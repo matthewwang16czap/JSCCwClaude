@@ -1,0 +1,164 @@
+================================================================================
+ COMMANDS_PERCEPTION.txt — wave p1: perceptual fine-tuning of the wave-1 models
+ rev 2026-09-25. Everything runs on the server, from the jscc/ directory.
+================================================================================
+
+WHAT THIS WAVE TESTS: can the SHORT prefixes of a variable-length code carry
+the important content (objects, semantics) better, while the full budget keeps
+its fidelity? net/loss.py adds, for every budget u decoded in a step:
+  sem    DINOv2 patch-feature distance, reconstruction vs input
+  align  REPA-style: the decoder's mid-depth hidden state predicts the DINOv2
+         features of the input (shapes the tokens themselves, not the output)
+  imp    squared error weighted by the teacher's attention
+each scaled by w(u): 1 at the smallest budget, 0 at the full one
+(--perc-schedule budget), so CBR 1/8 keeps the plain MSE objective. Weights
+are RELATIVE to the pixel loss: 0.5 = half of it, on any backbone.
+
+Every run is a 400-epoch fine-tune of a wave-1 checkpoint. The MSE-only
+controls (GPU 0 and 4) get exactly the same extra training, so extra epochs
+alone cannot pass for a gain:
+  GPU 0  ViT   control, MSE only
+  GPU 1  ViT   + LPIPS, constant weight       "just a perceptual loss"
+  GPU 2  ViT   + sem/align/imp, budget        the proposal
+  GPU 3  ViT   + sem/align/imp, constant      does the schedule matter?
+  GPU 4  Swin  control, MSE only
+  GPU 5  Swin  + sem/align/imp, budget
+
+NEW METRICS (final test, utils/metrics.py): LPIPS-VGG, DISTS; cls_top1 /
+cls_prob (an ImageNet ConvNeXt-T still sees the original's class); det_f1
+(Faster R-CNN on the reconstruction vs its detections on the original);
+obj_psnr / bg_psnr / obj_lpips (inside / outside those boxes); dino_sim.
+dino_sim IS THE TEACHER: never evidence for the sem/align runs. The LPIPS run
+trains on LPIPS-Alex: judge it by LPIPS-VGG and DISTS.
+
+GOTCHA: first use downloads DINOv2-S (Hugging Face hub) and VGG16, AlexNet,
+ConvNeXt-T, Faster R-CNN v2 (download.pytorch.org). Get "all networks ready"
+from fetch_models.py in step 0 before anything else.
+
+--------------------------------------------------------------------------------
+ 0. UNPACK, INSTALL, FETCH THE NETWORKS
+--------------------------------------------------------------------------------
+
+cd ~/projects/jscc_clean && unzip -o ~/jscc_clean.zip && cd jscc
+pip install timm lpips DISTS_pytorch
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# export HF_ENDPOINT=https://hf-mirror.com    # only if huggingface.co is unreachable
+#   (fully offline: fetch the timm weights file elsewhere and append
+#    --teacher-weights /path/to/model.safetensors to every command below)
+
+python tools/fetch_models.py     # ends with "all networks ready"
+
+--------------------------------------------------------------------------------
+ 1. CPU GATES — about two minutes
+--------------------------------------------------------------------------------
+
+python -m pyflakes main.py engine.py configs data net utils tools
+python tools/smoke.py            # ends with "all checks passed"
+python tools/check_channel.py    # ends with "channel conventions hold"
+
+--------------------------------------------------------------------------------
+ 2. GPU PROBE — worst-case memory, every perceptual term on
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 python tools/probe.py --backbone vit --batch-size 16 --amp \
+  --sem-weight 0.5 --align-weight 0.5 --imp-weight 0.5
+CUDA_VISIBLE_DEVICES=1 python tools/probe.py --backbone vit --batch-size 16 --amp \
+  --lpips-weight 0.5
+CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone swin --batch-size 16 --amp \
+  --sem-weight 0.5 --align-weight 0.5 --imp-weight 0.5
+
+# Keep "reserved" at or below ~22 GiB. Above it: append --batch-size 8 to that
+# backbone's lines in step 4 (accumulation keeps the effective batch at 16).
+
+--------------------------------------------------------------------------------
+ 3. BASELINES — re-score the two wave-1 checkpoints with the full suite
+    (test only, minutes; replaces their logs/test.json with all metrics)
+--------------------------------------------------------------------------------
+
+TEST="--testset Kodak --img-size 256 --channel-type awgn --snrs 1 4 7 10 13 \
+  --amp --tag w1"
+CUDA_VISIBLE_DEVICES=0 nohup python main.py $TEST --backbone vit \
+  --pretrained history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt \
+  > p1_base_vit.out 2>&1 &
+CUDA_VISIBLE_DEVICES=1 nohup python main.py $TEST --backbone swin \
+  --pretrained history/swin_base_awgn_DIV2K_256_w1/models/last.pt \
+  > p1_base_swin.out 2>&1 &
+
+grep -h "loaded" p1_base_*.out     # 0 missing, 0 unexpected
+tail -n 2 p1_base_*.out            # the last rows of both test tables
+
+--------------------------------------------------------------------------------
+ 4. WAVE p1 — six 400-epoch fine-tunes (they can start while step 3 runs)
+--------------------------------------------------------------------------------
+
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag p1"
+VIT="--backbone vit --pretrained history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt"
+SWIN="--backbone swin --pretrained history/swin_base_awgn_DIV2K_256_w1/models/last.pt"
+SEM="--sem-weight 0.5 --align-weight 0.5 --imp-weight 0.5"
+
+# GPU 0 — ViT control: MSE only, the same extra training as every other run
+CUDA_VISIBLE_DEVICES=0 nohup python main.py $FT $VIT \
+  > p1_gpu0_vit_mse.out 2>&1 &
+
+# GPU 1 — ViT + LPIPS at every budget: the plain perceptual-loss baseline
+CUDA_VISIBLE_DEVICES=1 nohup python main.py $FT $VIT \
+  --lpips-weight 0.5 --perc-schedule constant > p1_gpu1_vit_lpips.out 2>&1 &
+
+# GPU 2 — ViT + sem/align/imp, budget schedule: the proposal
+CUDA_VISIBLE_DEVICES=2 nohup python main.py $FT $VIT $SEM \
+  > p1_gpu2_vit_sem.out 2>&1 &
+
+# GPU 3 — ViT + sem/align/imp at every budget: is the schedule what matters?
+CUDA_VISIBLE_DEVICES=3 nohup python main.py $FT $VIT $SEM \
+  --perc-schedule constant > p1_gpu3_vit_sem_const.out 2>&1 &
+
+# GPU 4 — Swin control: MSE only
+CUDA_VISIBLE_DEVICES=4 nohup python main.py $FT $SWIN \
+  > p1_gpu4_swin_mse.out 2>&1 &
+
+# GPU 5 — Swin + sem/align/imp, budget schedule
+CUDA_VISIBLE_DEVICES=5 nohup python main.py $FT $SWIN $SEM \
+  > p1_gpu5_swin_sem.out 2>&1 &
+
+# --- while it runs --------------------------------------------------------------
+grep -h "loaded" p1_gpu*.out        # 0 missing, 0 unexpected (the new head is not listed)
+tail -n 1 p1_gpu*.out               # loss, psnr, and sem / align / lpips per run
+grep "diag" p1_gpu2_vit_sem.out | tail -3
+#   sem and align should fall over the first validations; "swapped" must stay
+#   far below "psnr" (the decoder still uses the channel)
+nvidia-smi
+
+--------------------------------------------------------------------------------
+ 5. READING WAVE p1 (after the final tests; differences are vs the control)
+--------------------------------------------------------------------------------
+
+V=history/vit_p8d768x10s4_awgn_DIV2K_256
+S=history/swin_base_awgn_DIV2K_256
+for m in psnr lpips_vgg dists cls_prob det_f1 obj_psnr obj_lpips; do
+  python tools/compare_runs.py ${V}_p1 ${V}_lp0.5-const_p1 ${V}_sem0.5-al0.5-imp0.5_p1 \
+    ${V}_sem0.5-al0.5-imp0.5-const_p1 ${V}_w1 --test --metric $m
+  python tools/compare_runs.py ${S}_p1 ${S}_sem0.5-al0.5-imp0.5_p1 ${S}_w1 --test --metric $m
+done
+
+# during training: validation LPIPS over the last 5 validations
+python tools/compare_runs.py ${V}_p1 ${V}_*_p1 --window 5 --metric lpips
+
+# Decision (docs/NOTES.md, "Perception wave"):
+#   proposal vs control at 1/48-1/16: det_f1, obj_psnr, obj_lpips, cls_prob,
+#       DISTS and LPIPS-VGG better (PSNR may drop there)  -> object-first prefix
+#   proposal vs control at 1/8: PSNR within ~0.1 dB      -> full budget intact
+#   constant schedule pays PSNR at 1/8 for similar small-budget gains
+#                                                         -> the schedule is
+#                                                            the contribution
+#   LPIPS run wins full-image perceptual metrics, not the object / semantic
+#       ones at small budgets                             -> smarter than a
+#                                                            perceptual loss
+#   nothing moves: retry with weights 1.0, or --perc-gamma 0.5 (the terms then
+#       reach further up the budget range)
+# Kodak has 24 images and not all contain COCO objects: before trusting a small
+# difference, pair the images in logs/test_per_image.json.

@@ -1,0 +1,198 @@
+================================================================================
+ COMMANDS_ALLOC.txt — per-image budget policy, the simple method:
+ predict each image's quality-vs-budget curve, then allocate on it.
+ rev 2026-09-28. Everything runs on the server, from the jscc/ directory.
+================================================================================
+
+WHAT THIS TESTS: at a fixed AVERAGE CBR, does giving each image its own token
+budget beat giving every image the same one -- for PSNR, and for perceptual
+quality (LPIPS / DISTS)? The codec is FROZEN; nothing here retrains it.
+
+  1. CURVES   tools/alloc_sweep.py scores every image at 11 budgets through
+              the channel, reusing ONE noise draw per image for all budgets
+              (common random numbers), at 5 SNRs x 4 draws (test) or at random
+              SNRs (training curves for the predictor).
+  2. ORACLE   tools/alloc_policy.py oracle: allocation on the measured curves
+              themselves = the most ANY per-image policy could gain. It picks
+              on half of the draws and is scored on the other half. THIS IS
+              THE GATE: if the oracle gains nothing, stop there.
+  3. POLICY   tools/alloc_policy.py train / eval: an MLP predicts each image's
+              curve from what the transmitter knows (image statistics, the
+              codeword's energy profile, 3 noise-free local decodes, the SNR
+              fed back) -- then the same allocation rule runs on the
+              predictions. One predictor serves every target CBR and every
+              objective (no retraining per rate).
+
+Methods in every table, all at the SAME average CBR as uniform:
+  uniform      every image gets the target budget (today's fixed-rate system)
+  sim          transmitter decodes noise-free at all 11 budgets, allocates on
+               that (no learning; 11 local decodes per image)
+  policy       the predictor (3 local decodes)
+  oracle       the ceiling (cross-fitted over noise draws)
+  oracle_psnr  the ceiling for PSNR: does a perceptual objective allocate
+               DIFFERENTLY from a fidelity one? (printed as "% of images whose
+               budget differs" and a rank correlation)
+
+--objective is what the allocation maximises: lpips, dists, psnr, msssim, or a
+mix 'lpips:0.7,psnr:0.3'. Its FIRST metric is the primary one (gain, 95% CI,
+bandwidth saving). An LPIPS objective is judged on LPIPS-VGG and DISTS, which
+it did not optimise.
+
+Targets: 1/24, 1/16, 1/12. At 1/48 and 1/8 no method can gain (every image
+already sits at the floor or the ceiling).
+
+Assumption to state in any write-up: the POLICY uses the SNR, i.e. the
+transmitter has it by feedback. The receiver needs nothing: it counts symbols.
+
+--------------------------------------------------------------------------------
+ 0. UNPACK, GATES (CPU, a few minutes)
+--------------------------------------------------------------------------------
+
+cd ~/projects/jscc_clean && unzip -o ~/jscc_clean.zip && cd jscc
+export JSCC_DATA_ROOT=$HOME
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py            # ends with "all checks passed" ([allocation] is new)
+
+# the checkpoints (p1 = the 400-epoch fine-tunes; w1 works too)
+VIT_MSE=history/vit_p8d768x10s4_awgn_DIV2K_256_p1/models/last.pt
+VIT_LP=history/vit_p8d768x10s4_awgn_DIV2K_256_lp0.5-const_p1/models/last.pt
+SWIN_MSE=history/swin_base_awgn_DIV2K_256_p1/models/last.pt
+ls -l $VIT_MSE $VIT_LP $SWIN_MSE
+mkdir -p curves policies results
+
+SW="python tools/alloc_sweep.py --img-size 256 --channel-type awgn --amp"
+TEST="--split test --testset Kodak --snrs 1 4 7 10 13 --draws 4"
+TRAIN="--split train --trainset DIV2K --crop 512 --crops-per-image 2 --random-snrs 2 --draws 2"
+VALID="--split valid --validset DIV2K --crop 512 --crops-per-image 1 --random-snrs 2 --draws 2"
+
+--------------------------------------------------------------------------------
+ 1. TEST CURVES — Kodak (24 images, native 768x512) x 5 SNRs x 4 draws x 11 budgets
+    (GPU; rough estimate 10-30 min for the ViT, a few min for Swin)
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 nohup $SW --backbone vit --pretrained $VIT_MSE $TEST \
+  --out curves/vit_mse_kodak.npz > a1_vit_mse_kodak.out 2>&1 &
+CUDA_VISIBLE_DEVICES=1 nohup $SW --backbone vit --pretrained $VIT_LP $TEST \
+  --out curves/vit_lp_kodak.npz > a1_vit_lp_kodak.out 2>&1 &
+CUDA_VISIBLE_DEVICES=2 nohup $SW --backbone swin --pretrained $SWIN_MSE $TEST \
+  --out curves/swin_mse_kodak.npz > a1_swin_mse_kodak.out 2>&1 &
+
+grep loaded a1_*.out       # "0 missing, 0 unexpected"
+tail -n 7 a1_*.out         # mean PSNR / LPIPS / DISTS per SNR at the 5 predefined CBRs:
+                           # should match the models' logs/test.json to ~0.05 dB
+
+--------------------------------------------------------------------------------
+ 2. ORACLE — CPU, seconds per line. THE GATE.
+--------------------------------------------------------------------------------
+
+for C in vit_mse vit_lp swin_mse; do
+  for OBJ in psnr lpips dists "lpips:0.7,psnr:0.3"; do
+    python tools/alloc_policy.py oracle --curves curves/${C}_kodak.npz --objective "$OBJ" \
+      --out results/oracle_${C}_$(echo $OBJ | tr ':,.' '__p').json
+  done
+done 2>&1 | tee results/oracle_all.txt
+
+# Read, per codec and objective, the GATE lines at the end of each block:
+#   PASS  = the oracle's primary gain is real (95% CI over images excludes 0)
+#           AND large: >= 0.1 dB (psnr) / 0.005 (lpips, dists), or an
+#           equal-quality bandwidth saving >= 5%
+#   A "*" after a saving: at some SNR the method never reached uniform's
+#   quality and was charged the whole range there (conservative).
+#   Chance level: on curves with NO per-image structure the gate passes ~2-4%
+#   of the time (checked in smoke.py). This loop runs 36 gates (3 codecs x 4
+#   objectives x 3 targets), so ONE isolated PASS is what noise alone gives;
+#   believe a pattern (neighbouring targets, or psnr AND lpips, agreeing).
+#   and the "allocate differently from PSNR?" lines for the perceptual
+#   objectives: < 20% of images differing and rank correlation > 0.8 means the
+#   perceptual reward buys nothing over a PSNR policy.
+# No PASS anywhere -> per-image allocation is not worth a policy on this codec.
+# Stop and send me results/oracle_all.txt.
+
+--------------------------------------------------------------------------------
+ 3. TRAINING CURVES — only if step 2 passed somewhere
+    DIV2K train: 800 images x 2 crops of 512 px x 2 random SNRs in [-2, 22] dB
+    x 2 draws (GPU; rough estimate 1-2 h for the ViT); DIV2K valid for early
+    stopping (100 crops, separate images: no leakage)
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 nohup sh -c "$SW --backbone vit --pretrained $VIT_MSE $TRAIN \
+  --out curves/vit_mse_train.npz && $SW --backbone vit --pretrained $VIT_MSE $VALID \
+  --out curves/vit_mse_valid.npz" > a3_vit_mse.out 2>&1 &
+CUDA_VISIBLE_DEVICES=1 nohup sh -c "$SW --backbone vit --pretrained $VIT_LP $TRAIN \
+  --out curves/vit_lp_train.npz && $SW --backbone vit --pretrained $VIT_LP $VALID \
+  --out curves/vit_lp_valid.npz" > a3_vit_lp.out 2>&1 &
+CUDA_VISIBLE_DEVICES=2 nohup sh -c "$SW --backbone swin --pretrained $SWIN_MSE $TRAIN \
+  --out curves/swin_mse_train.npz && $SW --backbone swin --pretrained $SWIN_MSE $VALID \
+  --out curves/swin_mse_valid.npz" > a3_swin_mse.out 2>&1 &
+
+tail -n 2 a3_*.out         # progress lines: images done, minutes left
+
+# More data if the predictor underfits (step 4): add --trainset DIV2K Flickr2K
+# (if Flickr2K is under $JSCC_DATA_ROOT/datasets), or --crops-per-image 4.
+
+--------------------------------------------------------------------------------
+ 4. TRAIN THE PREDICTOR — CPU, a minute or two each
+--------------------------------------------------------------------------------
+
+for C in vit_mse vit_lp swin_mse; do
+  python tools/alloc_policy.py train --curves curves/${C}_train.npz \
+    --valid-curves curves/${C}_valid.npz --out policies/${C}.pt
+done 2>&1 | tee results/train_all.txt
+
+# The last lines compare the predictor's validation error with "predict the
+# mean training curve for every image" (ratio 1.0 = learned nothing per image).
+# A ratio above ~0.7 means the features barely predict curve shape: expect
+# little gain over uniform in step 5.
+
+--------------------------------------------------------------------------------
+ 5. EVALUATE THE POLICY — CPU, seconds per line
+--------------------------------------------------------------------------------
+
+for C in vit_mse vit_lp swin_mse; do
+  for OBJ in psnr lpips dists "lpips:0.7,psnr:0.3"; do
+    python tools/alloc_policy.py eval --curves curves/${C}_kodak.npz \
+      --predictor policies/${C}.pt --objective "$OBJ" \
+      --out results/eval_${C}_$(echo $OBJ | tr ':,.' '__p').json
+  done
+done 2>&1 | tee results/eval_all.txt
+
+# Robustness to SNR feedback error: the predictor is fed SNR +- 3 dB
+for OFF in -3 3; do
+  python tools/alloc_policy.py eval --curves curves/vit_mse_kodak.npz \
+    --predictor policies/vit_mse.pt --objective lpips --snr-offset $OFF
+done 2>&1 | tee results/eval_snr_offset.txt
+
+# Per block: policy vs uniform (delta, 95% CI, saving), vs sim, and the
+# "share of the oracle's gain captured". The oracle is cross-fitted, i.e.
+# measured with channel noise, so it is slightly conservative and a good
+# policy can show > 100%.
+
+--------------------------------------------------------------------------------
+ 6. OPTIONAL — a second test set (bigger images, more of them)
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 nohup $SW --backbone vit --pretrained $VIT_MSE --split test \
+  --testset CLIC --snrs 1 4 7 10 13 --draws 4 --max-images 60 \
+  --out curves/vit_mse_clic.npz > a6_vit_mse_clic.out 2>&1 &
+# then step 2 / step 5 with --curves curves/vit_mse_clic.npz
+
+--------------------------------------------------------------------------------
+ 7. WHAT TO SEND BACK, AND HOW TO READ IT
+--------------------------------------------------------------------------------
+
+Send: results/oracle_all.txt, results/train_all.txt, results/eval_all.txt,
+results/eval_snr_offset.txt (the results/*.json files have every number).
+
+  oracle fails everywhere             -> stop: per-image allocation has no room on
+                                         these codecs (a finding; report it)
+  oracle passes, lpips allocates like -> the perceptual reward adds nothing; a PSNR
+  psnr (<20% differ, rho > 0.8)          policy is the whole story
+  policy >= ~60% of the oracle gain   -> the simple method works; no GRPO needed
+  and beats sim
+  policy < sim                        -> the predictor is the bottleneck: retrain with
+                                         --n-clean 5, more crops, or --features clean;
+                                         only then consider the GRPO fallback
+  vit_lp oracle >> vit_mse oracle     -> a perceptual codec leaves more room for
+                                         perceptual allocation (a result for story B)
+  swin_mse gains ~ vit_mse gains      -> expected: the policy is not an advantage of
+                                         one backbone; report both

@@ -1,0 +1,94 @@
+================================================================================
+ COMMANDS_RETEST.txt — re-score the seven wave-1 checkpoints after two fixes
+ rev 2026-09-25. Test only, no training: minutes, all runs in parallel.
+================================================================================
+
+WHAT CHANGED:
+  1. vit now decodes every tile on its own, exactly as in training. Wave 1
+     decoded each Kodak image as one joint grid of 6 tiles, a sequence length
+     and positions the decoder had never seen: -14 dB on Kodak (-10 dB for the
+     small ViT) while it led on the 256 px validation. The weights stay valid:
+     on a single tile the new decoder gives bit-identical outputs.
+  2. The objective and metrics run in fp32. Under --amp they ran in bf16,
+     which wrecks SSIM's variance terms: every wave-1 SSIM / MS-SSIM / LPIPS
+     is invalid (swin's SSIM of 0.26 at 29 dB PSNR was the symptom).
+     PSNR was never affected.
+  3. The training log's `between` is replaced by `common` (see README).
+
+FREE CHECK: swin, hybrid, hybrid_raster and both adatok must reproduce their
+wave-1 Kodak PSNR exactly (same checkpoints, same channel draws):
+  swin     26.01 28.26 29.75 30.59 31.15   (CBR 1/48 ... 1/8, mean over SNR)
+  hybrid   26.17 28.39 29.49 29.84 30.26
+  adatok   20.98 22.05 22.13 22.15 22.15
+If they do not, stop and send the output.
+
+NOTE (rev 2026-09-25b): the default channel is now Sionna. Re-running step 1
+re-scores the checkpoints on Sionna's AWGN; PSNR then matches wave 1 within a
+few hundredths of a dB (new noise draws, same statistics), no longer exactly.
+
+--------------------------------------------------------------------------------
+ 0. UNPACK (over the same clean tree that holds history/)
+--------------------------------------------------------------------------------
+
+cd ~/projects/jscc_clean && unzip -o ~/jscc_clean.zip && cd jscc
+export JSCC_DATA_ROOT=$HOME
+TEST="--testset Kodak --img-size 256 --channel-type awgn --snrs 1 4 7 10 13 \
+  --amp --tag w1"
+
+python -m pyflakes main.py engine.py configs data net utils tools
+python tools/smoke.py            # ends with "all checks passed"
+
+--------------------------------------------------------------------------------
+ 1. RE-SCORE (each run's logs/test.json and test_per_image.json are replaced)
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 nohup python main.py $TEST --backbone hybrid \
+  --pretrained history/hybrid_base_d256x4s16_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu0_hybrid.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=1 nohup python main.py $TEST --backbone vit \
+  --pretrained history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu1_vit.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=2 nohup python main.py $TEST --backbone adatok \
+  --pretrained history/adatok_p16d768x12s64_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu2_adatok.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=3 nohup python main.py $TEST --backbone swin \
+  --pretrained history/swin_base_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu3_swin.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=4 nohup python main.py $TEST --backbone hybrid \
+  --phase-order raster \
+  --pretrained history/hybrid_base_d256x4s16_awgn_DIV2K_256_raster_w1/models/last.pt \
+  > w1t_gpu4_hybrid_raster.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=5 nohup python main.py $TEST --backbone vit \
+  --patch-size 16 --sym-per-token 16 --token-dim 384 --depth 6 --heads 6 \
+  --pretrained history/vit_p16d384x6s16_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu5_vit_small.out 2>&1 &
+
+CUDA_VISIBLE_DEVICES=5 nohup python main.py $TEST --backbone adatok \
+  --token-dim 512 --depth 8 --heads 8 \
+  --pretrained history/adatok_p16d512x8s64_awgn_DIV2K_256_w1/models/last.pt \
+  > w1t_gpu5_adatok_small.out 2>&1 &
+
+# --- when all seven have printed their test table ----------------------------------
+grep -h "loaded" w1t_*.out             # every line: 0 missing, 0 unexpected
+tail -n 1 w1t_*.out                    # the last row of each test table
+
+--------------------------------------------------------------------------------
+ 2. READING
+--------------------------------------------------------------------------------
+
+python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
+  history/vit_*_w1 history/adatok_*_w1 --test
+python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
+  history/vit_*_w1 history/adatok_*_w1 --test --metric msssim
+python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
+  history/vit_*_w1 history/adatok_*_w1 --test --metric lpips
+
+# vit: the other arms gain ~0.7-0.8 dB from DIV2K crops to Kodak. If the big
+#   ViT keeps its +0.7-1.0 dB validation lead over swin on Kodak, the next
+#   question is patch 8 vs size (docs/NOTES.md, "Not yet tested").
+# Tile seams (vit, adatok) cost little PSNR; check a few Kodak images by eye.
