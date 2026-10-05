@@ -1,4 +1,4 @@
-"""CPU smoke test: all four models end to end, plus the invariants the
+"""CPU smoke test: every model end to end, plus the invariants the
 experiments rely on. Needs neither data nor a GPU (a few minutes on one core).
 
     python tools/smoke.py
@@ -27,7 +27,6 @@ SMALL = {  # 128 px images, tiny transformers; token geometry scaled from 256 px
     "hybrid": ["--model-size", "small", "--tile", "128", "--token-dim", "64", "--depth", "2",
                "--heads", "2"],
     "vit": ["--tile", "128", "--token-dim", "64", "--depth", "2", "--heads", "2"],
-    "adatok": ["--tile", "128", "--token-dim", "64", "--depth", "2", "--heads", "2"],
 }
 
 
@@ -66,9 +65,12 @@ def raises(argv, msg):
     ok(False, msg)
 
 
-def check_backbone(backbone, x):
-    print(f"[{backbone}]")
-    model, cfg = build(backbone, "--rates-per-step", "2")
+def check_backbone(backbone, x, *extra):
+    """`extra`: more flags; with --cascade the prefix-only checks (budgets between
+    the predefined ones, per-sample budgets) are skipped."""
+    casc = "--cascade" in extra
+    print(f"[{backbone}{' cascade' if casc else ''}]")
+    model, cfg = build(backbone, "--rates-per-step", "2", *extra)
     print(f"    {sum(p.numel() for p in model.parameters()) / 1e6:.2f} M parameters at smoke "
           f"size; units per CBR {cfg.cbr_units}")
 
@@ -103,7 +105,7 @@ def check_backbone(backbone, x):
                f"CBR {c}: {per_image} complex symbols per image at unit power")
     del model.channel.forward
 
-    if model.token:
+    if model.token and not casc:
         with torch.no_grad():
             enc = model.encode(x)
             l = cfg.token_list[2] + 5          # mid-phase on purpose
@@ -143,7 +145,7 @@ def check_backbone(backbone, x):
     ok(out.shape == big.shape and set(vals) == {"psnr", "ssim", "msssim"}
        and abs(sent - float(cfg.cbrs[2])) < 1e-12,
        "256x384 input decodes at its own size, pixel metrics computed")
-    if backbone in ("vit", "adatok"):
+    if backbone == "vit":
         model.channel.kind = "none"
         u, worst = cfg.token_list[2], 0.0
         with torch.no_grad():
@@ -167,12 +169,175 @@ def check_backbone(backbone, x):
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "w.pt")
         save_weights(model, path)
-        twin, _ = build(backbone)
+        twin, _ = build(backbone, *extra)
         load_weights(twin, path)
         twin.channel.kind = "none"
         with torch.no_grad():
             ok(diff(model(x, 10.0, cfg.cbrs[1])[0], twin(x, 10.0, cfg.cbrs[1])[0]) == 0.0,
                "checkpoint round trip reproduces the outputs")
+
+
+def check_cascade(x):
+    """Depth-cascade rate adaptation (net/cascade.py): validation, the level
+    structure, exactness at initialisation, gradient flow and sharing."""
+    import copy
+
+    from utils.common import param_groups
+
+    print("[cascade]")
+    raises(["--backbone", "hybrid", "--cascade"], "--cascade supports swin and vit only")
+    raises(["--backbone", "vit", "--cascade", "--rate-sampling", "uniform"],
+           "--cascade with uniform rate sampling is refused")
+    raises(["--backbone", "vit", "--cascade", "--fixed-cbr", "1/8"], "--cascade --fixed-cbr is refused")
+    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "mlp", "attn"],
+           "a wrong number of stage kinds is refused")
+    raises(["--backbone", "vit", "--cascade", "--mod-skip", "none", "--mod-depths", "0"],
+           "a bodiless stage without a skip is refused")
+    raises(["--backbone", "vit", "--cascade", "--eval-cbrs", "1/20"],
+           "a CBR that is not a level is refused")
+    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "attn", "--mod-width", "100"],
+           "an attention width that heads cannot divide is refused")
+    raises(["--backbone", "vit", "--rate-sampling", "sandwich", "--rates-per-step", "1"],
+           "sandwich sampling needs 2 or more budgets per step")
+
+    model, cfg = build("vit", "--rate-sampling", "sandwich", "--rates-per-step", "3")
+    torch.manual_seed(1)
+    got = [model.sample_units() for _ in range(200)]
+    ok(all(g[0] == cfg.cbr_units[0] and g[-1] == cfg.cbr_units[-1] and len(set(g)) == 3
+           and g == sorted(g) for g in got), "sandwich sampling: smallest + largest + one random")
+
+    for backbone in ("swin", "vit"):
+        casc = ["--cascade", "--mod-depths", "1", "--mod-width", "64", "--mod-skip", "proj"]
+        check_backbone(backbone, x, "--cascade", "--rates-per-step", "2")
+        model, cfg = build(backbone, *casc)
+        K = len(cfg.levels)
+        ok(cfg.code_dims == ([192, 128, 96, 64, 32] if backbone == "swin" else [48, 32, 24, 16, 8])
+           and len(model.enc_cascade.stages) == K - 1,
+           f"{backbone}: code widths per level {cfg.code_dims}, {K - 1} stages")
+
+        # exactness at initialisation: a cascade loaded from a PREFIX checkpoint is that
+        # prefix model, at every predefined CBR (noise-free and with noise)
+        pre, _ = build(backbone)
+        with torch.no_grad():
+            for p in pre.parameters():
+                p.add_(0.05 * torch.randn_like(p))
+            for name, b in pre.named_buffers():
+                if name.endswith("dc.mean"):
+                    b.normal_()
+            if backbone == "vit":
+                pre.encoder.gain.add_(0.3 * torch.randn_like(pre.encoder.gain))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "w.pt")
+            save_weights(pre, path)
+            for skip, kinds in (("proj", None), ("trunc", ["mlp"])):
+                extra = ["--cascade", "--mod-depths", "2", "--mod-skip", skip]
+                twin, _ = build(backbone, *extra, *(["--mod-kinds", *kinds] if kinds else []))
+                report = load_weights(twin, path)
+                twin.seed_levels()
+                only_new = all(k.startswith(("enc_cascade.", "dec_cascade.")) for k in report.missing_keys)
+                worst = 0.0
+                for kind in ("none", "awgn"):
+                    pre.channel.kind = twin.channel.kind = kind
+                    for c in cfg.cbrs:
+                        torch.manual_seed(5)
+                        a = pre.reconstruct(x, 7.0, c)[0]
+                        torch.manual_seed(5)
+                        b = twin.reconstruct(x, 7.0, c)[0]
+                        worst = max(worst, diff(a, b))
+                ok(only_new and worst < 1e-5,
+                   f"{backbone}: cascade (skip {skip}) loaded from a prefix checkpoint == the "
+                   f"prefix model at all 5 CBRs, with and without noise (max diff {worst:.1e}; "
+                   f"only cascade tensors missing)")
+
+        # level structure: stage k belongs to levels >= k, on the encoder and the decoder side
+        def per_level(m):
+            return [m(x, 10.0, cfg.cbrs[K - 1 - j])[0] for j in range(K)]
+
+        model.channel.kind = "none"
+        with torch.no_grad():
+            ref = per_level(model)
+            for side in ("enc", "dec"):
+                good = True
+                for k in range(1, K):
+                    twin = copy.deepcopy(model)
+                    w = getattr(twin, f"{side}_cascade").stages[k - 1].body.out.weight
+                    w.add_(0.3 * torch.randn_like(w))
+                    moved = [diff(a, b) > 1e-6 for a, b in zip(ref, per_level(twin))]
+                    good &= moved == [j >= k for j in range(K)]
+                name = {"enc": "encoder", "dec": "decoder"}[side]
+                ok(good, f"{backbone}: the {name}-side stage k changes levels >= k and no "
+                         f"shallower level")
+
+        # gradients: a level trains its own path and the shared code below it (eval mode and a
+        # noise-free channel: deterministic, the DC estimates stay put)
+        deep, shallow = cfg.cbr_units[0], cfg.cbr_units[-2]
+        snr = torch.tensor([0.0, 10.0])
+
+        def gsum(mods):
+            return sum(float(p.grad.abs().sum()) for m in mods for p in m.parameters()
+                       if p.grad is not None)
+
+        model.channel.kind = "none"
+        model.zero_grad(set_to_none=True)
+        model(x, snr, units=[shallow], want_metrics=False)[1].backward()
+        last_enc, last_dec = model.enc_cascade.stages[-1], model.dec_cascade.stages[-1]
+        ok(gsum([last_enc, last_dec]) == 0.0 and gsum([model.enc_cascade.stages[0]]) > 0.0,
+           f"{backbone}: a shallow level sends no gradient into the deep stages")
+        model.zero_grad(set_to_none=True)
+        model(x, snr, units=[deep], want_metrics=False)[1].backward()
+        top = gsum([model.encoder] + ([model.enc_adapter] if not model.token else []))
+        ok(gsum([last_enc]) > 0.0 and gsum([last_dec]) > 0.0 and top > 0.0,
+           f"{backbone}: the deepest level trains its stages and the backbone below them")
+        shared, _ = build(backbone, *casc, "--cascade-grad", "0")
+        shared.channel.kind = "none"
+        shared(x, snr, units=[deep], want_metrics=False)[1].backward()
+        top0 = gsum([shared.encoder] + ([shared.enc_adapter] if not shared.token else []))
+        ok(top0 == 0.0 and gsum([shared.enc_cascade.stages[-1]]) > 0.0,
+           f"{backbone}: --cascade-grad 0 stops the deeper exit's gradient into the shared code")
+        half, _ = build(backbone, *casc, "--cascade-grad", "0.5")
+        half.load_state_dict(model.state_dict())
+        half.channel.kind = "none"
+        full_g = {n: p.grad.clone() for n, p in model.encoder.named_parameters() if p.grad is not None}
+        half.zero_grad(set_to_none=True)
+        half(x, snr, units=[deep], want_metrics=False)[1].backward()
+        # the factor applies at every stage boundary: the deepest exit's gradient reaches the
+        # backbone scaled by alpha^(stages) (zero-initialised bodies: only the skips carry it)
+        want = 0.5 ** (K - 1)
+        ratio = [float(p.grad.norm() / full_g[n].norm())
+                 for n, p in half.encoder.named_parameters()
+                 if p.grad is not None and n in full_g and float(full_g[n].norm()) > 1e-12]
+        ok(bool(ratio) and all(abs(r / want - 1) < 0.05 for r in ratio),
+           f"{backbone}: --cascade-grad 0.5 scales the backbone's gradient from the deepest exit "
+           f"by 0.5^{K - 1} = {want:.4f} ({min(ratio):.4f}..{max(ratio):.4f})")
+
+        # the three module kinds cost the same per block, so a bake-off compares structure
+        counts = {}
+        for kind in ("mlp", "attn", "swin"):
+            m, _ = build(backbone, "--cascade", "--mod-kinds", kind, "--mod-depths", "2",
+                         "--mod-width", "64")
+            counts[kind] = sum(p.numel() for p in m.enc_cascade.parameters())
+            with torch.no_grad():
+                out = m(x, 10.0, cfg.cbrs[0])[0]
+            assert out.shape == x.shape
+        spread = (max(counts.values()) - min(counts.values())) / min(counts.values())
+        ok(spread < 0.05, f"{backbone}: mlp / attn / swin stages are parameter-matched within 5% "
+                          f"({counts}; a swin stage adds its relative-position tables, spread "
+                          f"{100 * spread:.1f}%)")
+
+    model, _ = build("swin", "--cascade")
+    groups = param_groups(model, 0.0, 1e-3, 4.0)
+    boosted = [g for g in groups if "lr" in g]
+    names = {id(p): n for n, p in model.named_parameters()}
+    ok(boosted and all(abs(g["lr"] - 4e-3) < 1e-12 for g in boosted)
+       and all(names[id(p)].startswith(("enc_cascade.", "dec_cascade."))
+               for g in boosted for p in g["params"])
+       and sum(len(g["params"]) for g in groups) == len(list(model.parameters())),
+       "--mod-lr-mult: only the cascade modules get the scaled learning rate")
+    parts = []
+    for flag in (["--rate-sampling", "sandwich", "--rates-per-step", "2"], []):
+        parts.append(build("vit", "--cascade", *flag)[1].run_name)
+    ok("sandwich" in parts[0] and "casc-" in parts[1] and "sandwich" not in parts[1],
+       f"run names mark the scheme ({parts[1]}; {parts[0]})")
 
 
 def check_perception(x):
@@ -306,6 +471,13 @@ def check_allocation(x):
             ok(arr["scores"].shape == (2, 1, 1, 3, 1) and arr["feat_code"].shape == (2, 24)
                and np.allclose(arr["clean"][:, :, 0].mean(0), direct, atol=1e-4),
                f"{backbone}: sweep shapes; its noise-free curve matches the model's own decode")
+    cm, ccfg = build("swin", "--cascade")
+    try:
+        sweep(cm, ccfg, OneBatch(x), ccfg.cbr_units, ["psnr"], draws=1, snrs=[5.0], log=lambda s: None)
+        refused = False
+    except ValueError:
+        refused = True
+    ok(refused, "the allocation sweep refuses a cascade model (one code per level, no shared prefix)")
     m, c = build("vit", "--channel-type", "rayleigh")
     with torch.no_grad():
         enc = m.encode(x)
@@ -504,14 +676,14 @@ def main():
     ok(sorted(order) == list(range(64)), "spread order is a permutation")
     ok(all((i // 8) % 2 == 0 and (i % 8) % 2 == 0 for i in order[:16]),
        "its first quarter is the stride-2 sub-lattice")
-    raises(["--backbone", "adatok", "--zero-init"], "adatok refuses --zero-init")
     raises(["--backbone", "hybrid", "--sym-per-token", "40"], "fractional token counts are refused")
     raises(["--backbone", "hybrid", "--sym-per-token", "64"], "a partial number of phases is refused")
     raises(["--img-size", "200"], "an image size off the Swin grid is refused")
     torch.manual_seed(0)
     x = torch.rand(2, 3, 128, 128)
-    for backbone in ("swin", "hybrid", "vit", "adatok"):
+    for backbone in ("swin", "hybrid", "vit"):
         check_backbone(backbone, x)
+    check_cascade(x)
     check_perception(x)
     check_allocation(x)
     check_frontier()

@@ -1,27 +1,28 @@
 ================================================================================
  COMMANDS.txt — clean tree, wave 1: batch 16, memory-matched backbones
  rev 2026-09-23. Everything runs on the server, from the jscc/ directory.
+ (Historical record. The AdaTok arm was dropped from the tree in the cascade
+ turn: its lines are gone, the other arms run unchanged. Current wave:
+ COMMANDS_CASCADE.txt.)
 ================================================================================
 
-WHAT CHANGED: at batch 8 the token arms used hybrid 11.2 GB, vit 1.6 GB and
-adatok 4.8 GB. vit and adatok were resized so that, like the hybrid, they fill
-a 3090 at batch 16 and 256 px. Batch 16 is now the default at 256 px.
+WHAT CHANGED: at batch 8 the token arms used hybrid 11.2 GB and vit 1.6 GB.
+vit was resized so that, like the hybrid, it fills a 3090 at batch 16 and
+256 px. Batch 16 is now the default at 256 px.
 
   arm      size                                               params  est. peak
   hybrid   unchanged: the previous best AdaJSCC                12.5 M   ~21 GiB
   vit      patch 8 (1024 tokens per tile), width 768,         142.4 M   ~19 GiB
            10 blocks per side, 12 heads, 4-symbol tokens
-  adatok   TiTok-B: width 768, 12 blocks per side, 12 heads,  184.3 M   ~20 GiB
-           patch 16, 384 tokens of 64 symbols (as before)
   swin     unchanged baseline                                   5.3 M   ~16 GiB
 
 The estimates are activation memory measured on CPU, calibrated on your three
 batch-8 readings. Step 2 measures the real peaks, about a minute per arm.
 
 GOTCHA: memory-matched is NOT compute- or parameter-matched. Per image, vit
-costs ~6x and adatok ~4x the hybrid's FLOPs, with 11x and 15x its parameters,
-so their epochs will be several times slower (step 2 prints ms/step). GPU 5
-runs the previous small sizes: read big against small before crediting size.
+costs ~6x the hybrid's FLOPs, with 11x its parameters, so its epochs will be
+several times slower (step 2 prints ms/step). GPU 5 runs the previous small
+size: read big against small before crediting size.
 
 GOTCHA: stop the three batch-8 runs first. Every run below carries --tag w1,
 so none of them can overwrite a batch-8 run directory in history/.
@@ -57,13 +58,11 @@ python tools/check_channel.py    # ends with "channel conventions hold"
 
 CUDA_VISIBLE_DEVICES=0 python tools/probe.py --backbone hybrid --batch-size 16 --amp
 CUDA_VISIBLE_DEVICES=1 python tools/probe.py --backbone vit --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone adatok --batch-size 16 --amp
 CUDA_VISIBLE_DEVICES=3 python tools/probe.py --backbone swin --batch-size 16 --amp
 
 # Each prints params, peak reserved memory, ms/step and hours per 100k steps
 # (= 2000 DIV2K epochs at batch 16). Keep "reserved" at or below ~22 GiB:
 #   vit    above 22 -> append --depth 8 to its line in step 3    (~15-18 GiB)
-#   adatok above 22 -> append --depth 10 to its line in step 3   (~17 GiB)
 #   hybrid above 22 -> append --batch-size 8 to its lines in step 3
 #                      (accumulation keeps the effective batch at 16)
 
@@ -79,10 +78,6 @@ CUDA_VISIBLE_DEVICES=0 nohup python main.py $COMMON --backbone hybrid \
 CUDA_VISIBLE_DEVICES=1 nohup python main.py $COMMON --backbone vit \
   > w1_gpu1_vit.out 2>&1 &
 
-# GPU 2 — adatok: TiTok-B, 384 tokens of 64 symbols.
-CUDA_VISIBLE_DEVICES=2 nohup python main.py $COMMON --backbone adatok \
-  > w1_gpu2_adatok.out 2>&1 &
-
 # GPU 3 — the swin baseline under the SAME protocol (cosine LR, last
 #   checkpoint). Earlier baseline numbers used a constant LR and best-of-N
 #   selection: do not compare against them.
@@ -94,22 +89,19 @@ CUDA_VISIBLE_DEVICES=3 nohup python main.py $COMMON --backbone swin \
 CUDA_VISIBLE_DEVICES=4 nohup python main.py $COMMON --backbone hybrid \
   --phase-order raster > w1_gpu4_hybrid_raster.out 2>&1 &
 
-# GPU 5 — the previous SMALL vit and adatok, together on one card
-#   (~2.5 + ~8 GiB): the control for the resize.
+# GPU 5 — the previous SMALL vit (~2.5 GiB): the control for the resize.
 CUDA_VISIBLE_DEVICES=5 nohup python main.py $COMMON --backbone vit \
   --patch-size 16 --sym-per-token 16 --token-dim 384 --depth 6 --heads 6 \
   > w1_gpu5_vit_small.out 2>&1 &
-CUDA_VISIBLE_DEVICES=5 nohup python main.py $COMMON --backbone adatok \
-  --token-dim 512 --depth 8 --heads 8 > w1_gpu5_adatok_small.out 2>&1 &
 
 # --- while it runs --------------------------------------------------------------
 tail -n 2 w1_gpu*.out                  # img/s, loss, the diag check
-grep "diag" w1_gpu2_adatok.out | tail -3
+grep "diag" w1_gpu1_vit.out | tail -3
 #   "swapped" must fall well below "psnr" within the first few thousand steps;
 #   if the three stay equal, the decoder has collapsed: stop it, send the log
 grep "non-finite" w1_gpu*.out          # skipped optimiser steps: expect none
 nvidia-smi                             # ~16-21 GiB on GPUs 0-4
-ls history/                            # seven new *_w1 directories
+ls history/                            # six new *_w1 directories
 
 --------------------------------------------------------------------------------
  4. READING WAVE 1
@@ -117,11 +109,11 @@ ls history/                            # seven new *_w1 directories
 
 # during training: per-CBR PSNR over the last 5 validations, differences vs swin
 python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
-  history/vit_*_w1 history/adatok_*_w1 --window 5
+  history/vit_*_w1 --window 5
 
 # after training: the Kodak test (last checkpoint, native resolution)
 python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
-  history/vit_*_w1 history/adatok_*_w1 --test
+  history/vit_*_w1 --test
 
 # Previous tree, for orientation (constant LR, best-of-N): hybrid vs linear
 #   +0.27 dB at 1/48, +0.16 at 1/24, -0.58 at 1/8, crossover near 1/16.
@@ -129,7 +121,7 @@ python tools/compare_runs.py history/swin_*_w1 history/hybrid_*_w1 \
 # Decision:
 #   hybrid vs hybrid_raster within the window sd -> keep spread (the default)
 #   raster clearly ahead at the five CBRs        -> revert the default
-#   big vit / adatok ahead of their small runs   -> the resize pays; then a
+#   big vit ahead of its small run               -> the resize pays; then a
 #       parameter-matched check before crediting the architecture
 #   big ~ small                                  -> go back to the small
 #       sizes (much cheaper) for the next waves

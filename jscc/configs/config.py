@@ -27,17 +27,24 @@ BACKBONE_DEFAULTS = {
     # the previous tree's best AdaJSCC (wave C: zero-init, latent-space blocks)
     "hybrid": dict(sym_per_token=16, token_dim=256, depth=4, heads=8, rate_mod="film",
                    zero_init=True, pos_scale=0.25, warmup_steps=2000),
-    # vit and adatok are sized to the hybrid's memory: ~20 GiB of a 24 GB card at
-    # batch 16 and 256 px (tools/probe.py measures it).
-    # vit: patch 8 spends the memory on resolution (1024 tokens per tile, 192
-    # pixel values per token); 4-symbol tokens keep hybrid's 6 phases.
+    # vit is sized to ~19 GiB of a 24 GB card at batch 16 and 256 px (tools/probe.py
+    # measures it). Patch 8 spends the memory on resolution (1024 tokens per tile,
+    # 192 pixel values per token); 4-symbol tokens keep hybrid's 6 phases.
     # Previous small size: patch 16, sym 16, 384 wide, 6 blocks, 6 heads.
     "vit": dict(sym_per_token=4, token_dim=768, depth=10, heads=12, patch_size=8,
                 rate_mod="film", zero_init=True, warmup_steps=2000),
-    # adatok: TiTok-B, one size up from AdaTok's TiTok-S (512 wide, 8 blocks,
-    # 8 heads); 16x16 patches, MH-LoRA rank 16 over 8 budget anchors
-    "adatok": dict(sym_per_token=64, token_dim=768, depth=12, heads=12, patch_size=16,
-                   rate_mod="lora", zero_init=False, warmup_steps=2000),
+}
+
+# Depth-cascade modules (--cascade, net/cascade.py), one stage per step down the
+# rate ladder (4 stages for the 5 predefined CBRs). `width` is the hidden width of
+# a stage body. Hypothesis behind the kinds: the first stages (1/8 -> 1/12 -> 1/16)
+# only fold a few dropped channels into the kept ones, which needs no spatial
+# context; the deep ones (-> 1/24 -> 1/48) must decide WHERE to spend the little
+# that is left, which does. Depth grows as the rate falls: narrower code, more
+# nonlinear work. COMMANDS_CASCADE.txt tests this per level.
+MODULE_DEFAULTS = {
+    "swin": dict(kinds=["mlp", "mlp", "swin", "swin"], depths=[1, 2, 3, 4], width=96),
+    "vit": dict(kinds=["mlp", "mlp", "attn", "attn"], depths=[1, 2, 3, 4], width=128),
 }
 
 
@@ -103,12 +110,14 @@ class Config:
         self.pos_scale = pick("pos_scale")
         self.zero_init = bool(pick("zero_init")) if self.token else False
         self.rate_mod = pick("rate_mod") if self.token else "none"
-        self.rate_anchors, self.rate_rank = args.rate_anchors, args.rate_rank
+        self.rate_anchors = args.rate_anchors
         self.phase_order, self.refine_ch = args.phase_order, args.refine_ch
+        self.cascade = bool(args.cascade)
 
         # rate
         self.cbrs = [parse_cbr(c) for c in PREDEFINED_CBRS]
-        self.rate_sampling, self.rates_per_step = args.rate_sampling, int(args.rates_per_step)
+        self.rate_sampling = args.rate_sampling or ("grid" if self.cascade else "uniform")
+        self.rates_per_step = int(args.rates_per_step)
         self.top_prob = float(getattr(args, "top_prob", 0.0))
         self.fixed_cbr = parse_cbr(args.fixed_cbr) if args.fixed_cbr else None
         self.diag_cbr = self.cbrs[len(self.cbrs) // 2]
@@ -116,6 +125,7 @@ class Config:
             self._setup_tokens()
         self.cbr_units = [self.units_for_cbr(c) for c in self.cbrs]
         self._setup_rates(args)
+        self._setup_cascade(args)
 
         # resolution
         self.img_size = args.img_size
@@ -134,6 +144,9 @@ class Config:
                 f"effective batch is {per_step * self.accum_steps}, not {self.effective_batch} "
                 f"({self.batch_size} x {self.world_size} GPU(s) x {self.accum_steps} accumulation)")
         self.grad_clip, self.weight_decay, self.ema = args.grad_clip, args.weight_decay, args.ema
+        self.mod_lr_mult = float(args.mod_lr_mult)
+        if self.mod_lr_mult <= 0:
+            raise ValueError("--mod-lr-mult must be > 0")
         self.loss = args.loss
         self.freeze = getattr(args, "freeze", "none")
         if self.freeze != "none" and not args.pretrained:
@@ -208,15 +221,15 @@ class Config:
                 self.warnings.append("--phase-order raster: a partial phase refines the top rows "
                                      "of each block first (the previous tree's order; use it to "
                                      "evaluate that tree's checkpoints)")
-        if self.backbone in ("vit", "adatok") and self.tile % self.patch:
+        if self.backbone == "vit" and self.tile % self.patch:
             raise ValueError(f"--tile {self.tile} must be a multiple of --patch-size {self.patch}")
-        if self.backbone == "adatok" and self.zero_init:
-            raise ValueError("--zero-init is refused for adatok: identity blocks make the latent "
-                             "tokens image-independent at step 0 and DC removal erases them")
 
     def _setup_rates(self, args):
         if self.rates_per_step < 1:
             raise ValueError("--rates-per-step must be >= 1")
+        if self.rate_sampling == "sandwich" and not 2 <= self.rates_per_step <= len(self.cbrs):
+            raise ValueError(f"--rate-sampling sandwich sends the smallest and the largest budget "
+                             f"plus random ones: --rates-per-step must be 2..{len(self.cbrs)}")
         if not 0.0 <= self.top_prob <= 1.0:
             raise ValueError("--top-prob is a probability")
         if self.top_prob and (self.rate_sampling != "uniform" or self.fixed_cbr is not None):
@@ -250,6 +263,68 @@ class Config:
                 raise ValueError(f"--img-size {self.img_size} must be a multiple of --tile {self.tile}")
         self.size_multiple = mult   # native-resolution tests crop to a multiple of this
 
+    def _setup_cascade(self, args):
+        """Levels, code widths and the module spec of the depth cascade."""
+        self.levels = list(self.cbr_units[::-1])            # descending rate: level 0 = top
+        self.code_dims = list(self.levels)                  # real channels per position
+        self.mod_kinds = self.mod_depths = None
+        self.mod_width, self.mod_skip = args.mod_width, args.mod_skip
+        self.cascade_grad = float(args.cascade_grad)
+        if not self.cascade:
+            return
+        if self.backbone not in MODULE_DEFAULTS:
+            raise ValueError(f"--cascade supports --backbone swin (feature transmission) and vit "
+                             f"(token transmission), not {self.backbone}")
+        if self.fixed_cbr is not None or self.top_prob:
+            raise ValueError("--cascade trains the levels themselves: --fixed-cbr and --top-prob "
+                             "belong to the prefix scheme")
+        if self.rate_sampling == "uniform":
+            raise ValueError("--cascade has one code per predefined CBR: use --rate-sampling "
+                             "grid (default) or sandwich")
+        if not 0.0 <= self.cascade_grad <= 1.0:
+            raise ValueError("--cascade-grad is a fraction in [0, 1]")
+        if self.token:
+            per = self.grid_tokens
+            bad = [str(c) for c, u in zip(self.cbrs, self.cbr_units) if u % per]
+            if bad:
+                raise ValueError(f"--cascade needs every CBR on a phase boundary; {', '.join(bad)} "
+                                 f"is not (a level sends whole phases of {per} tokens)")
+            self.code_dims = [u // per * 2 * self.sym for u in self.levels]
+        n, d = len(self.levels) - 1, MODULE_DEFAULTS[self.backbone]
+
+        def per_stage(name, vals, default, cast):
+            vals = default if vals is None else [cast(v) for v in vals]
+            if len(vals) == 1:
+                vals = vals * n
+            if len(vals) != n:
+                raise ValueError(f"--{name} takes 1 or {n} values (one per stage), got {len(vals)}")
+            return vals
+
+        self.mod_kinds = per_stage("mod-kinds", args.mod_kinds, d["kinds"], str)
+        self.mod_depths = per_stage("mod-depths", args.mod_depths, d["depths"], int)
+        self.mod_width = int(self.mod_width or d["width"])
+        for k in self.mod_kinds:
+            if k not in ("mlp", "attn", "swin"):
+                raise ValueError(f"--mod-kinds are mlp|attn|swin, got {k!r}")
+        if min(self.mod_depths) < 0:
+            raise ValueError("--mod-depths must be >= 0")
+        if self.mod_skip not in ("proj", "trunc", "none"):
+            raise ValueError(f"--mod-skip is proj|trunc|none, got {self.mod_skip!r}")
+        for k, dep in zip(self.mod_kinds, self.mod_depths):
+            need = {"mlp": 1, "attn": 32, "swin": 16}[k] if dep else 1
+            if self.mod_width % need:
+                raise ValueError(f"--mod-width {self.mod_width} must be a multiple of {need} "
+                                 f"for a {k} stage (heads of {need} channels)")
+        if self.mod_skip == "none" and 0 in self.mod_depths:
+            raise ValueError("--mod-skip none needs a body in every stage (--mod-depths >= 1)")
+        if self.token and "swin" in self.mod_kinds and self.grid_side % self.window:
+            raise ValueError(f"swin stages need the tile's {self.grid_side}x{self.grid_side} "
+                             f"position grid to be a multiple of --window-size {self.window}")
+        for c in self.eval_cbrs:
+            if self.units_for_cbr(c, exact=False) not in self.cbr_units:
+                raise ValueError(f"--cascade evaluates its levels only: CBR {c} is not one of "
+                                 f"{', '.join(PREDEFINED_CBRS)}")
+
     # -- rate units -------------------------------------------------------------------
     def units_for_cbr(self, cbr, exact=True):
         """Tokens per tile (token models) or real channels per position (baseline)."""
@@ -277,7 +352,7 @@ class Config:
         if self.backbone in ("swin", "hybrid"):
             parts.append(self.model_size)
         if self.token:
-            patch = f"p{self.patch}" if self.backbone in ("vit", "adatok") else ""
+            patch = f"p{self.patch}" if self.backbone == "vit" else ""
             parts.append(f"{patch}d{self.token_dim}x{self.depth}s{self.sym}")
         parts += [self.channel_type, "+".join(self.trainsets), str(args.img_size)]
         d = BACKBONE_DEFAULTS[self.backbone]
@@ -294,7 +369,7 @@ class Config:
             extra.append(f"w{self.window}")
         if self.channel_type == "rayleigh" and self.equalizer != "mmse":
             extra.append(self.equalizer)
-        if self.rate_sampling != "uniform":
+        if self.rate_sampling != ("grid" if self.cascade else "uniform"):
             extra.append(self.rate_sampling)
         if self.rates_per_step != 1:
             extra.append(f"k{self.rates_per_step}")
@@ -306,6 +381,16 @@ class Config:
             extra.append("frz-" + self.freeze[:3])
         if self.refine_ch:
             extra.append(f"rf{self.refine_ch}")
+        if self.cascade:
+            letters = "".join(k[0] for k in self.mod_kinds)
+            d = MODULE_DEFAULTS[self.backbone]
+            extra.append(f"casc-{letters}-d{''.join(str(v) for v in self.mod_depths)}")
+            if self.mod_width != d["width"]:
+                extra.append(f"w{self.mod_width}")
+            if self.mod_skip != "proj":
+                extra.append(f"sk{self.mod_skip}")
+            if self.cascade_grad != 1.0:
+                extra.append(f"cg{self.cascade_grad:g}")
         perc = [f"{k}{v:g}" for k, v in (("sem", self.sem_weight), ("al", self.align_weight),
                                            ("imp", self.imp_weight), ("lp", self.lpips_weight)) if v]
         if perc:

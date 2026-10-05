@@ -1,22 +1,31 @@
-# Rate-adaptive deep JSCC: a SwinJSCC baseline and three token backbones
+# Rate-adaptive deep JSCC: feature and token transmission, prefix and depth-cascade rates
 
-A clean rewrite of `jscc_rev_20260923b`. One driver trains and tests four models
-that share the channel, the rate protocol and the evaluation. The rate is always
-a prefix: the receiver gets the first *k* channels (baseline) or the first *l*
-tokens of one ordered codeword and knows how many arrived. Nothing else about
-the channel reaches any network.
+One driver trains and tests the models below. They share the channel, the rate
+protocol and the evaluation. Two ways to make the rate adaptive:
+
+* **prefix** (default): one ordered codeword; the receiver gets the first *k*
+  channels (feature transmission) or the first *l* tokens (token transmission)
+  and knows how many arrived. Nothing else about the channel reaches any network.
+* **cascade** (`--cascade`, `net/cascade.py`, `docs/CASCADE.md`): a stack of small
+  modules between backbone encoder and decoder, one exit per predefined CBR; each
+  rate has its own module path, the backbones are shared. Judge it with
+  `docs/ASSESSMENT.md` (novelty, related work, venue) and run it with
+  `COMMANDS_CASCADE.txt`.
 
 | `--backbone` | model | rate unit at 256 px | parameters |
 |---|---|---|---|
-| `swin` (default) | **Baseline.** SwinJSCC + linear channel truncation, math unchanged | *k* real channels per position; CBR = *k*/1536 | 5.3 M |
-| `hybrid` | **Swin + attention.** Swin stages on the whole image, 16x16 latent blocks, phase tokens, joint `[grid ; tokens]` attention trunk: the previous best AdaJSCC | 16-symbol tokens, 6 phases x 256 positions per block; CBR = *l*/12288 | 12.5 M |
-| `vit` | **Plain ViT**, patch 8, width 768, 10 blocks per side: tiles coded and decoded independently | 4-symbol tokens, 6 phases x 1024 positions per tile; CBR = *l*/49152 | 142.4 M |
-| `adatok` | **AdaTok's tokenizer at TiTok-B size**, analog: learned latent tokens, MH-LoRA budget heads | 64-symbol 1D tokens, 384 per tile; CBR = *l*/3072 | 184.3 M |
+| `swin` (default) | **Feature transmission.** SwinJSCC + linear channel truncation, math unchanged | *k* real channels per position; CBR = *k*/1536 | 5.3 M |
+| `vit` | **Token transmission.** Plain ViT, patch 8, width 768, 10 blocks per side: tiles coded and decoded independently | 4-symbol tokens, 6 phases x 1024 positions per tile; CBR = *l*/49152 | 142.4 M |
+| `hybrid` | Swin + attention, phase tokens, joint `[grid ; tokens]` trunk: the previous best AdaJSCC. Prefix only | 16-symbol tokens, 6 phases x 256 positions per block; CBR = *l*/12288 | 12.5 M |
 
-All four fit one 24 GB RTX 3090 at batch 16 and 256 px. Estimated training
-peaks: hybrid ~21 GiB, adatok ~20, vit ~19, swin ~16; `tools/probe.py` measures
-the real figure in a minute. Memory-matched is not compute-matched: per image,
-vit costs about 6x and adatok about 4x the hybrid's FLOPs.
+The AdaTok backbone (learned 1D latent tokens, MH-LoRA budget heads) was removed:
+it did not turn tokens into detail (`docs/NOTES.md`, wave 1). `--cascade` adds
+1.76 M parameters (+33%) to `swin` and 2.71 M (+1.9%) to `vit` at the defaults.
+
+All models fit one 24 GB RTX 3090 at batch 16 and 256 px. Estimated training
+peaks: hybrid ~21 GiB, vit ~19, swin ~16; `tools/probe.py` measures the real
+figure in a minute. Memory-matched is not compute-matched: per image, vit costs
+about 6x the hybrid's FLOPs.
 
 ## Quick start
 
@@ -34,21 +43,24 @@ COMMON="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
 python main.py $COMMON                      # baseline
 python main.py $COMMON --backbone hybrid    # previous best AdaJSCC (see "Phase order")
 python main.py $COMMON --backbone vit
-python main.py $COMMON --backbone adatok
+python main.py $COMMON --backbone vit --cascade   # one module path per rate (docs/CASCADE.md)
+python main.py $COMMON --backbone swin --cascade
 torchrun --nproc_per_node 2 main.py $COMMON --backbone hybrid   # effective batch stays 16
 
 python main.py --backbone hybrid --pretrained history/<run>/models/last.pt     # test only
 python tools/compare_runs.py history/<run A> history/<run B> --window 5
+python tools/paired.py history/<control> history/<variant> --metric psnr   # paired Kodak, CIs over images
 ```
 
 A test-only run needs the model flags the checkpoint was trained with.
-`COMMANDS.txt` holds the current wave of runs, ready to paste.
+`COMMANDS_CASCADE.txt` holds the current wave of runs, ready to paste.
 
 ## Layout
 
 ```
 main.py                 train / test driver (one GPU or torchrun)
-COMMANDS.txt            wave 1 (memory-matched backbones), copy-paste ready
+COMMANDS_CASCADE.txt    current wave: depth-cascade module bake-off, copy-paste ready
+COMMANDS.txt            wave 1 (memory-matched backbones), historical
 COMMANDS_PERCEPTION.txt wave p1: perceptual fine-tuning, copy-paste ready
 COMMANDS_ALLOC.txt      per-image budget policy: sweep, oracle, predictor, copy-paste ready
 COMMANDS_FRONTIER.txt   story B's test: budget schedule vs constant weights, copy-paste ready
@@ -64,13 +76,16 @@ net/network.py          JSCC: encode -> send (channel) -> decode, and diagnose()
 net/channel.py          Sionna 2 AWGN / i.i.d. Rayleigh (+ a torch reference)
 net/tokens.py           token interface: order, DC removal, prenorm, folding
 net/loss.py             objective and reported metrics
-net/backbones/          swin_linear.py  hybrid.py  vit.py  adatok.py
+net/cascade.py          depth cascade: stages, module kinds, per-level token post-processing
+net/backbones/          swin_linear.py  hybrid.py  vit.py
 net/modules/            swin.py  transformer.py  rate_mod.py  common.py
 alloc/                  per-image budget policy: core.py (allocation, statistics),
                         sweep.py (curves), predictor.py (the policy), io.py
-tools/                  smoke.py  check_channel.py  compare_runs.py  probe.py  fetch_models.py
-                        alloc_sweep.py  alloc_policy.py  frontier.py
+tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
+                        fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
 docs/NOTES.md           what the previous tree established; open questions
+docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
+docs/ASSESSMENT.md      the cascade idea: related work, novelty, venue, go / no-go gates
 ```
 
 ## Defaults and the knobs worth knowing
@@ -89,18 +104,19 @@ Flags left unset take the backbone's defaults (`BACKBONE_DEFAULTS` in
   previous small size is `--patch-size 16 --sym-per-token 16 --token-dim 384
   --depth 6 --heads 6`. `--refine-ch 32` adds a small conv tail against
   patch-edge artefacts; it is off so the arm stays a plain transformer.
-- `adatok`: TiTok-B, `--patch-size 16 --sym-per-token 64 --token-dim 768 --depth 12
-  --heads 12 --rate-mod lora --rate-rank 16 --rate-anchors 8 --warmup-steps 2000`.
-  The paper's TiTok-S is `--token-dim 512 --depth 8 --heads 8`. `--zero-init` is
-  refused (it would make the latent tokens image-independent at step 0).
 - `swin`: `--model-size base --window-size 8`, no warm-up.
+
+- `--cascade` (swin, vit): `--mod-kinds mlp mlp swin swin` (vit: `attn`) `--mod-depths 1 2 3 4`
+  `--mod-width 96` (vit 128) `--mod-skip proj --cascade-grad 1`, grid rate sampling; see
+  `docs/CASCADE.md`. `--mod-lr-mult` trains the new modules faster when fine-tuning.
 
 All arms: AdamW, lr 1e-4, cosine decay to 5% (`--lr-floor`), batch 16 at 256 px,
 effective batch 16 (with a smaller `--batch-size`, gradient accumulation fills
 the gap), grad clip 1.0, 2000 epochs, validation every 40.
 
-Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]) or `grid` (the
-five predefined CBRs). `--rates-per-step K` decodes K budgets from one encoder
+Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
+(the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and
+largest). `--rates-per-step K` decodes K budgets from one encoder
 pass; use the same K in every arm of a comparison to match compute.
 `--fixed-cbr 1/16` trains a single-rate specialist. `--eval-cbrs` evaluates
 anywhere; results report the CBR actually sent.
@@ -141,7 +157,8 @@ Also: `--ema 0.999`, `--lr-schedule constant`, `--final-ckpt best`,
   reseeds torch and Sionna (seed + 1000 i + j), so every
   checkpoint of a configuration sees the same channel draws. Kodak is tested at
   native resolution. `hybrid` runs Swin on the whole image and blocks only the
-  bottleneck; `vit` and `adatok` code and decode 256 px tiles independently.
+  bottleneck; `vit` codes and decodes 256 px tiles independently (cascade modules act per
+  tile too).
 
 ## Output and the training log
 
@@ -375,8 +392,9 @@ the tail".
 
 For the token models, `JSCC.send(enc, units, snr)` and
 `JSCC.decode(enc, rx, units)` accept an integer tensor of budgets: one per image
-`(B,)`, or one per tile `(B*T,)` for `hybrid` and `adatok`. Decoders use key
-padding (`hybrid`, `adatok`) or masked folding (`vit`, whose budget modulation
-is per image). `tools/smoke.py` checks that mixed budgets decode exactly like
+`(B,)`, or one per tile `(B*T,)` for `hybrid`. Decoders use key padding (`hybrid`) or
+masked folding (`vit`, whose budget modulation is per image). Prefix models only: a
+cascade sends one level per batch (its allocation hook would be a per-image choice
+among the five levels, not built yet). `tools/smoke.py` checks that mixed budgets decode exactly like
 uniform ones. Nothing is trained on non-uniform budgets yet. Read the stage-2
 section of `docs/NOTES.md` before comparing a policy with fixed budgets.

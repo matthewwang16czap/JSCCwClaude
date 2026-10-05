@@ -33,8 +33,8 @@ PSNR, mean over SNR 1-13 dB, CBR 1/48, 1/24, 1/16, 1/12, 1/8.
 | hybrid (spread; raster within 0.01) | 25.46 27.68 28.76 29.19 29.71 | 26.17 28.39 29.49 29.84 30.26 |
 | vit, patch 8, 142 M | 26.35 28.59 29.87 30.45 31.02 | invalid (joint decoding, fixed) |
 | vit, patch 16, 22 M | 25.58 27.44 28.53 29.00 29.49 | invalid (joint decoding, fixed) |
-| adatok, TiTok-B | 19.34 20.69 20.81 20.82 20.84 | 20.98 22.05 22.13 22.15 22.15 |
-| adatok, TiTok-S | 18.71 19.56 19.78 19.86 19.90 | 20.20 20.99 21.17 21.23 21.26 |
+| adatok, TiTok-B (removed from the tree) | 19.34 20.69 20.81 20.82 20.84 | 20.98 22.05 22.13 22.15 22.15 |
+| adatok, TiTok-S (removed from the tree) | 18.71 19.56 19.78 19.86 19.90 | 20.20 20.99 21.17 21.23 21.26 |
 
 1. **The crossover reproduces** under the new protocol: the hybrid is ahead of
    channel truncation by ~0.15 dB at 1/48 and 1/24 and behind from 1/16 up
@@ -44,7 +44,8 @@ PSNR, mean over SNR 1-13 dB, CBR 1/48, 1/24, 1/16, 1/12, 1/8.
    the small one only at 1/48. Whether patch 8 or size drives it is open. Its
    Kodak numbers came from decoding six tiles as one grid never seen in
    training (-14 dB); now decoded tile by tile.
-4. **AdaTok does not turn tokens into detail.** Its decoder uses the channel
+4. **AdaTok does not turn tokens into detail** (the backbone is gone from the tree;
+   the code remains in the previous zip). Its decoder uses the channel
    (late in training: swapped ~10 dB vs psnr ~23 dB), but budgets beyond 1/24
    (128 tokens) add at most 0.15 dB at any point of training (0.34 for
    TiTok-S); at epoch 40 its output did not depend on the budget at all. The
@@ -122,8 +123,36 @@ per-image records (test_per_image.json) before trusting small differences.
 - `vit` on Kodak with tile-by-tile decoding (COMMANDS_RETEST.txt), and whether
   the big ViT's lead comes from patch 8 or from size: a patch-8 ViT at the
   hybrid's compute is `--token-dim 384 --depth 6 --heads 6` (~22 M parameters).
-- Seams: `vit` and `adatok` reconstruct 256 px tiles independently.
+- Seams: `vit` reconstructs 256 px tiles independently.
 - EMA, other seeds, budgets between the five CBRs.
 - Rayleigh. The decoders are channel-blind by design, and the MMSE equaliser
   assumes unit symbol variance, which the per-token gain violates (up to e^4
   between tokens). Whether that costs anything is open.
+
+## Cascade wave c1 (`COMMANDS_CASCADE.txt`): what would count as evidence
+
+Background: the tail probes (`COMMANDS_TAIL.txt`) showed the nested code's last third
+carries almost nothing (-0.02 dB from 1/12 to 1/8 without noise, against +1.00 dB for a
+fixed-rate code) and a 1/8 specialist beats the nested ViT by 0.29-0.71 dB.
+`--cascade` (docs/CASCADE.md) gives each rate its own module path. `tools/toy_nesting.py`
+shows a LINEAR-Gaussian nested code loses <= 0.2 dB, so the penalty is a nonlinear effect.
+
+Fine-tunes of the wave-1 swin and vit checkpoints, 400 epochs, the p1 recipe, against a
+control fine-tuned identically on the SAME five budgets (`--rate-sampling grid`, no
+modules). Arms per interface: linear (depth 0), all-mlp, mixed (mlp, mlp, spatial,
+spatial), all-spatial; then gradient sharing 0.5 and a reversed depth schedule. Reading
+(paired Kodak table, `tools/paired.py`, plus 5-validation windows):
+
+1. any arm - control >= +0.3 dB mean over the five CBRs (CI above 0 at >= 3 CBRs) is the
+   bar to continue; < +0.1 dB means the nesting penalty is not what a cascade removes;
+2. linear - control > 0 at the low CBRs: rate-specific paths help by themselves; if only
+   the module arms gain, the effect is capacity: add the parameter-matched adapter control;
+3. spatial vs mlp per level: the factorial mmmm / mmss / ssss, read at the levels each
+   stage owns (stage 1 -> 1/12, stage 2 -> 1/16, stage 3 -> 1/24, stage 4 -> 1/48);
+4. top rate: every arm - control at 1/8 against the 0.3-0.7 dB specialist gap;
+5. depth schedule d1234 vs d4321 (same parameters): "deeper for fewer channels";
+6. swin pays +33% parameters, vit +1.9%: do not credit Swin's gain to structure before
+   the matched control.
+
+Warm starts keep `z0` ordered. The fair test of the top rate is from scratch (`--mod-skip
+none`, `--cascade-grad` < 1): wave c2, after these results.

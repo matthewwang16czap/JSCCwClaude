@@ -3,7 +3,8 @@
     CUDA_VISIBLE_DEVICES=0 python tools/probe.py --backbone vit --batch-size 16 --amp
 
 Takes the same flags as main.py (plus --steps). Trains a few steps on random
-images at the LARGEST budget, where uniform prefix sampling peaks, and prints
+images at the LARGEST budget, where uniform prefix sampling peaks (for --cascade: at the
+smallest, the deepest level), and prints
 the parameter count, the peak memory PyTorch allocated and reserved, and the
 time per optimiser step. nvidia-smi shows the reserved figure plus the CUDA
 context (0.3-0.5 GB). On a 24 GB card keep reserved at or below ~22 GiB:
@@ -36,7 +37,9 @@ def main():
     model = JSCC(cfg).to(dev).train()
     model.objective.schedule = "constant"   # every perceptual term on at the largest budget: worst case
     opt = torch.optim.AdamW(param_groups(model, cfg.weight_decay), lr=cfg.lr)
-    units = cfg.cbr_units[-1]
+    # the prefix scheme peaks at the largest budget; a cascade at its deepest level (the whole
+    # module chain on both sides)
+    units = cfg.cbr_units[0] if cfg.cascade else cfg.cbr_units[-1]
     x = torch.rand(cfg.batch_size, 3, cfg.img_size, cfg.img_size, device=dev)
     snr = torch.full((cfg.batch_size,), 10.0, device=dev)
 

@@ -36,7 +36,8 @@ def table(results, keys=None):
 
 
 def train(cfg, net, model, loaders, log, rank):
-    optimizer = torch.optim.AdamW(param_groups(model, cfg.weight_decay), lr=cfg.lr)
+    optimizer = torch.optim.AdamW(param_groups(model, cfg.weight_decay, cfg.lr, cfg.mod_lr_mult),
+                                  lr=cfg.lr)
     steps_per_epoch = max(1, len(loaders.train) // cfg.accum_steps)
     scheduler = build_scheduler(optimizer, cfg, steps_per_epoch)
     ema = EMA(model, cfg.ema) if cfg.ema > 0 else None
@@ -114,8 +115,19 @@ def main():
     if log:
         log.info(f"{cfg.run_name}: {sum(p.numel() for p in model.parameters()) / 1e6:.2f} M "
                  f"parameters, effective batch {cfg.batch_size * cfg.world_size * cfg.accum_steps}")
+        if cfg.cascade:
+            mods = sum(p.numel() for n, p in model.named_parameters()
+                       if n.startswith(("enc_cascade.", "dec_cascade.")))
+            log.info(f"cascade: {mods / 1e6:.2f} M parameters in the modules "
+                     f"(kinds {cfg.mod_kinds}, depths {cfg.mod_depths}, width {cfg.mod_width}, "
+                     f"skip {cfg.mod_skip}, grad share {cfg.cascade_grad:g}); levels {cfg.levels}")
     if cfg.pretrained:
-        load_weights(model, cfg.pretrained, log)
+        report = load_weights(model, cfg.pretrained, log)
+        if cfg.cascade and cfg.token and any(k.startswith("enc_cascade.posts")
+                                             for k in report.missing_keys):
+            model.seed_levels()   # a prefix checkpoint: levels start from its gain / DC tables
+            if log:
+                log.info("prefix checkpoint: the cascade levels start from its gain and DC tables")
     if cfg.freeze != "none":
         n = model.freeze(cfg.freeze)
         if log:
@@ -125,7 +137,7 @@ def main():
     net = model
     if ddp.world_size > 1:
         net = DDP(model, device_ids=[ddp.local_rank] if cfg.device.type == "cuda" else None,
-                  find_unused_parameters=model.token)
+                  find_unused_parameters=model.token or model.cascade)
     loaders = get_loaders(cfg, ddp.rank, ddp.world_size, train=cfg.training)
     if cfg.training:
         train(cfg, net, model, loaders, log, ddp.rank)

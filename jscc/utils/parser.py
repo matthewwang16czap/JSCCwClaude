@@ -7,7 +7,8 @@ import os
 
 def create_parser():
     p = argparse.ArgumentParser(
-        description="Rate-adaptive deep JSCC: SwinJSCC baseline + three token backbones")
+        description="Rate-adaptive deep JSCC: feature transmission (Swin) and token "
+                    "transmission (ViT), prefix or depth-cascade rate adaptation")
 
     g = p.add_argument_group("run")
     g.add_argument("--training", action="store_true",
@@ -21,17 +22,17 @@ def create_parser():
     g.add_argument("--out-dir", default="./history")
 
     g = p.add_argument_group("model")
-    g.add_argument("--backbone", default="swin", choices=["swin", "hybrid", "vit", "adatok"],
-                   help="swin = SwinJSCC + linear truncation (baseline); hybrid = Swin + "
-                        "attention tokens; vit = plain ViT tokens; adatok = AdaTok/TiTok-S")
+    g.add_argument("--backbone", default="swin", choices=["swin", "hybrid", "vit"],
+                   help="swin = SwinJSCC feature transmission (baseline); vit = plain ViT "
+                        "token transmission; hybrid = Swin + attention tokens (prefix only)")
     g.add_argument("--model-size", default="base", choices=["small", "base", "large"],
                    help="Swin stage sizes (swin, hybrid)")
     g.add_argument("--window-size", type=int, default=8, help="Swin window (swin, hybrid)")
     g.add_argument("--token-dim", type=int, default=None, help="transformer width")
     g.add_argument("--depth", type=int, default=None,
-                   help="blocks per side: token trunk (hybrid) or ViT (vit, adatok)")
+                   help="blocks per side: token trunk (hybrid) or ViT (vit)")
     g.add_argument("--heads", type=int, default=None)
-    g.add_argument("--patch-size", type=int, default=None, help="vit, adatok")
+    g.add_argument("--patch-size", type=int, default=None, help="vit")
     g.add_argument("--sym-per-token", type=int, default=None,
                    help="complex symbols per token")
     g.add_argument("--tile", type=int, default=256,
@@ -42,12 +43,34 @@ def create_parser():
                    help="zero the residual branches of the token transformers")
     g.add_argument("--phase-order", default="spread", choices=["spread", "raster"],
                    help="hybrid, vit: position order within a phase")
-    g.add_argument("--rate-mod", default=None, choices=["none", "film", "lora", "both"],
+    g.add_argument("--rate-mod", default=None, choices=["none", "film"],
                    help="budget modulation of the token decoder")
     g.add_argument("--rate-anchors", type=int, default=8)
-    g.add_argument("--rate-rank", type=int, default=16)
     g.add_argument("--refine-ch", type=int, default=0,
-                   help="vit, adatok: width of an optional conv tail (0 = off)")
+                   help="vit: width of an optional conv tail (0 = off)")
+
+    g = p.add_argument_group("depth cascade (net/cascade.py): rate k = its own module path")
+    g.add_argument("--cascade", action="store_true",
+                   help="rate adaptation by a stack of small modules between the backbone "
+                        "encoder and decoder, one exit per predefined CBR (swin, vit), "
+                        "instead of sending a prefix of one ordered codeword")
+    g.add_argument("--mod-kinds", nargs="+", default=None, metavar="KIND",
+                   help="mlp | attn | swin, one per stage (4) or one for all; the stages "
+                        "step down the rate ladder 1/8 -> 1/12 -> 1/16 -> 1/24 -> 1/48")
+    g.add_argument("--mod-depths", nargs="+", type=int, default=None, metavar="N",
+                   help="blocks per stage (4 values or one for all); 0 = bare skip")
+    g.add_argument("--mod-width", type=int, default=None,
+                   help="hidden width of a stage body (default 96 swin, 128 vit)")
+    g.add_argument("--mod-skip", default="proj", choices=["proj", "trunc", "none"],
+                   help="proj: learned linear skip initialised to channel truncation; trunc: "
+                        "fixed truncation (the code stays ordered); none: body only")
+    g.add_argument("--cascade-grad", type=float, default=1.0,
+                   help="fraction of the gradient that passes each stage boundary on its way "
+                        "from a deeper exit into the shared shallower code: 1 = joint training, "
+                        "0 = every stage trained on a detached input")
+    g.add_argument("--mod-lr-mult", type=float, default=1.0,
+                   help="learning-rate multiplier of the cascade modules (new, randomly "
+                        "initialised parameters; useful when fine-tuning a --pretrained backbone)")
 
     g = p.add_argument_group("channel")
     g.add_argument("--channel-type", default="awgn", choices=["awgn", "rayleigh", "none"])
@@ -62,8 +85,10 @@ def create_parser():
                    help="training SNR range (dB), uniform per image")
 
     g = p.add_argument_group("rate")
-    g.add_argument("--rate-sampling", default="uniform", choices=["uniform", "grid"],
-                   help="uniform: continuous CBR in [1/48, 1/8]; grid: the 5 predefined CBRs")
+    g.add_argument("--rate-sampling", default=None, choices=["uniform", "grid", "sandwich"],
+                   help="uniform: continuous CBR in [1/48, 1/8] (prefix default); grid: the 5 "
+                        "predefined CBRs (cascade default); sandwich: grid, always including the "
+                        "smallest and the largest budget (--rates-per-step >= 2)")
     g.add_argument("--rates-per-step", type=int, default=1,
                    help="budgets decoded per step from one encoder pass (loss = mean)")
     g.add_argument("--fixed-cbr", default=None, help="train a single-rate specialist")

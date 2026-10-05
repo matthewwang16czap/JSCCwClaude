@@ -86,7 +86,7 @@ def to_image(logits):
 
 
 class Refine(nn.Module):
-    """Optional residual conv tail on the image logits (vit, adatok).
+    """Optional residual conv tail on the image logits (vit).
 
     A linear patch head leaves block edges; this is the usual cheap cure. The
     last conv is zero-initialised, so the tail starts as the identity. Off by

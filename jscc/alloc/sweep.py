@@ -161,6 +161,10 @@ def sweep(model, cfg, loader, units, metrics, draws=2, snrs=None, random_snrs=0,
     noise-free channel (what the transmitter can simulate), snr (N, S),
     feat_img (N, 14), feat_code (N, 24), pixels (N,)."""
     model.eval()
+    if getattr(model, "cascade", False):
+        raise ValueError("the allocation sweep reads prefixes of one codeword with common noise; a "
+                         "cascade model has one code per level (the per-image choice among its "
+                         "levels is future work)")
     dev, kind, eq = cfg.device, cfg.channel_type, cfg.equalizer
     if kind == "none":
         raise ValueError("a noise-free channel has no SNR to sweep; train with awgn or rayleigh")

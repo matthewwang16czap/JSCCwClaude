@@ -1,18 +1,27 @@
-"""JSCC: encoder -> rate -> channel -> decoder, one class for all four models.
+"""JSCC: encoder -> rate -> channel -> decoder, one class for all models.
 
-    swin    SwinJSCC + linear channel truncation (the baseline)
-    hybrid  Swin + attention, phase tokens            (net/backbones/hybrid.py)
-    vit     plain ViT, phase tokens                   (net/backbones/vit.py)
-    adatok  AdaTok / TiTok-S 1D latent tokens         (net/backbones/adatok.py)
+    swin    SwinJSCC, feature transmission: real channels of a latent grid (the baseline)
+    vit     plain ViT, token transmission: phase tokens tied to patch positions
+    hybrid  Swin + attention phase tokens (prefix scheme only)
 
 A "unit" is what the rate controls: real channels k per grid position for the
 baseline (CBR = k/1536), tokens l per tile for the token models
 (CBR = l * sym / (3 * tile^2)). No network input depends on the SNR or on the
 channel state; the only thing a decoder is told is how many units arrived.
 
+Two rate schemes (--cascade selects the second):
+
+    prefix   one ordered codeword; rate = how much of its head is sent. One decoder
+             path for every rate (token decoders also get a FiLM keyed on l).
+    cascade  a stack of small modules between backbone and codec head, one exit per
+             predefined CBR (net/cascade.py). Rate k sends the code of level k and
+             the receiver runs the decoder modules of that level; units must be one
+             of cfg.cbr_units. The number of symbols that arrive still identifies
+             the level, so nothing is signalled.
+
 Per-sample budgets (the hook for a future allocation policy): pass a (B,)
-integer tensor as `units` to send()/decode() of a token model. Each image then
-transmits its own prefix; decoders use key padding (hybrid, adatok) or masked
+integer tensor as `units` to send()/decode() of a prefix token model. Each image
+then transmits its own prefix; decoders use key padding (hybrid) or masked
 folding (vit). Only uniform budgets are trained and evaluated in this tree.
 """
 
@@ -21,12 +30,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils.metrics import per_image_mse, psnr
-from .backbones import adatok, hybrid, swin_linear, vit
+from . import cascade
+from .backbones import hybrid, swin_linear, vit
 from .channel import Channel
 from .loss import Objective
-from .tokens import token_valid
+from .tokens import post_symbols, token_valid
 
-BUILDERS = {"hybrid": hybrid.build, "vit": vit.build, "adatok": adatok.build}
+BUILDERS = {"hybrid": hybrid.build, "vit": vit.build}
 
 
 class JSCC(nn.Module):
@@ -35,12 +45,16 @@ class JSCC(nn.Module):
         self.cfg = cfg
         self.kind = cfg.backbone
         self.token = cfg.token
+        self.cascade = cfg.cascade
         self.channel = Channel(cfg.channel_type, cfg.channel_backend, cfg.equalizer)
         if self.token:
             self.encoder, self.decoder = BUILDERS[self.kind](cfg)
         else:
             self.encoder, self.decoder, self.enc_adapter, self.dec_adapter = \
                 swin_linear.build(cfg)
+        if self.cascade:
+            self.levels = list(cfg.levels)
+            self.enc_cascade, self.dec_cascade = cascade.build(cfg)
         tap_dim = cfg.token_dim if self.token else cfg.swin_decoder_kwargs["embed_dims"][0]
         self.objective = Objective(cfg, tap_dim)
         if self.objective.wants_taps:   # decoder hidden state for the alignment term
@@ -51,12 +65,17 @@ class JSCC(nn.Module):
 
     # -- probes: train one half of a pretrained model ---------------------------
     def halves(self):
-        """The modules on each side of the channel (adapters go with their side;
-        the objective's own heads stay trainable)."""
+        """The modules on each side of the channel (adapters and cascade modules
+        go with their side; the objective's own heads stay trainable)."""
         if self.token:
-            return {"encoder": [self.encoder], "decoder": [self.decoder]}
-        return {"encoder": [self.encoder, self.enc_adapter],
-                "decoder": [self.decoder, self.dec_adapter]}
+            halves = {"encoder": [self.encoder], "decoder": [self.decoder]}
+        else:
+            halves = {"encoder": [self.encoder, self.enc_adapter],
+                      "decoder": [self.decoder, self.dec_adapter]}
+        if self.cascade:
+            halves["encoder"].append(self.enc_cascade)
+            halves["decoder"].append(self.dec_cascade)
+        return halves
 
     def freeze(self, part):
         """Stop gradients into one half; returns the number of frozen tensors."""
@@ -75,12 +94,29 @@ class JSCC(nn.Module):
             m.eval()    # a frozen half behaves exactly as at test time
         return self
 
+    @torch.no_grad()
+    def seed_levels(self):
+        """After a PREFIX token checkpoint was loaded into a cascade model: start
+        every level's gain and DC tables from the head of the prefix model's, so
+        that at step 0 each level sends what the prefix model sends at that budget."""
+        if self.cascade and self.token:
+            self.enc_cascade.seed(self.encoder.gain, self.encoder.dc.mean)
+
     # -- rate -----------------------------------------------------------------
     def units(self, cbr):
         return self.cfg.units_for_cbr(cbr, exact=False)
 
     def cbr_of(self, units):
         return self.cfg.cbr_for_units(units)
+
+    def level_of(self, units):
+        """Cascade: the level (0 = top rate) whose code carries `units`."""
+        if torch.is_tensor(units):
+            raise ValueError("a cascade sends one level per batch; per-image budgets belong to "
+                             "the prefix scheme")
+        if int(units) not in self.levels:
+            raise ValueError(f"{units} units is not a level of this cascade {self.levels}")
+        return self.levels.index(int(units))
 
     def sample_units(self):
         """Training budgets for one step, ascending. Host RNG only (no sync)."""
@@ -90,6 +126,9 @@ class JSCC(nn.Module):
         if c.rate_sampling == "grid":
             pick = torch.randperm(len(c.cbrs))[:c.rates_per_step].sort().values
             return [c.cbr_units[i] for i in pick.tolist()]
+        if c.rate_sampling == "sandwich":
+            mid = (torch.randperm(len(c.cbrs) - 2)[:c.rates_per_step - 2] + 1).tolist()
+            return [c.cbr_units[i] for i in sorted([0, len(c.cbrs) - 1] + mid)]
         lo, hi = float(c.cbrs[0]), float(c.cbrs[-1])
         draws = torch.rand(c.rates_per_step).tolist()
         tops = torch.rand(c.rates_per_step).tolist() if c.top_prob else [1.0] * len(draws)
@@ -98,11 +137,35 @@ class JSCC(nn.Module):
 
     # -- encode / send / decode --------------------------------------------------
     def encode(self, x):
+        B = x.shape[0]
         if self.token:
+            if self.cascade:
+                z, shape = self.encoder.code(x)
+                return {"B": B, "codes": [z], "shape": shape,
+                        "hw": (self.encoder.side, self.encoder.side)}
             sym, shape = self.encoder(x)
-            return {"B": x.shape[0], "sym": sym, "shape": shape}
+            return {"B": B, "sym": sym, "shape": shape}
         feat, H, W = self.encoder(x)
-        return {"B": x.shape[0], "full": self.enc_adapter(feat), "shape": (H, W)}
+        full = self.enc_adapter(feat)
+        enc = {"B": B, "full": full, "shape": (H, W)}
+        if self.cascade:
+            enc.update(codes=[full], hw=(H, W))
+        return enc
+
+    def codeword(self, enc, units):
+        """What the transmitter puts on the channel for `units`, before the
+        channel's power normalisation: tokens (rows, n, 2 sym) or channels (B, N, k)."""
+        if not self.cascade:
+            return enc["sym"][:, :units] if self.token else enc["full"][..., :units]
+        j = self.level_of(units)
+        z = self.enc_cascade.advance(enc, j)
+        if not self.token:
+            return z
+        with torch.autocast(device_type=z.device.type, enabled=False):
+            tok = self.encoder.layout(z.float())
+            if j == 0:
+                return post_symbols(tok, self.encoder.gain, self.encoder.dc)
+            return self.enc_cascade.posts[j - 1](tok)
 
     @staticmethod
     def _rows(v, rows, batch, device, dtype):
@@ -118,6 +181,10 @@ class JSCC(nn.Module):
         return t
 
     def send(self, enc, units, snr):
+        if self.cascade:
+            cw = self.codeword(enc, units)
+            return self.channel(cw, self._rows(snr, cw.shape[0], enc["B"], cw.device,
+                                               torch.float32))
         if not self.token:
             if torch.is_tensor(units):
                 raise ValueError("the linear baseline takes one channel width per batch")
@@ -133,13 +200,28 @@ class JSCC(nn.Module):
         y = self.channel(sym[:, :units], snr)
         return F.pad(y, (0, 0, 0, M - units))
 
+    def _expand(self, enc, rx, units):
+        """Cascade: the received code of a level -> the estimate of z_0 (full width)
+        through that level's decoder modules."""
+        if self.token:
+            rx = self.decoder.inv_layout(rx)
+        return self.dec_cascade(rx, self.level_of(units), enc["hw"])
+
+    def _swin_input(self, enc, rx, units):
+        """Baseline decoder input for one received code."""
+        return self.dec_adapter(self._expand(enc, rx, units) if self.cascade else rx)
+
     def decode(self, enc, rx, units):
+        if self.cascade and self.token:
+            zhat = self._expand(enc, rx, units)
+            grid = self.decoder.embed_code(zhat, int(units) // self.decoder.N)
+            return self.decoder.finish(grid, int(units), enc["shape"])
         if self.token:
             if torch.is_tensor(units):
                 units = self._rows(units, rx.shape[0], enc["B"], rx.device, torch.long)
             return self.decoder(rx, units, enc["shape"])
         H, W = enc["shape"]
-        return self.decoder(self.dec_adapter(rx), H, W)
+        return self.decoder(self._swin_input(enc, rx, units), H, W)
 
     # -- forward ------------------------------------------------------------------
     def forward(self, x, snr, cbr=None, units=None, want_metrics=True):
@@ -158,7 +240,7 @@ class JSCC(nn.Module):
         taps = [] if self.objective.wants_taps else None
         if not self.token and len(units) > 1:
             H, W = enc["shape"]
-            stacked = torch.cat([self.dec_adapter(r) for r in rxs], 0)
+            stacked = torch.cat([self._swin_input(enc, r, u) for r, u in zip(rxs, units)], 0)
             recons = list(self.decoder(stacked, H, W).chunk(len(units), 0))
             if taps is not None:
                 taps = list(self.decoder.tap_grid().chunk(len(units), 0))
@@ -200,7 +282,7 @@ class JSCC(nn.Module):
             out = {k: float(psnr(per_image_mse(self.decode(enc, v, u).float().clamp(0, 1),
                                                x.float())).mean())
                    for k, v in variants.items()}
-            sent = (enc["sym"][:, :u] if self.token else enc["full"][..., :u]).float()
+            sent = self.codeword(enc, u).float()
             out["common"] = float(sent.mean(0).pow(2).mean() / sent.pow(2).mean().clamp_min(1e-12))
             out["cbr"] = self.cbr_of(u)
         finally:

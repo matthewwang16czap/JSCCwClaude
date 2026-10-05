@@ -132,10 +132,21 @@ NO_DECAY = ("query", "pos", "latent", "phase", "gain", "mask_token", "grid_query
             "relative_position_bias_table")
 
 
-def param_groups(model, weight_decay):
-    decay, plain = [], []
+CASCADE_MODULES = ("enc_cascade.", "dec_cascade.")
+
+
+def param_groups(model, weight_decay, lr=None, module_lr_mult=1.0):
+    """Decay / no-decay groups; the cascade modules (new parameters) can train at
+    `module_lr_mult` x lr, in groups of their own (the scheduler scales each group)."""
+    groups = {}
     for n, p in model.named_parameters():
         if p.requires_grad:
-            (plain if p.ndim <= 1 or any(k in n for k in NO_DECAY) else decay).append(p)
-    return [{"params": decay, "weight_decay": weight_decay},
-            {"params": plain, "weight_decay": 0.0}]
+            plain = p.ndim <= 1 or any(k in n for k in NO_DECAY)
+            groups.setdefault((plain, n.startswith(CASCADE_MODULES)), []).append(p)
+    out = []
+    for (plain, is_module), params in groups.items():
+        g = {"params": params, "weight_decay": 0.0 if plain else weight_decay}
+        if is_module and module_lr_mult != 1.0:
+            g["lr"] = lr * module_lr_mult
+        out.append(g)
+    return out
