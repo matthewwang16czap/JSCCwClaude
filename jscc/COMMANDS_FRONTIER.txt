@@ -1,0 +1,192 @@
+================================================================================
+ COMMANDS_FRONTIER.txt — story B's decisive test: does a BUDGET-SCHEDULED
+ perceptual weight beat CONSTANT weights, on metrics it was not trained on?
+ rev 2026-09-28. Everything runs on the server, from the jscc/ directory.
+================================================================================
+
+THE QUESTION. With our relative loss, a constant weight already sets the same
+marginal trade-off (dB of PSNR per percent of LPIPS) at every budget. A
+schedule w(u) can only be MORE than a choice of operating points if the value
+of perception differs by budget. So at every budget we draw the trade-off
+curve of constant weights and place the scheduled model against it.
+
+THE MODELS (all ViT, all 400-epoch fine-tunes of the same w1 checkpoint, the
+p1 recipe; two are new):
+  weight 0      MSE control                      exists  (p1)
+  weight 0.5    LPIPS, constant                  exists  (p1, lp0.5-const)
+  weight 0.2    LPIPS, constant                  NEW     (lp0.2-const)
+  schedule      LPIPS 0.5 x w(u), gamma 1        NEW     (lp0.5)
+The schedule's local weight is 0.5 at 1/48, 0.4 at 1/24, 0.3 at 1/16, 0.2 at
+1/12 and 0 at 1/8: it meets a constant model exactly at 1/48, 1/12 and 1/8
+(printed as paired "same local weight" rows) and lies between them elsewhere.
+Optional, if GPUs are free: constant 0.1 (tightens the high-budget end, where
+the schedule's weights are 0.05-0.15) and the schedule with gamma 2.
+
+THE VERDICT (tools/frontier.py), on DISTS and LPIPS-VGG (LPIPS-Alex, the
+training metric, is printed for reference only):
+  chord   straight line between neighbouring constant weights: always
+          reachable (decode a share of the images with each model)
+  bound   the neighbouring chords extended and the segment's left end: a
+          concave, non-increasing curve cannot exceed it
+  ABOVE / chord+ / on / BELOW   per budget, gaps in dB-equivalent (the PSNR
+          the schedule saves at equal perceptual quality), >= 0.05 dB with the
+          95% CI over images excluding 0
+  LIVES   ABOVE on both metrics at >= 2 budgets, BELOW nowhere  -> the
+          efficiency claim (a Pareto gain) stands
+  DEAD    never above even the chord -> the schedule only picks operating
+          points constant weights reach; the PREFERENCE version remains
+  MIXED   wins somewhere, loses somewhere; OPEN: train the weight it prints
+
+--------------------------------------------------------------------------------
+ 0. UNPACK, GATES (CPU, a few minutes)
+--------------------------------------------------------------------------------
+
+cd ~/projects/jscc_clean && unzip -o ~/jscc_clean.zip && cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py            # ends with "all checks passed" ([frontier] is new)
+mkdir -p curves results
+
+--------------------------------------------------------------------------------
+ 1. THE TWO NEW FINE-TUNES (GPU; same wall time as the p1 runs)
+--------------------------------------------------------------------------------
+
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag p1"
+VIT="--backbone vit --pretrained history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt"
+
+# GPU 0 — the schedule: LPIPS 0.5 x w(u), gamma 1   -> ..._lp0.5_p1
+CUDA_VISIBLE_DEVICES=0 nohup python main.py $FT $VIT --lpips-weight 0.5 \
+  > f1_gpu0_vit_lp05_budget.out 2>&1 &
+
+# GPU 1 — constant LPIPS 0.2                         -> ..._lp0.2-const_p1
+CUDA_VISIBLE_DEVICES=1 nohup python main.py $FT $VIT --lpips-weight 0.2 \
+  --perc-schedule constant > f1_gpu1_vit_lp02_const.out 2>&1 &
+
+# OPTIONAL GPU 2 — constant LPIPS 0.1                -> ..._lp0.1-const_p1
+CUDA_VISIBLE_DEVICES=2 nohup python main.py $FT $VIT --lpips-weight 0.1 \
+  --perc-schedule constant > f1_gpu2_vit_lp01_const.out 2>&1 &
+
+# OPTIONAL GPU 3 — the schedule with gamma 2         -> ..._lp0.5-g2_p1
+CUDA_VISIBLE_DEVICES=3 nohup python main.py $FT $VIT --lpips-weight 0.5 \
+  --perc-gamma 2 > f1_gpu3_vit_lp05_g2.out 2>&1 &
+
+grep -h "loaded" f1_gpu*.out     # 0 missing, 0 unexpected
+tail -n 1 f1_gpu*.out            # loss, psnr, lpips per run
+
+--------------------------------------------------------------------------------
+ 2. EARLY READ WHILE THEY TRAIN — the sem/align/imp pair you already have
+    (GPU, ~10 min per sweep; only two constant weights, 0 and 0.5, so it can
+    say BELOW / chord+ / on, and ABOVE only if the schedule beats a constant
+    model on both axes)
+--------------------------------------------------------------------------------
+
+SW="python tools/alloc_sweep.py --img-size 256 --channel-type awgn --amp"
+TEST="--split test --testset Kodak --snrs 1 4 7 10 13 --draws 4"
+V=history/vit_p8d768x10s4_awgn_DIV2K_256
+ls -l curves/vit_mse_kodak.npz curves/vit_lp_kodak.npz   # from COMMANDS_ALLOC step 1
+# (missing? re-make them: $SW --backbone vit --pretrained ${V}_p1/models/last.pt $TEST
+#  --out curves/vit_mse_kodak.npz   and the same with ${V}_lp0.5-const_p1 ->
+#  curves/vit_lp_kodak.npz)
+
+CUDA_VISIBLE_DEVICES=4 nohup sh -c "$SW --backbone vit \
+  --pretrained ${V}_sem0.5-al0.5-imp0.5_p1/models/last.pt $TEST \
+  --out curves/vit_semb_kodak.npz && $SW --backbone vit \
+  --pretrained ${V}_sem0.5-al0.5-imp0.5-const_p1/models/last.pt $TEST \
+  --out curves/vit_semc_kodak.npz" > f2_sem_sweeps.out 2>&1 &
+
+# when both are written:
+python tools/frontier.py --const curves/vit_mse_kodak.npz curves/vit_semc_kodak.npz \
+  --test sem_budget=curves/vit_semb_kodak.npz --train-metric "" \
+  --out results/frontier_sem.json --plot results/frontier_sem \
+  2>&1 | tee results/frontier_sem.txt
+
+--------------------------------------------------------------------------------
+ 3. AFTER STEP 1 — sweep the new checkpoints (GPU, ~10 min each). Same
+    --seed as the existing sweeps (the default): every model then sees the
+    SAME channel noise, and the tool says so ("channel noise SHARED")
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=0 nohup $SW --backbone vit --pretrained ${V}_lp0.5_p1/models/last.pt \
+  $TEST --out curves/vit_lp05b_kodak.npz > f3_sweep_b.out 2>&1 &
+CUDA_VISIBLE_DEVICES=1 nohup $SW --backbone vit --pretrained ${V}_lp0.2-const_p1/models/last.pt \
+  $TEST --out curves/vit_lp02c_kodak.npz > f3_sweep_c02.out 2>&1 &
+# optional runs:
+CUDA_VISIBLE_DEVICES=2 nohup $SW --backbone vit --pretrained ${V}_lp0.1-const_p1/models/last.pt \
+  $TEST --out curves/vit_lp01c_kodak.npz > f3_sweep_c01.out 2>&1 &
+CUDA_VISIBLE_DEVICES=3 nohup $SW --backbone vit --pretrained ${V}_lp0.5-g2_p1/models/last.pt \
+  $TEST --out curves/vit_lp05g2_kodak.npz > f3_sweep_g2.out 2>&1 &
+
+grep loaded f3_*.out             # 0 missing, 0 unexpected
+
+--------------------------------------------------------------------------------
+ 4. THE TEST (CPU, seconds)
+--------------------------------------------------------------------------------
+
+python tools/frontier.py \
+  --const curves/vit_mse_kodak.npz curves/vit_lp02c_kodak.npz curves/vit_lp_kodak.npz \
+  --test gamma1=curves/vit_lp05b_kodak.npz \
+  --out results/frontier_lp.json --plot results/frontier_lp \
+  2>&1 | tee results/frontier_lp.txt
+
+# with the optional runs (add whichever exist):
+python tools/frontier.py \
+  --const curves/vit_mse_kodak.npz curves/vit_lp01c_kodak.npz curves/vit_lp02c_kodak.npz \
+          curves/vit_lp_kodak.npz \
+  --test gamma1=curves/vit_lp05b_kodak.npz gamma2=curves/vit_lp05g2_kodak.npz \
+  --out results/frontier_lp_all.json --plot results/frontier_lp_all \
+  2>&1 | tee results/frontier_lp_all.txt
+
+# Weights and the schedule are read from the checkpoint names stored in the
+# curve files (0.2=path or --schedule 0.5 1 override them).
+
+--------------------------------------------------------------------------------
+ 5. OPTIONAL — more images, if the verdict is OPEN or rests on small gaps
+    (CLIC, 60 images; every model must be swept on the same set)
+--------------------------------------------------------------------------------
+
+CL="--split test --testset CLIC --snrs 1 4 7 10 13 --draws 2 --max-images 60"
+# one GPU per model (each takes longer than a Kodak sweep: CLIC images are large)
+G=0
+for R in p1:mse lp0.2-const_p1:lp02c lp0.5-const_p1:lp lp0.5_p1:lp05b; do
+  RUN=${R%%:*}; OUT=${R##*:}
+  CUDA_VISIBLE_DEVICES=$G nohup $SW --backbone vit --pretrained ${V}_${RUN}/models/last.pt \
+    $CL --out curves/vit_${OUT}_clic.npz > f5_clic_${OUT}.out 2>&1 &
+  G=$((G + 1))
+done
+# when all four are written:
+python tools/frontier.py \
+  --const curves/vit_mse_clic.npz curves/vit_lp02c_clic.npz curves/vit_lp_clic.npz \
+  --test gamma1=curves/vit_lp05b_clic.npz --out results/frontier_lp_clic.json \
+  2>&1 | tee results/frontier_lp_clic.txt
+
+--------------------------------------------------------------------------------
+ 6. READING IT, AND WHAT TO SEND BACK
+--------------------------------------------------------------------------------
+
+Send: results/frontier_sem.txt (early), results/frontier_lp.txt (and _all /
+_clic if run); the .png files are for your eyes (one per held-out metric: a
+panel per budget, constant weights as dots with the chord, the bound dotted,
+the schedule as a star).
+
+  VERDICT LIVES  -> the efficiency claim holds on Kodak. Before building on
+                    it: repeat the schedule run with --seed 43 (run name gets
+                    _s43) and pass both as --test; confirm on CLIC (step 5)
+  VERDICT DEAD   -> the schedule reaches nothing constant weights do not.
+                    Story B survives only as the preference version (fidelity
+                    at large budgets, perception at small ones) -- a section,
+                    not a paper; we rethink the core claim
+  VERDICT MIXED  -> a trade: the table shows where it wins and loses
+  VERDICT OPEN   -> train the constant weight(s) printed under the verdict
+
+Also read the "same local weight" rows (paired, identical local objective):
+  1/8  vs weight 0    PSNR: what training the small budgets perceptually costs
+                      the full budget (the p1 sem result suggested ~0.1 dB)
+  1/48 vs weight 0.5  DISTS / LPIPS-VGG: does the schedule keep the small-
+                      budget gain although the other budgets are pushed less?
+  1/12 vs weight 0.2  both
+CIs are over the 24 images and do not include run-to-run training noise: a
+verdict that rests on gaps within ~0.1 dB needs the second seed.
