@@ -1,6 +1,7 @@
 ================================================================================
  COMMANDS_CASCADE.txt — depth cascade: one module path per rate, shared backbones
- rev 2026-10-05. Everything runs on the server, from the jscc/ directory.
+ rev 2026-10-07. Everything runs on the server, from the jscc/ directory.
+ GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
 THE IDEA (docs/CASCADE.md). Between the backbone encoder and decoder sits a stack
@@ -40,10 +41,18 @@ five budgets, no modules):
   (SP = swin windows for swin, global attention for vit; extra parameters at the
    defaults: swin 1.76 M = +33% of 5.3 M, vit 2.71 M = +1.9% of 142 M)
 
-14 jobs on 6 cards, queued per card, first jobs = the essential comparisons.
-A job is about 3-4 h by your wave-1 throughput (tools/probe.py prints ms/step):
-about 8 h for the whole sheet. Stop after the first row of jobs if you want an
-early look: control, all-mlp and all-spatial answer questions 1-4.
+14 jobs on 4 cards (2, 3, 4, 5), queued per card in priority order. By your wave-1
+throughput a vit job is about 3.8 h and a swin job about 2.7 h (tools/probe.py
+prints ms/step, section 2): the whole sheet is about 12 h. The six essential jobs
+(both controls, all-mlp and all-spatial for each interface: T0 T2 T4 S0 S2 S4) are
+the first one or two jobs of their queues and finish about 6.5 h in; they answer
+questions 1-4. Stop there for an early look if you need the cards.
+
+  card   queue (in order)
+  GPU 2  T0 vit control          -> T3 vit mixed          -> T5 vit mixed, grad 0.5
+  GPU 3  T2 vit all-mlp          -> T1 vit linear         -> T6 vit mixed, depths 4 3 2 1
+  GPU 4  T4 vit all-attention    -> S4 swin all-window    -> S3 swin mixed -> S5 swin mixed, grad 0.5
+  GPU 5  S0 swin control         -> S2 swin all-mlp       -> S1 swin linear -> S6 swin mixed, depths 4 3 2 1
 
 GOTCHA: these are FINE-TUNES. The cascade starts from the wave-1 weights, so its
 validation PSNR at epoch 40 must be within ~0.3 dB of the control's. A cascade arm
@@ -54,14 +63,17 @@ NOT the continuous-rate wave-1 model: a cascade can only be trained on its level
 so the fair control sees the same budgets.
 GOTCHA: a cascade only evaluates its five levels (--eval-cbrs must be among them);
 it has no in-between budgets.
+GOTCHA: every command below sets CUDA_VISIBLE_DEVICES to 2, 3, 4 or 5 itself, and
+none of them uses a bare `wait` or `nvidia-smi` without -i, so whatever you run on
+GPU 0 (even from the same shell) is neither blocked nor touched.
 
 --------------------------------------------------------------------------------
  0. GET THE CODE, ENVIRONMENT
 --------------------------------------------------------------------------------
 
 cd ~/projects
-git clone https://github.com/matthewwang16czap/JSCCwClaude.git jscc_cascade   # or: cd jscc_cascade && git pull
-cd jscc_cascade && git checkout claude/gifted-newton-cfldb8 && cd jscc
+git clone https://github.com/matthewwang16czap/JSCCwClaude.git jscc_cascade   # or: cd jscc_cascade
+cd jscc_cascade && git checkout claude/gifted-newton-cfldb8 && git pull && cd jscc
 
 # the wave-1 checkpoints live in the old tree: make its history/ visible here,
 # the new runs land in the same place
@@ -69,6 +81,9 @@ ln -sfn ~/projects/jscc_clean/jscc/history history
 
 export JSCC_DATA_ROOT=$HOME
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # less fragmentation
+export CUDA_DEVICE_ORDER=PCI_BUS_ID    # CUDA index N = nvidia-smi index N. Without it CUDA may
+                                       # number identical cards differently, and "2" could be
+                                       # the card you keep free. Keep it set in this shell.
 
 W1S=history/swin_base_awgn_DIV2K_256_w1/models/last.pt
 W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
@@ -90,20 +105,25 @@ python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py            # ends with "all checks passed"; [cascade] is new
 python tools/check_channel.py    # ends with "channel conventions hold"
 
-# FREE CHECK (minutes, four cards; test only, no training). A cascade with
-# untrained modules loaded from the wave-1 checkpoint IS that prefix model, so its
-# Kodak table must equal the prefix model's at the five CBRs (same code, same channel
-# draws; the prefix model is re-scored here so an old test.json cannot confuse it):
+# FREE CHECK (minutes, cards 2-5, one run each; test only, no training). A cascade
+# with untrained modules loaded from the wave-1 checkpoint IS that prefix model, so
+# its Kodak table must equal the prefix model's at the five CBRs (same code, same
+# channel draws; the prefix model is re-scored here so an old test.json cannot
+# confuse it):
 TEST="--testset Kodak --img-size 256 --channel-type awgn --snrs 1 4 7 10 13 --amp --tag t0"
-CUDA_VISIBLE_DEVICES=0 python main.py $TEST --backbone swin --pretrained $W1S \
+CUDA_VISIBLE_DEVICES=2 python main.py $TEST --backbone swin --pretrained $W1S \
   > c1_t0_swin_prefix.out 2>&1 &
-CUDA_VISIBLE_DEVICES=1 python main.py $TEST --backbone vit --pretrained $W1V \
+P2=$!
+CUDA_VISIBLE_DEVICES=3 python main.py $TEST --backbone vit --pretrained $W1V \
   > c1_t0_vit_prefix.out 2>&1 &
-CUDA_VISIBLE_DEVICES=2 python main.py $TEST --backbone swin --cascade --pretrained $W1S \
+P3=$!
+CUDA_VISIBLE_DEVICES=4 python main.py $TEST --backbone swin --cascade --pretrained $W1S \
   > c1_t0_swin_cascade.out 2>&1 &
-CUDA_VISIBLE_DEVICES=3 python main.py $TEST --backbone vit --cascade --pretrained $W1V \
+P4=$!
+CUDA_VISIBLE_DEVICES=5 python main.py $TEST --backbone vit --cascade --pretrained $W1V \
   > c1_t0_vit_cascade.out 2>&1 &
-wait
+P5=$!
+wait $P2 $P3 $P4 $P5               # only these four, not anything else running from this shell
 python tools/compare_runs.py history/swin_base_awgn_DIV2K_256_t0 \
   history/swin_base_awgn_DIV2K_256_casc-mmss-d1234_t0 --test
 python tools/compare_runs.py history/vit_p8d768x10s4_awgn_DIV2K_256_t0 \
@@ -116,55 +136,49 @@ python tools/compare_runs.py history/vit_p8d768x10s4_awgn_DIV2K_256_t0 \
  2. GPU PROBE — about a minute per line: real peak memory and speed at batch 16
 --------------------------------------------------------------------------------
 
-CUDA_VISIBLE_DEVICES=0 python tools/probe.py --backbone vit --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=1 python tools/probe.py --backbone vit --cascade --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone swin --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=3 python tools/probe.py --backbone swin --cascade --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone vit --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=3 python tools/probe.py --backbone vit --cascade --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=4 python tools/probe.py --backbone swin --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=5 python tools/probe.py --backbone swin --cascade --batch-size 16 --amp
 
 # The cascade probes run the DEEPEST level (the whole module chain on both sides).
 # Keep "reserved" at or below ~22 GiB. If the vit cascade is above that, add
 # --batch-size 8 to every vit line in section 3 (accumulation keeps the effective
-# batch at 16). Send the four ms/step figures: they size the whole wave.
+# batch at 16). Send the four ms/step figures: they size the whole wave. (If they
+# say a vit job is much slower than 3.8 h, drop the third job of the GPU 2 and
+# GPU 3 queues first: T5 and T6 answer questions 5 and 6, not 1-4.)
 
 --------------------------------------------------------------------------------
- 3. THE WAVE — 14 fine-tunes, queued on 6 cards (jobs on one card run in order)
+ 3. THE WAVE — 14 fine-tunes, queued on cards 2-5 (jobs on one card run in order)
 --------------------------------------------------------------------------------
 
-# GPU 0 — T0 vit control (grid, no modules);  T3 vit mixed (the default)
+# GPU 2 — T0 vit control (grid, no modules);  T3 vit mixed (the default);  T5 vit mixed, grad share 0.5
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=0 python main.py $FT $VI --rate-sampling grid > c1_gpu0_T0_control.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=0 python main.py $FT $VI $CS > c1_gpu0_T3_mixed.out 2>&1
+CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI --rate-sampling grid > c1_gpu2_T0_control.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI $CS > c1_gpu2_T3_mixed.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI $CS --cascade-grad 0.5 > c1_gpu2_T5_grad05.out 2>&1
 " > /dev/null 2>&1 &
 
-# GPU 1 — T2 vit all-mlp;  T5 vit mixed, --cascade-grad 0.5
+# GPU 3 — T2 vit all-mlp;  T1 vit linear (depth 0);  T6 vit mixed, depths 4 3 2 1
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=1 python main.py $FT $VI $CS --mod-kinds mlp > c1_gpu1_T2_allmlp.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=1 python main.py $FT $VI $CS --cascade-grad 0.5 > c1_gpu1_T5_grad05.out 2>&1
+CUDA_VISIBLE_DEVICES=3 python main.py $FT $VI $CS --mod-kinds mlp > c1_gpu3_T2_allmlp.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT $VI $CS --mod-kinds mlp --mod-depths 0 > c1_gpu3_T1_linear.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT $VI $CS --mod-depths 4 3 2 1 > c1_gpu3_T6_deprev.out 2>&1
 " > /dev/null 2>&1 &
 
-# GPU 2 — T4 vit all-attention;  T6 vit mixed, depths 4 3 2 1
+# GPU 4 — T4 vit all-attention;  S4 swin all-window;  S3 swin mixed (the default);  S5 swin mixed, grad share 0.5
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI $CS --mod-kinds attn > c1_gpu2_T4_allattn.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI $CS --mod-depths 4 3 2 1 > c1_gpu2_T6_deprev.out 2>&1
-" > /dev/null 2>&1 &
-
-# GPU 3 — S0 swin control (grid, no modules);  T1 vit linear (depth 0)
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FT $SW --rate-sampling grid > c1_gpu3_S0_control.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python main.py $FT $VI $CS --mod-kinds mlp --mod-depths 0 > c1_gpu3_T1_linear.out 2>&1
-" > /dev/null 2>&1 &
-
-# GPU 4 — S2 swin all-mlp;  S3 swin mixed (the default);  S1 swin linear
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW $CS --mod-kinds mlp > c1_gpu4_S2_allmlp.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI $CS --mod-kinds attn > c1_gpu4_T4_allattn.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW $CS --mod-kinds swin > c1_gpu4_S4_allswin.out 2>&1 ;
 CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW $CS > c1_gpu4_S3_mixed.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW $CS --mod-kinds mlp --mod-depths 0 > c1_gpu4_S1_linear.out 2>&1
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW $CS --cascade-grad 0.5 > c1_gpu4_S5_grad05.out 2>&1
 " > /dev/null 2>&1 &
 
-# GPU 5 — S4 swin all-window;  S5 swin mixed, --cascade-grad 0.5;  S6 swin mixed, depths 4 3 2 1
+# GPU 5 — S0 swin control (grid, no modules);  S2 swin all-mlp;  S1 swin linear;  S6 swin mixed, depths 4 3 2 1
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW $CS --mod-kinds swin > c1_gpu5_S4_allswin.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW $CS --cascade-grad 0.5 > c1_gpu5_S5_grad05.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW --rate-sampling grid > c1_gpu5_S0_control.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW $CS --mod-kinds mlp > c1_gpu5_S2_allmlp.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW $CS --mod-kinds mlp --mod-depths 0 > c1_gpu5_S1_linear.out 2>&1 ;
 CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW $CS --mod-depths 4 3 2 1 > c1_gpu5_S6_deprev.out 2>&1
 " > /dev/null 2>&1 &
 
@@ -174,14 +188,15 @@ grep -h "loaded" c1_gpu*.out          # controls: 0 missing. Cascade arms: only 
                                       #   tensors missing (a few hundred), 0 unexpected
 grep -h "prefix checkpoint" c1_gpu*.out   # the vit cascade arms: levels seeded from the gain/DC tables
 tail -n 2 c1_gpu*.out                 # img/s, loss, the diag check
-nvidia-smi                            # <= ~22 GiB per card
+nvidia-smi -i 2,3,4,5                 # <= ~22 GiB per card (-i: never queries the broken card)
 
 # --- while it runs ----------------------------------------------------------------
-grep -h "diag" c1_gpu0_T3_mixed.out | tail -3      # swapped must stay well below psnr
+grep -h "diag" c1_gpu3_T2_allmlp.out | tail -3     # swapped must stay well below psnr
 grep -h "non-finite" c1_gpu*.out                   # skipped optimiser steps: expect none
 ls history/ | grep _c1$                            # the run directories (names in section 4)
 
-# the validation at epoch 40 (~25 min in): cascade arms within ~0.3 dB of their control
+# the validation at epoch 40 (~25 min into each job): cascade arms within ~0.3 dB of
+# their control. Run the swin line again as S2, S4 ... start (each job has to exist).
 python tools/compare_runs.py history/vit_*_grid_c1 history/vit_*casc*_c1 --window 1 --upto 40
 python tools/compare_runs.py history/swin_*_grid_c1 history/swin_*casc*_c1 --window 1 --upto 40
 
@@ -250,3 +265,4 @@ epochs, cascade vs a grid-trained prefix control (the fair test of the top rate:
 warm start keeps the top code ordered; try --mod-skip none and --cascade-grad 0.5 / 0);
 fixed-rate specialists at 1/48 and 1/8 as the ceiling; the parameter-matched adapter
 control; swin width 64; a second seed of the best arm; Rayleigh; per-image level choice.
+(Four cards: a 2000-epoch vit run is about 20 h each, so expect to choose a few arms.)

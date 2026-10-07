@@ -59,12 +59,9 @@ A test-only run needs the model flags the checkpoint was trained with.
 
 ```
 main.py                 train / test driver (one GPU or torchrun)
-COMMANDS_CASCADE.txt    current wave: depth-cascade module bake-off, copy-paste ready
-COMMANDS.txt            wave 1 (memory-matched backbones), historical
-COMMANDS_PERCEPTION.txt wave p1: perceptual fine-tuning, copy-paste ready
-COMMANDS_ALLOC.txt      per-image budget policy: sweep, oracle, predictor, copy-paste ready
-COMMANDS_FRONTIER.txt   story B's test: budget schedule vs constant weights, copy-paste ready
-COMMANDS_TAIL.txt       tail probes: where a nested code's tail information dies
+COMMANDS_CASCADE.txt    the current wave: depth-cascade module bake-off, copy-paste ready
+                        (the sheets of earlier waves are gone from the tree: they are in git
+                        history, commit 6b02b27, and in jscc_clean.zip)
 engine.py               one training epoch; the evaluation grid
 configs/config.py       every knob, per-backbone defaults, validation at start-up
 utils/parser.py         command line
@@ -268,7 +265,7 @@ checks them all. A metric network that cannot load is skipped with a warning.
   LPIPS are invalid. PSNR was not affected.
 - The log's `between` is replaced by `common`: the pre-DC between-image share
   fell to ~0.03 in the healthy hybrid and ViT runs, so it was no health signal.
-- `COMMANDS_RETEST.txt` re-scores the seven wave-1 checkpoints.
+- The wave-1 checkpoints were re-scored after these fixes (numbers in `docs/NOTES.md`).
 - The channel is Sionna 2 by default (AWGN; i.i.d. Rayleigh through
   `FlatFadingChannel`), seeded explicitly: `torch.manual_seed` does not reach
   Sionna's generators. `--channel-backend torch` keeps the reference.
@@ -294,7 +291,7 @@ Pass the flags a checkpoint was trained with (the wave-B P6 arms used
 selection: retrain the baseline here for comparisons, or reproduce the old
 protocol with `--lr-schedule constant --final-ckpt best`.
 
-## Per-image budget policy (`alloc/`, `COMMANDS_ALLOC.txt`)
+## Per-image budget policy (`alloc/`, `tools/alloc_sweep.py`, `tools/alloc_policy.py`)
 
 A frozen codec, and a policy that gives each image its own budget so that the
 AVERAGE CBR stays at a target. The receiver counts the symbols that arrive, so
@@ -348,7 +345,7 @@ whether the perceptual objective allocates differently from PSNR (share of
 images whose budget differs, rank correlation): if it does not, a perceptual
 reward adds nothing over a fidelity one.
 
-## Budget schedule vs constant weights (`tools/frontier.py`, `COMMANDS_FRONTIER.txt`)
+## Budget schedule vs constant weights (`tools/frontier.py`)
 
 The efficiency claim of a budget-scheduled perceptual weight w(u) is that one
 model beats every CONSTANT weight somewhere, on metrics it was not trained on.
@@ -375,7 +372,7 @@ gamma 1) also get a direct paired comparison. The inputs are sweep files
 the same channel noise; CIs are over images and do not include run-to-run
 training noise.
 
-## Tail probes (`--freeze`, `--top-prob`, `COMMANDS_TAIL.txt`)
+## Tail probes (`--freeze`, `--top-prob`; results in `docs/NOTES.md`)
 
 Noise-free decodes show that a nested code's last third (CBR 1/12 to 1/8)
 adds nothing, with or without channel noise, while a fixed-rate 1/8 code

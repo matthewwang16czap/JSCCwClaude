@@ -20,7 +20,7 @@ change it. "TWS" is read as IEEE Transactions on Wireless Communications (TWC).
    routes, or ICC / Globecom first.
 3. **The strongest asset is not the architecture but a measured problem**: the nested
    (prefix) code wastes its tail, which this tree has already shown with probes
-   (`COMMANDS_TAIL.txt`): -0.02 dB from 1/12 to 1/8 without noise against +1.00 dB for a
+   (`docs/NOTES.md`, tail probes): -0.02 dB from 1/12 to 1/8 without noise against +1.00 dB for a
    fixed-rate code, and a 1/8 specialist beating the nested ViT by 0.29-0.71 dB. A paper
    that characterises this "nesting penalty", shows what causes it, and removes it for
    ~2% extra parameters (ViT) would have a story, if the cascade does remove it. If the cascade recovers little of it, there is

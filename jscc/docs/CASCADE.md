@@ -43,7 +43,7 @@ while the backbones, which do the heavy lifting, are paid for once.
 
 ## 2. Why this should beat the prefix scheme (and what the evidence is)
 
-Evidence from this tree (`COMMANDS_TAIL.txt`, ViT, Kodak):
+Evidence from this tree (`docs/NOTES.md`, tail probes; ViT, Kodak):
 
 | | nested (prefix) code | fixed-rate 1/8 code |
 |---|---|---|
