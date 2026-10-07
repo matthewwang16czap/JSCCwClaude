@@ -59,7 +59,7 @@ PSNR, mean over SNR 1-13 dB, CBR 1/48, 1/24, 1/16, 1/12, 1/8.
 6. All runs trained at ~38 img/s whatever their size (big ViT 30): with seven
    runs on one machine, data loading rather than the GPU probably set the pace.
 7. Wave-1 SSIM, MS-SSIM and LPIPS were computed in bf16 and are invalid;
-   COMMANDS_RETEST.txt re-scored them. Kodak retest (fp32 metrics, ViT tile by
+   the retest re-scored them. Kodak retest (fp32 metrics, ViT tile by
    tile): the big ViT leads swin by +0.86 +0.90 +0.78 +0.51 +0.46 dB, with
    better MS-SSIM and LPIPS at every CBR.
 8. Wave 1 used the torch channel; after every validation its training random
@@ -80,6 +80,37 @@ MSE. The claim holds if, against the control,
 dino_sim is the training teacher: never evidence for the sem/align runs.
 Kodak has 24 images and not all contain COCO objects; use the paired
 per-image records (test_per_image.json) before trusting small differences.
+
+## Tail probes: where a nested code's tail dies
+
+(Carried over from the retired `COMMANDS_TAIL.txt`; the `--freeze` and `--top-prob`
+probe flags stay, see the README.) ViT, Kodak; tail gain = PSNR at 1/8 minus PSNR at 1/12.
+
+| | nested code | fixed-rate 1/8 code |
+|---|---|---|
+| no channel noise (P3b / P1) | -0.02 dB | +1.00 dB |
+| trained 16-22 dB, at 22 dB | +0.04 (P2) | +0.60 (P3a) |
+| trained -2..22 dB, at 13 dB | +0.21 (p1) | +1.01 (P3c) |
+
+Nesting, not the channel, empties the tail: even with no noise the nested code's last
+third carries nothing. The fixed 1/8 specialist beats the nested model at 1/8 by +0.29 dB
+at 1 dB SNR, rising to +0.71 dB at 22 dB (P3c vs p1), while a specialist is useless at
+small budgets. Reference, P3b (nested, noise-free): 28.67 31.59 33.71 34.17 34.15 dB at
+1/48 1/24 1/16 1/12 1/8.
+
+The question that was open: does the tail's information die (a) in the encoder, which
+never puts new information there, (b) in the nested decoder, which does not read it, or
+(c) in the sampling, which starves the tail? Probes (all noise-free, 100-200 epoch
+fine-tunes): Q2a freeze the nested encoder, train a decoder for 1/8 only; Q2b the same
+for 1/12 (tail information sent = Q2a(1/8) - Q2b(1/12); <= ~0.15 dB means (a), >= ~0.5 dB
+means (b)); Q1 `--top-prob 0.5` (tail >= +0.5 dB with the small budgets within ~0.1 dB of
+P3b means (c), a recipe fix any architecture must beat); Q3 freeze the nested decoder and
+train an encoder for 1/8 (>= ~34.6 dB: the nested decoder can read an informative tail).
+The results of Q1-Q3 are not recorded in this tree. What each answer calls for: (a) a
+rate-causal encoder (tokens attend only to earlier tokens, or a branch fed with the
+prefix's reconstruction); (b) budget-gated decoder capacity; (c) a sampling recipe. The
+depth cascade (`docs/CASCADE.md`) is a fourth answer: stop making one code serve every
+rate.
 
 ## Audit findings that shaped this tree
 
@@ -120,7 +151,7 @@ per-image records (test_per_image.json) before trusting small differences.
 
 ## Not yet tested in this tree
 
-- `vit` on Kodak with tile-by-tile decoding (COMMANDS_RETEST.txt), and whether
+- `vit` on Kodak with tile-by-tile decoding (done in the retest, above), and whether
   the big ViT's lead comes from patch 8 or from size: a patch-8 ViT at the
   hybrid's compute is `--token-dim 384 --depth 6 --heads 6` (~22 M parameters).
 - Seams: `vit` reconstructs 256 px tiles independently.
@@ -131,7 +162,7 @@ per-image records (test_per_image.json) before trusting small differences.
 
 ## Cascade wave c1 (`COMMANDS_CASCADE.txt`): what would count as evidence
 
-Background: the tail probes (`COMMANDS_TAIL.txt`) showed the nested code's last third
+Background: the tail probes (above) showed the nested code's last third
 carries almost nothing (-0.02 dB from 1/12 to 1/8 without noise, against +1.00 dB for a
 fixed-rate code) and a 1/8 specialist beats the nested ViT by 0.29-0.71 dB.
 `--cascade` (docs/CASCADE.md) gives each rate its own module path. `tools/toy_nesting.py`
