@@ -1,6 +1,6 @@
 """Pre-norm transformer blocks with global attention (SDPA), optional budget
-modulation and key padding. Used by the hybrid trunk, the ViT and the cascade
-modules."""
+modulation (FiLM and / or budget LoRA heads) and key padding. Used by the hybrid
+trunk, the ViT and the cascade modules."""
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +27,7 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, dim, heads, mlp_ratio=4.0, rate_mod="none", anchors=8):
+    def __init__(self, dim, heads, mlp_ratio=4.0, rate_mod="none", anchors=8, rank=16):
         super().__init__()
         hidden = int(dim * mlp_ratio)
         self.norm1 = nn.LayerNorm(dim)
@@ -36,24 +36,33 @@ class Block(nn.Module):
         self.fc1 = nn.Linear(dim, hidden)
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden, dim)
-        self.mod = BlockMod(dim, anchors, rate_mod) if rate_mod != "none" else None
+        self.mod = BlockMod(dim, hidden, anchors, rate_mod, rank) \
+            if rate_mod != "none" else None
 
     def forward(self, x, b=None, key_padding=None):
         m = self.mod if b is not None else None
         h = self.norm1(x)
-        if m is not None:
+        if m is not None and m.film1 is not None:
             h = m.film1(h, b)
         x = x + self.attn(h, key_padding)
         h = self.norm2(x)
-        if m is not None:
+        if m is not None and m.film2 is not None:
             h = m.film2(h, b)
-        return x + self.fc2(self.act(self.fc1(h)))
+        a = self.fc1(h)
+        if m is not None and m.lora_fc1 is not None:
+            a = a + m.lora_fc1(h, b)
+        a = self.act(a)
+        o = self.fc2(a)
+        if m is not None and m.lora_fc2 is not None:
+            o = o + m.lora_fc2(a, b)
+        return x + o
 
 
 class Trunk(nn.Module):
-    def __init__(self, dim, depth, heads, mlp_ratio=4.0, rate_mod="none", anchors=8):
+    def __init__(self, dim, depth, heads, mlp_ratio=4.0, rate_mod="none",
+                 anchors=8, rank=16):
         super().__init__()
-        self.blocks = nn.ModuleList([Block(dim, heads, mlp_ratio, rate_mod, anchors)
+        self.blocks = nn.ModuleList([Block(dim, heads, mlp_ratio, rate_mod, anchors, rank)
                                      for _ in range(depth)])
         self.norm = nn.LayerNorm(dim)
         self.tap, self.tapped = None, None   # keep the hidden state after block `tap`

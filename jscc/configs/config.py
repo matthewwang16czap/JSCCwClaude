@@ -57,7 +57,7 @@ class Config:
     def __init__(self, args, world_size=1):
         self.warnings = []
         self.world_size = max(1, int(world_size))
-        self.seed = args.seed
+        self.seed, self.eval_seed = args.seed, args.eval_seed
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.training, self.amp = args.training, args.amp
         self.pretrained, self.resume, self.final_ckpt = args.pretrained, args.resume, args.final_ckpt
@@ -111,7 +111,7 @@ class Config:
         self.pos_scale = pick("pos_scale")
         self.zero_init = bool(pick("zero_init")) if self.token else False
         self.rate_mod = pick("rate_mod") if self.token else "none"
-        self.rate_anchors = args.rate_anchors
+        self.rate_anchors, self.rate_rank = args.rate_anchors, args.rate_rank
         self.phase_order, self.refine_ch = args.phase_order, args.refine_ch
         self.cascade = bool(args.cascade)
 

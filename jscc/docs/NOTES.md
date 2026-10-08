@@ -160,6 +160,26 @@ rate.
   assumes unit symbol variance, which the per-token gain violates (up to e^4
   between tokens). Whether that costs anything is open.
 
+## Compute of the backbones (measured 2026-10-08)
+
+`torch.utils.flop_counter` on CPU, one 256x256 image at the top budget, encoder + decoder:
+
+| model | params | encoder GFLOPs | decoder GFLOPs | total |
+|---|---|---|---|---|
+| swin small | 3.31 M | 4.87 | 4.87 | 9.7 |
+| swin base (the baseline) | 5.27 M | 9.26 | 9.26 | 18.5 |
+| swin large | 12.67 M | 20.89 | 20.89 | 41.8 |
+| hybrid (Swin + token trunk) | 12.54 M | 20.57 | 20.57 | 41.1 |
+| vit p16 384x6 s16 (wave-1 small) | 22.11 M | 5.62 | 5.62 | 11.2 |
+| vit p8 384x6 s4 | 21.56 M | 21.93 | 21.93 | 43.9 |
+| vit p8 512x8 s4 | 50.83 M | 51.79 | 51.79 | 103.6 |
+| vit p8 768x10 s4 (wave-1 best) | 142.39 M | 145.33 | 145.33 | 290.7 |
+
+The wave-1 ViT lead over Swin base (+0.46 to +0.90 dB on Kodak) costs 27x the parameters and
+16x the FLOPs. The two token models nearest Swin's compute (vit p16 at 11 GFLOPs, hybrid at 41)
+lost to it from 1/16 up. ViT p8 384x6 and Swin large are the matched pair (~42-44 GFLOPs);
+Swin large is also the published SwinJSCC size class.
+
 ## Cascade wave c1: what would have counted as evidence (the plan)
 
 Background: the tail probes (above) showed the nested code's last third
@@ -245,3 +265,15 @@ Reading: in these models the nesting penalty does not live in the code layout at
 bottleneck. What is left is the capacity the rates share in the backbones, and point 5
 puts at least part of it in the encoder. Wave c2 measures the specialist gap under this
 protocol and splits it between encoder and decoder.
+
+## Wave c2, re-planned (2026-10-08)
+
+The wave c2 planned above (the specialist gap, split between encoder and decoder) was
+re-planned before it ran, after the reassessment (`docs/ASSESSMENT.md` v2). Kept: the 1/8 and 1/48 specialists (vit and swin) and the vit 1/8 run with the encoder
+frozen (the decoder's share of the gap, the ceiling for any decoder-side budget head).
+Dropped: the encoder-only runs. Added: the matched-compute pair (vit p8 384x6 against swin
+large, from scratch, gate G-A), the allocation oracle on the wave-1 models (G-B), AdaTok's
+per-budget LoRA heads in the vit decoder trunk (`--rate-mod both`), alone and with the
+linear exits, and a second seed of the c1 control and of the c1 linear exits (G-C).
+`--eval-seed` (new, default 42) keeps the test's channel draws fixed across training seeds,
+so the seed-43 runs pair with the c1 runs; seed-42 runs are scored exactly as before.

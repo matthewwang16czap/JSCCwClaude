@@ -11,7 +11,8 @@ protocol and the evaluation. Two ways to make the rate adaptive:
   rate has its own module path, the backbones are shared. Wave c1 tested it: only
   +0.02 to +0.08 dB over a matched prefix control, all of it from a per-rate linear
   stage (`docs/NOTES.md`; verdict in `docs/ASSESSMENT.md`). `COMMANDS.txt` holds the
-  current wave: where the nesting penalty lives (specialists, encoder vs decoder).
+  current wave: the gates of `docs/ASSESSMENT.md` (matched compute, per-image
+  allocation, budget-specialised decoding).
 
 | `--backbone` | model | rate unit at 256 px | parameters |
 |---|---|---|---|
@@ -19,8 +20,9 @@ protocol and the evaluation. Two ways to make the rate adaptive:
 | `vit` | **Token transmission.** Plain ViT, patch 8, width 768, 10 blocks per side: tiles coded and decoded independently | 4-symbol tokens, 6 phases x 1024 positions per tile; CBR = *l*/49152 | 142.4 M |
 | `hybrid` | Swin + attention, phase tokens, joint `[grid ; tokens]` trunk: the previous best AdaJSCC. Prefix only | 16-symbol tokens, 6 phases x 256 positions per block; CBR = *l*/12288 | 12.5 M |
 
-The AdaTok backbone (learned 1D latent tokens, MH-LoRA budget heads) was removed:
-it did not turn tokens into detail (`docs/NOTES.md`, wave 1). `--cascade` adds
+The AdaTok backbone (learned 1D latent tokens) was removed: it did not turn tokens
+into detail (`docs/NOTES.md`, wave 1). Its per-budget LoRA decoder heads are kept, on
+the position-tied token backbones, as `--rate-mod lora|both`. `--cascade` adds
 0.09 M parameters to `swin` and 0.02 M to `vit` at the defaults (linear stages); the
 module bodies of wave c1 add 1.76 M (+33%) and 2.71 M (+1.9%).
 
@@ -61,7 +63,8 @@ A test-only run needs the model flags the checkpoint was trained with.
 
 ```
 main.py                 train / test driver (one GPU or torchrun)
-COMMANDS.txt            the current wave (c2: the specialist gap, encoder vs decoder), copy-paste ready
+COMMANDS.txt            the current wave (c2, revised: matched compute, allocation oracle,
+                        specialists, LoRA budget heads, seeds), copy-paste ready
                         (the sheets of earlier waves are gone from the tree: they are in git
                         history, commit 6b02b27, and in jscc_clean.zip)
 engine.py               one training epoch; the evaluation grid
@@ -84,7 +87,9 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
-docs/ASSESSMENT.md      the cascade idea: related work, novelty, venue, go / no-go gates
+docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
+docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token communication,
+                        adaptive tokenizers, allocation; the novelty matrix
 ```
 
 ## Defaults and the knobs worth knowing
@@ -108,7 +113,14 @@ Flags left unset take the backbone's defaults (`BACKBONE_DEFAULTS` in
 - `--cascade` (swin, vit): linear stages (`--mod-depths 0`, the learned skip initialised to
   truncation) `--mod-skip proj --cascade-grad 1`, grid rate sampling; the bodies of wave c1
   are `--mod-kinds mlp mlp attn attn --mod-depths 1 2 3 4` (swin: `swin` for `attn`), see
-  `docs/CASCADE.md`. `--mod-lr-mult` trains the new modules faster when fine-tuning.
+  `docs/CASCADE.md`. `--mod-lr-mult` trains the new modules (cascade stages and LoRA
+  heads) faster when fine-tuning.
+- `--rate-mod` (hybrid, vit): how the decoder trunk knows the budget. `film` (default)
+  scales and shifts every block, hat-interpolated over `--rate-anchors` log-spaced
+  budgets; `lora` gives every block MLP a low-rank head per anchor (rank `--rate-rank`,
+  AdaTok's MH-LoRA), interpolated the same way, so it stays continuous in the budget;
+  `both` uses the two; `none` removes budget conditioning. The LoRA B factors start at
+  zero: a `film` checkpoint loads into `both` and decodes identically at step 0.
 
 All arms: AdamW, lr 1e-4, cosine decay to 5% (`--lr-floor`), batch 16 at 256 px,
 effective batch 16 (with a smaller `--batch-size`, gradient accumulation fills
@@ -154,8 +166,9 @@ Also: `--ema 0.999`, `--lr-schedule constant`, `--final-ckpt best`,
   the budgets of the step.
 - **Evaluation**: 8-bit outputs, per-image metrics averaged: validation PSNR,
   MS-SSIM and LPIPS; the final test the whole suite below. Each (SNR, CBR) cell
-  reseeds torch and Sionna (seed + 1000 i + j), so every
-  checkpoint of a configuration sees the same channel draws. Kodak is tested at
+  reseeds torch and Sionna (`--eval-seed` + 1000 i + j, default 42, independent of
+  `--seed`), so every checkpoint of every configuration and training seed sees the
+  same channel draws. Kodak is tested at
   native resolution. `hybrid` runs Swin on the whole image and blocks only the
   bottleneck; `vit` codes and decodes 256 px tiles independently (cascade modules act per
   tile too).

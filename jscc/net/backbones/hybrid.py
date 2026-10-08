@@ -69,7 +69,7 @@ class HybridEncoder(nn.Module):
 
 class HybridDecoder(nn.Module):
     def __init__(self, swin_kwargs, block, n_tokens, sym, dim, depth, heads,
-                 pos_scale, zero_init, order, rate_mod, anchors, l_min):
+                 pos_scale, zero_init, order, rate_mod, anchors, rank, l_min):
         super().__init__()
         self.block, self.dim, self.pos_scale = int(block), int(dim), float(pos_scale)
         self.N = self.block ** 2
@@ -80,7 +80,7 @@ class HybridDecoder(nn.Module):
         self.grid_query = nn.Parameter(torch.zeros(1, 1, dim))
         self.grid_out = nn.Linear(dim, swin_kwargs["embed_dims"][0])
         self.mixer = BudgetMixer(l_min, n_tokens, anchors) if rate_mod != "none" else None
-        self.trunk = Trunk(dim, depth, heads, rate_mod=rate_mod, anchors=anchors)
+        self.trunk = Trunk(dim, depth, heads, rate_mod=rate_mod, anchors=anchors, rank=rank)
         self.grid = SwinDecoder(**swin_kwargs)
         o = position_order(order, self.block, self.block)
         self.register_buffer("inv", torch.argsort(o), persistent=False)
@@ -133,5 +133,5 @@ def build(cfg):
                   pos_scale=cfg.pos_scale, zero_init=cfg.zero_init, order=cfg.phase_order)
     enc = HybridEncoder(cfg.swin_encoder_kwargs, **common)
     dec = HybridDecoder(cfg.swin_decoder_kwargs, rate_mod=cfg.rate_mod,
-                        anchors=cfg.rate_anchors, l_min=cfg.l_min, **common)
+                        anchors=cfg.rate_anchors, rank=cfg.rate_rank, l_min=cfg.l_min, **common)
     return enc, dec

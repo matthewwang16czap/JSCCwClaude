@@ -1,184 +1,180 @@
-# Assessment: depth-cascade rate adaptation for deep JSCC
+# Assessment v2: adaptive-length token communication, aimed at IEEE TWC
 
-Written before any cascade run existed; wave c1 has now run (`docs/NOTES.md`, "Cascade
-wave c1: results"). "TWS" is read as IEEE Transactions on Wireless Communications (TWC).
+2026-10-08, after cascade wave c1. Supersedes v1 (in git history at commit 0af2e1f). The
+literature behind it is in `docs/SURVEY.md`; measurements in `docs/NOTES.md`. "TWS" is read as
+IEEE Transactions on Wireless Communications (TWC).
 
-## Update after wave c1 (2026-10-08): the bottleneck cascade fails its gates
+## 0. Verdict
 
-| gate | outcome |
+1. **On the yardstick, you are right.** If the multi-rate (nesting) penalty is 0.2-0.5 dB, the
+   c1 exits' +0.07 dB at 1/8 on the ViT is 15-35% of it, and my +0.3 dB gate asked for more than
+   the whole headroom. Keep budget-specialised decoding in the paper. But keep the LINEAR exits
+   only (the stacked modules added nothing), measure the gap under this protocol, and
+   replicate over seeds: the effect is ~0.05 dB on average.
+2. **The headline is not yet a fair claim.** The ViT that beats Swin uses 27x the parameters and
+   16x the FLOPs. At matched compute it was never run, and the two near-matched token models you
+   do have both lost to Swin at 1/16 and above. A TWC reviewer checks this first. It is this
+   turn's main experiment.
+3. **"AdaTok's flow in JSCC" will not survive review as the novelty.** AdaTok itself (June 2026)
+   is new, but each of its ingredients has a JSCC precedent: a per-image policy over a prefix
+   mask (2022), an RL policy choosing how many leading tokens to send (2025), and a single-model,
+   tail-dropped, content-adaptive SwinJSCC at a fixed mean rate (TS-JSCC, August 2026).
+   Per-budget LoRA heads inside a JSCC decoder look untried; they are in this turn's wave.
+4. **Stacking the cascade does not make the story more solid by itself**, and it fights the
+   flow: the cascade has five discrete levels, while per-image allocation needs a code that
+   decodes at any length. Use exits for a coarse rate menu with a prefix inside each exit, or
+   only for fixed-rate operation.
+5. **A TWC-shaped paper is reachable**, as a system paper: a prefix-decodable token codec,
+   side-information-free content- and channel-aware bandwidth allocation across images or
+   users with an optimality argument, and budget-specialised decoding that closes a measured
+   share of the nesting penalty. It needs gates G-A and G-B (section 3) to pass.
+6. If G-A fails (the ViT loses at matched compute), the codec stops being the contribution; the
+   allocation and the nesting analysis can still be, on whichever backbone wins.
+
+## 1. Your four points, checked
+
+### 1a. "The specialist gap is 0.2-0.5 dB, so 0.1 dB is large"
+
+Share of a 0.2-0.5 dB gap closed by the c1 arms (Kodak, paired against the grid-trained prefix
+control):
+
+| arm | at 1/8 | at 1/48 | mean over CBRs |
+|---|---|---|---|
+| vit, linear exits | +0.069 dB = 14-35% | +0.028 | +0.048 |
+| vit, mixed modules | +0.076 = 15-38% | +0.031 | +0.049 |
+| vit, mixed modules, grad share 0.5 | +0.142 = 28-71% | **-0.211** | +0.005 |
+| swin, linear exits | +0.007 = 1-4% | +0.022 | +0.019 |
+| swin, mixed modules, grad share 0.5 | +0.074 = 15-37% | -0.013 | +0.035 |
+
+Three conditions before it goes in a paper:
+* **The gap under this protocol.** Your 0.2-0.5 dB comes from an older project; the tail probes
+  gave 0.29-0.71 dB at 1/8 under another recipe. The share above means nothing until the
+  specialists are trained the c1 way. This wave does it (1/8 and 1/48, both backbones).
+* **Seeds.** All six ViT arms gained (+0.039 to +0.049 dB mean), and they very likely trained on
+  different random draws (the extra modules consume random numbers at construction, which
+  shifts data order and budgets). So the effect is probably real, but at ~0.05 dB a paper needs
+  three seeds per arm. This wave adds a second seed of the control and of the linear exits.
+* **The part that worked is the linear exit.** "Smaller channels need deeper networks" was
+  tested and failed (bodies, spatial context and depth schedules within 0.01-0.02 dB). Report
+  it as an ablation; it makes the rest more credible.
+
+### 1b. "ViT with token communication beats Swin by a large margin"
+
+Measured cost per 256x256 image, encoder + decoder, and the wave-1 differences to Swin base:
+
+| model | params | GFLOPs | vs Swin base, valid crops, 1/48 ... 1/8 (dB) | Kodak |
+|---|---|---|---|---|
+| Swin base (baseline) | 5.3 M | 18.5 | - | - |
+| ViT p8 768x10, token | 142.4 M | 290.7 | +1.05 +1.06 +1.03 +0.81 +0.74 | +0.86 +0.90 +0.78 +0.51 +0.46 |
+| ViT p16 384x6, token | 22.1 M | 11.2 | +0.28 -0.09 -0.31 -0.64 -0.79 | (retested, not recorded in the tree) |
+| hybrid: Swin + token trunk | 12.5 M | 41.1 | +0.16 +0.15 -0.08 -0.45 -0.57 | +0.16 +0.13 -0.26 -0.75 -0.89 |
+| Swin large | 12.7 M | 41.8 | never trained | |
+| ViT p8 384x6, token | 21.6 M | 43.9 | never trained | |
+
+* The two token models closest to Swin's compute lost to it from 1/16 up. The big ViT's lead
+  can be its size, its patch 8, or the token interface; the data cannot tell them apart.
+* The matched pair exists in the code today: **ViT p8 384x6 (43.9 GFLOPs) against Swin large
+  (41.8 GFLOPs)**, both from scratch on the wave-1 protocol. This wave runs it. Swin large is
+  also the published SwinJSCC size class (12-33 M params), which your 5.3 M baseline is not.
+* A ViT JSCC is already in TWC (DeepJSCC-MIMO, 2024). So the claim has to be about the token
+  interface and its efficiency, not about using a ViT.
+* "Token communications" in the literature means discrete tokens from a foundation-model
+  tokenizer (TokCom, ToDMA). Yours are analog JSCC tokens. Name them so, and say how they
+  differ.
+* Claiming that the token INTERFACE (per-token gain, DC removal, phase identity, budget FiLM)
+  matters, rather than the backbone, needs a same-backbone ablation: a ViT with
+  feature-style transmission. That is next turn's code if G-A passes.
+
+### 1c. "Nobody has applied AdaTok's flow to JSCC"
+
+AdaTok (Lu et al., arXiv 2606.07185) = tail masking + a LoRA decoder head per budget + a GRPO
+policy that picks each image's token count. In JSCC:
+
+| AdaTok ingredient | JSCC precedent (docs/SURVEY.md) |
 |---|---|
-| G1 any arm >= +0.3 dB mean | **fails**: best +0.049 dB (vit), +0.035 dB (swin) |
-| G2 the linear arm helps | it takes ALL of the gain (vit +0.048, swin +0.019); bodies add <= 0.01 dB |
-| G3 same sign on both interfaces | holds, at +0.02 to +0.05 dB |
-| G4 1/8 gain >= 0.25 dB | **fails**: +0.08 (default), +0.14 with `--cascade-grad 0.5`, paid with -0.21 at 1/48 |
-| G5 from scratch | not run; low prior (below) |
-| G6 overhead | linear: +0.02 M (vit), +0.09 M (swin) |
+| nested, tail-droppable code | DeepJSCC-l (TWC 2021), Yang and Kim (thermometer prefix mask, 2022), SwinJSCC channel selection, timeliness-aware JSCC (leading tokens), **TS-JSCC (tail-structured sparsity + active prefix, Aug 2026)** |
+| budget-conditioned decoder | DeepJSCC-l++ (ratio as input), SwinJSCC rate modulation, rate tokens (NTSCC family), FiLM in this tree. **Per-budget LoRA heads in a JSCC decoder: none found** |
+| per-image length policy | Yang and Kim (Gumbel-softmax policy), **timeliness-aware JSCC (PPO picks the length)**, TS-JSCC (sparsity), NTSCC (entropy model), DiT-JSCC (complexity score) |
 
-**Verdict.** The depth cascade at the bottleneck, as proposed, does not remove the nesting
-penalty and is not a paper method, for TWC or anywhere. The gain is real on Kodak but at
-the level of seed noise, and a per-rate LINEAR map gets all of it, so the extra depth,
-spatial context and depth schedule (the substance of the proposal) do nothing.
+What still looks unclaimed, and is defensible as a combination:
+* a position-tied token code decodable at ANY length (1 token = 4 complex symbols per 256 px
+  tile), so per-image allocation at a fixed mean rate is exact with time-sharing and needs no
+  side information (the receiver counts tokens);
+* allocation that is Lagrangian-optimal on predicted per-image, per-SNR curves, against a
+  cross-fitted oracle (`alloc/`), instead of a learned black-box policy;
+* budget-specialised decoding (FiLM, AdaTok-style LoRA heads, per-rate exits) with a measured
+  share of the nesting penalty recovered.
 
-**What it does establish**, which is worth keeping: the penalty is not in the code layout at
-the bottleneck. The one knob with an effect, gradient sharing, acts on the shared encoder
-and only moves quality between rates. So the rates compete for backbone capacity.
+Read TS-JSCC and the timeliness-aware paper in full before writing the related-work section;
+they are the closest.
 
-**G5 (from scratch) has a low prior**: starting from scratch changes how the top code is
-organised, not the two findings that bottleneck capacity is worth nothing and that the
-rates compete in the backbone. Run it only if wave c2 puts the gap in the code layout.
+### 1d. "Stacking the cascade pushes the story"
 
-**Where the idea can still live.** "Each rate its own network, sharing the backbones" may
-still be right with the per-rate part moved to where the rates compete. Wave c2
-(`COMMANDS.txt`) measures the fixed-rate specialist gap under this protocol and splits it
-between encoder and decoder:
-* gap mostly in the DECODER: per-rate low-rank adapters inside the decoder backbone. The
-  decoder already runs once per rate, so they cost no compute; this is the cascade idea
-  moved into the backbone, and a TWC-sized study if it closes most of the gap;
-* gap mostly in the ENCODER: per-rate branches of the last encoder blocks (the original
-  U-Net picture with the split moved earlier; costs an encoder pass per rate when several
-  rates are trained), or report `--cascade-grad` as a rate-priority knob;
-* gap small under this protocol: the nesting penalty is a protocol artefact of the tail
-  probes, and the paper has to be about something else.
+As measured, the stack's contribution is the linear exit: +0.05 dB on average. It also turns
+the codec into five discrete rates, which removes what makes the allocation story work. Two
+ways out:
+* exits for a coarse rate menu, and a prefix within each exit: a code of level k may be cut
+  anywhere between its rate and the next level's. This keeps continuous rates and per-rate
+  specialisation, and is a small code change once wanted;
+* budget specialisation without discrete exits: the LoRA heads in this wave are continuous in
+  the budget (hat-interpolated anchors), so they keep the any-length property.
 
-The sections below are the pre-registration as written before c1; they stand as the record.
+## 2. The paper to aim at
 
-## Verdict (before c1)
+**Working title**: prefix-decodable token communication with content- and channel-aware
+bandwidth allocation.
 
-1. **The mechanism is not new; the study around it can be.** Rate adaptation by exiting
-   at different depths of a JSCC autoencoder (the encoder has several downsampling
-   modules, the decoder can exit early, the latent size follows the exit) is published
-   (Zhang et al., arXiv 2403.11693, CNN-based, inside a beamforming paper), and
-   hierarchical-VAE JSCC (AAAI 2025) varies bandwidth by the number of
-   hierarchical levels sent. Pitched as "a stack of modules with early exits", this
-   would be read as an incremental variant. I could read these two papers only through
-   search summaries (the sandbox blocks arXiv): read them in full before writing.
-2. **As an architecture trick alone, TWC is unlikely.** It becomes a plausible TWC
-   submission only as a complete study with analysis, wireless-system content and
-   strong, well-controlled evidence (section 4). Otherwise IEEE TCCN, the JSAC / WCL
-   routes, or ICC / Globecom first.
-3. **The strongest asset is not the architecture but a measured problem**: the nested
-   (prefix) code wastes its tail, which this tree has already shown with probes
-   (`docs/NOTES.md`, tail probes): -0.02 dB from 1/12 to 1/8 without noise against +1.00 dB for a
-   fixed-rate code, and a 1/8 specialist beating the nested ViT by 0.29-0.71 dB. A paper
-   that characterises this "nesting penalty", shows what causes it, and removes it for
-   ~2% extra parameters (ViT) would have a story, if the cascade does remove it. If the cascade recovers little of it, there is
-   no paper in this direction.
-4. **The honest weak points**: the penalty is not explained by linear theory
-   (`tools/toy_nesting.py`: <= 0.2 dB at 1 dB SNR, ~0 at 7-13 dB), the cascade loses
-   incremental refinement, rates become discrete, and Swin pays +33% parameters.
+**Problem**: K images (or users) share a frame of N channel uses; each has its own content and
+SNR. Choose the channel uses per image to maximise mean (or worst) quality, with one codec, no
+retraining per rate, and no side information.
 
-## 1. What is being proposed, in the field's terms
+**Contributions** (each conditional on the gates):
+* C1 codec: position-tied ViT phase tokens, any prefix decodable, token-level power handling
+  (gain, DC removal, prenorm), budget-specialised decoding (FiLM + LoRA heads + exits),
+  competitive with SwinJSCC / MambaJSCC at matched compute (G-A).
+* C2 allocation: concave-hull curves, equal-slope allocation optimal for the Lagrangian
+  relaxation, exact average rate by time-sharing, predicted curves from transmitter-side
+  features and fed-back SNR, a multi-user formulation (G-B).
+* C3 analysis: nesting is nearly free for a Gaussian source under linear analog coding
+  (`tools/toy_nesting.py`: <= 0.2 dB); the learned code's measured penalty and the share that
+  budget specialisation recovers (G-C).
+* C4 evaluation to TWC standard: Kodak and CLIC; AWGN and Rayleigh (block and fast); SNR
+  mismatch; PSNR, MS-SSIM, LPIPS; SwinJSCC at its published size, MambaJSCC, NTSCC,
+  DeepJSCC-l++, BPG + LDPC; parameters, FLOPs, latency; three seeds for every small effect.
 
-Rate adaptivity in deep JSCC splits into two families:
+If G-B fails (allocation gains are small), the fallback is an architecture paper (C1 + C3).
+That only works if G-A shows a clear matched-compute win, and then IEEE TCCN or a Globecom/ICC
+version fits better than TWC.
 
-* **Width-nested (prefix, mask, ordering).** One code; the rate is how much of it is sent.
-  The encoder is pushed to order its features by importance.
-* **Depth-nested (exits, hierarchy).** The code has stages; the rate is the stage you send.
-  Smaller codes are produced by more processing. This proposal.
+## 3. Gates
 
-## 2. Related work
+| gate | test | pass | if it fails |
+|---|---|---|---|
+| G-A matched compute | ViT p8 384x6 vs Swin large, 2000 epochs, same protocol (this wave) | ViT ahead by >= 0.3 dB mean over CBRs on Kodak | no backbone or interface claim; the paper rests on C2 / C3 with the better backbone |
+| G-B allocation | cross-fitted oracle on Kodak (this wave), then CLIC | >= +0.2 dB or >= 10% bandwidth saving at 1/24-1/12, CI clear of 0; a policy recovering >= half of it | C2 shrinks to a section; architecture paper only |
+| G-C budget specialisation | specialists (this wave), LoRA heads / exits, seeds | closes >= 30% of the matched-protocol gap at 1/8 with 2+ seeds, without losing at 1/48 | report as an ablation, not a contribution |
+| G-D baselines | official-size SwinJSCC, MambaJSCC, NTSCC numbers (later turns) | on par or better at matched compute | reconsider the venue |
 
-Width-nested / conditioned (what the cascade replaces):
+## 4. This turn's wave (`COMMANDS.txt`)
 
-| work | rate mechanism | note |
-|---|---|---|
-| DeepJSCC-l, Kurka and Gündüz, [arXiv 2009.12480](https://arxiv.org/abs/2009.12480) (IEEE TWC 2021) | layered successive refinement and multiple descriptions, CNN | incremental delivery; negligible loss vs single transmission is claimed |
-| DeepJSCC-l++, [arXiv 2305.13161](https://arxiv.org/abs/2305.13161) | one Swin/ViT model fed the bandwidth ratio and SNR; loss weights set from per-rate quality | the closest transformer baseline for "one model, many rates" |
-| Yang and Kim, [arXiv 2110.04456](https://arxiv.org/abs/2110.04456) (ICASSP 2022) | thermometer-coded channel mask from a policy network, Gumbel-softmax | content-adaptive rate, one network |
-| SwinJSCC, [arXiv 2308.09361](https://arxiv.org/abs/2308.09361) | spatial modulation modules scale the latent by SNR and rate | the feature-transmission baseline of this tree |
-| Token communications (TokCom), [arXiv 2502.12096](https://arxiv.org/abs/2502.12096) and adaptive semantic token communication, [arXiv 2505.17604](https://arxiv.org/abs/2505.17604) | tokens as the unit; token selection and embedding dimension set the rate | the token-transmission framing |
-| nested dropout ([arXiv 1402.0915](https://arxiv.org/abs/1402.0915)), PLONQ ([2102.02913](https://arxiv.org/abs/2102.02913)), ProgDTD, Matryoshka / FlexTok ([2502.13967](https://arxiv.org/abs/2502.13967)) | ordered / nested representations by tail dropping | the prefix scheme's lineage; they all pay for ordering |
+| run | answers |
+|---|---|
+| ViT p8 384x6 and Swin large, from scratch, 2000 epochs | G-A |
+| allocation sweeps + oracle on the wave-1 ViT and Swin (Kodak) | G-B (skip if you already have these curves) |
+| 1/8 and 1/48 specialists, ViT and Swin (c1 protocol) | the gap that G-C is measured against |
+| ViT 1/8 with the encoder frozen (only the decoder specialises) | the decoder's share of the gap: the ceiling for any decoder-side head; if it is small, the penalty sits in the shared encoder and the next step conditions the encoder on the budget (the transmitter knows it) |
+| ViT + AdaTok-style LoRA heads; + linear exits | budget-specialised decoding inside the decoder trunk; the stack you asked for |
+| second seed of the c1 control and of the linear exits | whether the c1 effect is real (`--eval-seed` keeps the test's channel draws fixed across seeds, so the pairs stay paired) |
 
-Depth-nested (what the cascade is):
+## 5. Risks
 
-| work | mechanism | difference to this proposal |
-|---|---|---|
-| Zhang et al., Beamforming Design for Semantic-Bit Coexisting Communication System, [arXiv 2403.11693](https://arxiv.org/abs/2403.11693) | multi-exit JSCC: several downsampling modules (residual block + conv, halving the image, fixed channels) in the encoder, early exit in the decoder, module-by-module training | CNN, spatial halving, not benchmarked against a width-nested model as far as the summaries show; no token / feature split |
-| Learned image transmission with a hierarchical VAE, [arXiv 2408.16340](https://arxiv.org/abs/2408.16340) (AAAI 2025) | latents of smaller dimension at coarser levels; bandwidth by levels sent, with a rate-attention module | top-down hierarchy, successive refinement, different mechanism |
-| FAJSCC, [arXiv 2504.04758](https://arxiv.org/abs/2504.04758) | adjustable encoder / decoder complexity, not rate | related only in sharing one trained model across operating points |
-
-Training of shared multi-operating-point networks (borrowed, not new): universally
-slimmable networks, sandwich rule and in-place distillation ([arXiv 1903.05134](https://arxiv.org/abs/1903.05134));
-slimmable compressive autoencoders ([arXiv 2103.15726](https://arxiv.org/abs/2103.15726), rate by width);
-multi-exit networks (BranchyNet, MSDNet).
-
-## 3. What is and is not new here
-
-Not new: exits at depth as the rate control; sandwich-style sampling; shared backbones with
-per-operating-point heads.
-
-Defensible as new, if the experiments support it:
-
-1. **A strict superset of the prefix scheme.** Zero-initialised residual stages over a
-   channel-truncation skip make the cascade bit-exact to a prefix model at step 0
-   (checked), so it can be warm-started from any prefix checkpoint and cannot start worse.
-   Earlier multi-exit JSCC trains from scratch with fresh heads.
-2. **The nesting penalty, measured and attacked.** Tail probes plus a cascade that targets
-   them, on the same backbone and the same training budgets, with a control trained on
-   the same five rates.
-3. **One construction on two interfaces.** The same stages on feature transmission (Swin
-   grid, real channels) and token transmission (ViT phase tokens, per-level power profile
-   and DC handling), with a parameter-matched module bake-off per rate.
-4. **A training knob with a Pareto reading** (`--cascade-grad`, joint -> greedy): how much
-   the top rate may specialise against the low rates.
-5. **Free rate signalling and a hook for per-image level choice** (the receiver counts
-   symbols; `alloc/` has the equal-slope allocator).
-
-## 4. What a TWC paper would need
-
-TWC reviewers will ask, in this order:
-
-1. *What is new beyond multi-exit JSCC with a Transformer?* Section 3, items 1-4, backed
-   by controls below.
-2. *Is the gain structure or just parameters?* Required controls: prefix + same-size
-   shared adapter (parameter-matched); linear-only cascade; module kinds matched per block
-   (built in). Swin's +33% makes this non-optional.
-3. *Against what?* Fixed-rate specialists at every rate (the ceiling), the prefix control
-   on the same rates, SwinJSCC with its own rate modulation, DeepJSCC-l++, a digital
-   BPG + LDPC reference at the same CBR, several seeds, Kodak and CLIC, PSNR + MS-SSIM +
-   LPIPS (the tree already scores all, fp32).
-4. *What does it do in a wireless system?* AWGN and Rayleigh (the code supports both), SNR
-   mismatch, rate switching under fluctuating bandwidth, and per-image level choice
-   with the existing allocator. Without a system section it reads as an ML paper.
-5. *Theory.* The linear-Gaussian toy says nesting is nearly free, so a theory of why the
-   cascade wins cannot be a power-allocation argument. Options with substance: a
-   capacity-ordering argument for finite-width networks, or a bound on tandem loss
-   (the level codes form a Markov chain X -> Z1 -> ... -> Z4, so a deeper code is a
-   function of a shallower one) and when that loss is small. Without any theory, aim at
-   TCCN-style venues.
-6. *The cost.* No incremental refinement; discrete rates; K decoder-side stage chains to
-   store; K decoder passes per step if all levels are trained each step.
-
-Go / no-go from the screening wave (Kodak, paired intervals over images, last checkpoint):
-
-| gate | pass | if it fails |
-|---|---|---|
-| G1 any module arm beats the grid-trained prefix control | mean >= +0.3 dB over the five CBRs, CI above 0 at >= 3 of them | < +0.1 dB: stop; the nesting penalty is not what the cascade removes |
-| G2 the linear arm already helps | > 0 at the low CBRs | the gain, if any, is capacity: run the parameter-matched adapter control before anything else |
-| G3 same sign in both interfaces | swin and vit both positive | a one-interface result is a workshop paper |
-| G4 top rate | 1/8 gain >= 0.25 dB (the penalty is 0.3-0.7) with the default joint training or with `--cascade-grad` < 1 | no top-rate gain: the nested tail was not the bottleneck |
-| G5 from scratch | the gain survives 2000 epochs from scratch, not only fine-tuning | a fine-tune-only effect is an optimisation artefact of warm starting |
-| G6 overhead | vit +2%, swin <= 15% with width 64 holding most of the gain | a Swin result that needs +33% is a capacity result |
-
-## 5. Risks, in order of how likely they are to hurt
-
-1. **The gain is within noise.** Differences between identical-seed runs were 0.67 dB per
-   validation epoch; screening at 400 epochs from a shared checkpoint reduces but does not
-   remove it. Use paired Kodak tables and repeat the best arm with another seed.
-2. **Fine-tune screening biases toward the prefix layout.** The warm start keeps `z0`
-   ordered; a from-scratch run with `--mod-skip none` or `--cascade-grad` < 1 is the fair
-   test of the top rate (wave 2, then the headline).
-3. **The control is too weak.** It must be trained on the same five budgets
-   (`--rate-sampling grid`), not the continuous prefix model of wave 1; the commands do.
-4. **The multi-exit prior art is closer than the summaries suggest.** Read it in full.
-5. **Tandem loss.** `z_k` is a function of `z_(k-1)`; if `z0` cannot be both a good top code
-   and a good source for compression, the low rates lose. `--cascade-grad` measures it.
-
-## 6. Contribution framings, from safest to boldest
-
-* **Characterisation:** the nesting penalty of prefix JSCC and how much a cascade removes
-  (needs G1-G5; fits a letter or a TCCN-style paper).
-* **Method + system:** the cascade plus per-image level choice and rate switching over a
-  fading channel, with the toy and a tandem-loss bound as the theory (the TWC route).
-* **Unified view:** width- vs depth-nesting for feature and token transmission with the
-  module taxonomy (needs more backbones than two).
+* **Concurrent work is moving monthly** (AdaTok Jun 2026, ATS-ToDMA Jul 2026, TS-JSCC Aug
+  2026). A TWC review takes months; an arXiv preprint or a conference version early protects
+  priority.
+* **Complexity**: a 142 M-parameter, 291-GFLOP codec is hard to sell for devices. G-A also
+  decides whether there is a smaller operating point worth reporting.
+* **Tiles**: the ViT codes 256 px tiles independently; native-resolution results may show seams,
+  and reviewers will ask. Show crops.
+* **Kodak has 24 images**: every decision here uses paired intervals, but the paper needs CLIC.
+* **SNR-blind decoders** are a design choice (SNR conditioning bought nothing in the old tree);
+  compare against SNR-adaptive baselines on their terms and show robustness to SNR mismatch.

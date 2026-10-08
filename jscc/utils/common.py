@@ -133,16 +133,22 @@ NO_DECAY = ("query", "pos", "latent", "phase", "gain", "mask_token", "grid_query
 
 
 CASCADE_MODULES = ("enc_cascade.", "dec_cascade.")
+NEW_MODULE_KEYS = (".lora_fc1.", ".lora_fc2.")      # AdaTok-style budget LoRA heads
+
+
+def is_new_module(name):
+    """Parameters that a fine-tune of an older checkpoint adds: cascade stages, LoRA heads."""
+    return name.startswith(CASCADE_MODULES) or any(k in name for k in NEW_MODULE_KEYS)
 
 
 def param_groups(model, weight_decay, lr=None, module_lr_mult=1.0):
-    """Decay / no-decay groups; the cascade modules (new parameters) can train at
-    `module_lr_mult` x lr, in groups of their own (the scheduler scales each group)."""
+    """Decay / no-decay groups; new modules (cascade stages, LoRA budget heads) can train
+    at `module_lr_mult` x lr, in groups of their own (the scheduler scales each group)."""
     groups = {}
     for n, p in model.named_parameters():
         if p.requires_grad:
             plain = p.ndim <= 1 or any(k in n for k in NO_DECAY)
-            groups.setdefault((plain, n.startswith(CASCADE_MODULES)), []).append(p)
+            groups.setdefault((plain, is_new_module(n)), []).append(p)
     out = []
     for (plain, is_module), params in groups.items():
         g = {"params": params, "weight_decay": 0.0 if plain else weight_decay}
