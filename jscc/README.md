@@ -330,9 +330,14 @@ predict every image's quality-vs-budget curve, then allocate on the curves.
    last segment is time-shared, so every method meets the target average CBR
    exactly (in expectation) and is compared with uniform allocation there.
    The objective is any mix of metrics (`--objective lpips:0.7,psnr:0.3`); one
-   set of curves serves every objective and every target CBR.
+   set of curves serves every objective and every target CBR. The baseline rule
+   is PADC's (IEEE TWC 2023), `level_segments`: every image gets the least budget
+   that reaches a common quality level, raised until the budget is spent
+   (max-min fairness; the same greedy and time-sharing, steps taken in order of
+   level instead of slope).
 3. **Oracle** (`tools/alloc_policy.py oracle`). Allocation on the measured
-   curves themselves: the ceiling of any per-image policy. It selects on half
+   curves themselves: the ceiling of any per-image policy (printed beside
+   `equal_q`, PADC's rule on the same curves). It selects on half
    of the noise draws and is scored on the other half (then the halves swap):
    selecting and scoring on the same draws harvests channel noise as gain
    (+0.15 to +0.6 dB on identical synthetic images; cross-fitted: none). With

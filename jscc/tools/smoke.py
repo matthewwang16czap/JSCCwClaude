@@ -441,7 +441,8 @@ def check_allocation(x):
     import numpy as np
 
     from alloc import predictor as P
-    from alloc.core import allocate, compare, isotonic, metric_scales, path, segments
+    from alloc.core import (allocate, compare, isotonic, level_segments, metric_scales, path,
+                            segments)
     from alloc.sweep import codeword, draw_noise, send, sweep
 
     class OneBatch:                     # the sweep reads len(loader.dataset) and iterates
@@ -467,6 +468,15 @@ def check_allocation(x):
         exact &= abs((w * q).sum() - best) < 1e-9
         exact &= abs((w @ units * cost).sum() / cost.sum() - t) < 1e-9
     ok(exact, "equal-slope allocation == brute-force optimum, target rate met exactly")
+    qm = np.maximum.accumulate(q, axis=1)
+    tau = float(np.sort(qm[:, :-1].ravel())[N])         # a level some images have passed
+    least = np.array([np.searchsorted(qm[i, :-1], tau, side="left") for i in range(N)])
+    t_tau = float((cost * units[least]).sum() / cost.sum())
+    we, _ = allocate(level_segments(q, cost, units), cost, units, t_tau)
+    ws, _ = allocate(segs, cost, units, t_tau)
+    ok(np.allclose(we, np.eye(K)[least], atol=1e-6) and (we * q).sum() <= (ws * q).sum() + 1e-9,
+       "equal-quality rule (PADC) == the least budget reaching a common level; its mean "
+       "<= equal-slope's")
     y = isotonic(np.array([1.0, 3.0, 2.0, 2.0, 5.0, 4.0]))
     ok(bool(np.all(np.diff(y) >= 0)) and abs(y.sum() - 17.0) < 1e-9, "isotonic fit")
     Nn, D, units2 = 300, 4, np.linspace(1024, 6144, 11)
@@ -478,6 +488,11 @@ def check_allocation(x):
                   {"oracle": ("oracle", [("psnr", 1.0)])}, [3072.0], sc, "psnr")
     gain = float((res["oracle"][3072.0]["values"] - res["uniform"][3072.0])[:, 0].mean())
     ok(gain < 0.02, f"cross-fitted oracle harvests no noise on identical images ({gain:+.3f} dB)")
+    res = compare(draws, np.ones(Nn), units2, ["psnr", "lpips"],
+                  {"equal_q": ("equal", [("psnr", 1.0)]),
+                   "equal_fixed": ("equal", np.tile(flat, (Nn, 1)))}, [3072.0], sc, "psnr")
+    ok(all(abs(res[m][3072.0]["avg"] - 3072.0) < 1e-6 for m in ("equal_q", "equal_fixed")),
+       "the equal-quality rule meets the target average budget, from measured or fixed curves")
 
     from tools.alloc_policy import summarise, verdicts
 

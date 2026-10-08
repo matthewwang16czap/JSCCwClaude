@@ -28,8 +28,17 @@ IEEE Transactions on Wireless Communications (TWC).
    side-information-free content- and channel-aware bandwidth allocation across images or
    users with an optimality argument, and budget-specialised decoding that closes a measured
    share of the nesting penalty. It needs gates G-A and G-B (section 3) to pass.
-6. If G-A fails (the ViT loses at matched compute), the codec stops being the contribution; the
-   allocation and the nesting analysis can still be, on whichever backbone wins.
+6. If G-A fails (Swin large beats the ViT at matched compute), the ViT is a choice paid for in
+   compute; the rate-adaptive codec, the allocation and the nesting analysis carry over, on
+   whichever token backbone wins (the hybrid is the Swin-based one).
+7. **Against DeepJSCC-MIMO (read in full, section 1e):** it already has the ViT JSCC with patch
+   tokens mapped straight to symbols, the "ViT beats Swin at lower cost" result, and
+   truncate-and-zero-pad adaptation of one model (over antennas). It has no rate adaptivity and
+   names variable-length JSCC as future work. So the novelty beyond it is the rate dimension,
+   and that must in turn be defended against PADC (IEEE TWC 2023: predicted per-image PSNR picks
+   the rate) and JSCCformer-f (IEEE TWC 2024: feedback-driven stopping). Enough for TWC only as
+   the combination: one ViT JSCC for every rate + an open-loop joint allocation that beats
+   PADC's rule + the measured nesting penalty.
 
 ## 1. Your four points, checked
 
@@ -119,6 +128,59 @@ ways out:
 * budget specialisation without discrete exits: the LoRA heads in this wave are continuous in
   the budget (hat-interpolated anchors), so they keep the any-length property.
 
+### 1e. Against DeepJSCC-MIMO (read in full, 2026-10-08)
+
+Wu, Shao, Bian, Mikolajczyk and Gündüz, IEEE TWC 2024 ([2309.00470](https://arxiv.org/abs/2309.00470)).
+Details in `docs/SURVEY.md`, section B.
+
+What it already has, so this paper cannot claim it:
+
+| this tree's claim | DeepJSCC-MIMO |
+|---|---|
+| ViT JSCC whose patch tokens map straight to channel symbols | the same design: one linear layer per token -> a fixed number of symbols. This tree's ViT at a fixed rate (`--fixed-cbr`) is nearly that architecture: per-position symbol heads after a ViT trunk, a linear patch head. Left: fixed vs learned positions, per-token gain and DC removal vs one global normalisation, no Siamese input layer, no SNR / CSI heatmap (this decoder is SNR-blind) |
+| "the ViT beats Swin" | its complexity table: ViT above CNN and Swin DeepJSCC with fewer parameters and FLOPs (CIFAR10, 2x2 MIMO, R 1/24, 5 dB: 24.41 vs 23.54 / 23.61 dB) |
+| one model adapts by sending part of its code, the receiver zero-pads | "adaptive-M": the first M_i antenna rows are sent and zero-padded, <= 0.6 dB below per-M models. A nested code over antennas with three levels; the same mechanism as the prefix scheme on another resource |
+
+What it does not have:
+* any rate adaptivity: every bandwidth ratio is a separately trained model;
+* per-image or per-user length, allocation of a shared budget;
+* prefix decodability at token granularity, budget-specialised decoding, a measured nesting
+  penalty in bandwidth;
+* SISO results at high resolution and matched compute (its Kodak models train on 128 px crops;
+  its complexity table is for 32 px images).
+
+Its conclusion names exactly this as open: "variable length JSCC ... where the channel
+resources are judiciously exploited depending on the channel state as well as the input
+signal". That sentence is the motivation the paper can quote. The same group's JSCCformer-f
+(IEEE TWC 2024) already varies the length per image, but closed-loop: it needs channel
+feedback and stops block by block when the decoder (seen through feedback) reaches a target.
+PADC (IEEE TWC 2023) already predicts each image's PSNR and picks its rate, by a per-image
+quality floor (`docs/SURVEY.md`, section A).
+
+Consequences:
+1. **The backbone is not a contribution.** "Token communication on a ViT beats Swin" would be
+   read as DeepJSCC-MIMO's result at a larger size. G-A stays, but as the choice of backbone
+   at matched compute (and the reason to keep the ViT), not as a claim.
+2. **The codec's novelty is rate adaptivity:** one ViT JSCC that decodes any prefix (one token =
+   4 symbols per 256 px tile), with a phase-major layout that makes every prefix a code for
+   every position (DeepJSCC-MIMO's codeword has one fixed length per model and is never cut
+   along the channel uses), budget-specialised decoding, and its cost measured against
+   per-rate models. The per-rate models are the DeepJSCC-MIMO baseline; this wave's
+   specialists are close to it architecturally, and a faithful SISO DeepJSCC-MIMO (learned
+   positions, global power normalisation, Siamese input, SNR heatmap) is a later turn's code,
+   needed for the paper.
+3. **The allocation's novelty is the rule and the setting, not the idea:** a joint split of a
+   shared budget across images or users (equal slope, Lagrangian-optimal), exact average rate
+   by time-sharing, no side information and no feedback, against PADC's per-image rule.
+   `tools/alloc_policy.py oracle` now prints PADC's rule (`equal_q`) beside the equal-slope
+   oracle on the same curves, so G-B also asks whether the rule matters.
+4. **The adaptive-M number (<= 0.6 dB) is a second measurement of a nesting penalty** in a ViT
+   JSCC; C3 can put it next to this tree's 0.2-0.5 dB and the linear-Gaussian <= 0.2 dB.
+5. **Wireless depth is where DeepJSCC-MIMO is strong and this tree is thin** (SISO AWGN only).
+   For TWC, the minimum is Rayleigh block fading and SNR mismatch; per-user SNRs in the
+   allocation make it channel-aware. A MIMO version is a natural extension later (ordered tokens
+   on eigenmodes sorted by gain), not a requirement.
+
 ## 2. The paper to aim at
 
 **Working title**: prefix-decodable token communication with content- and channel-aware
@@ -129,18 +191,22 @@ SNR. Choose the channel uses per image to maximise mean (or worst) quality, with
 retraining per rate, and no side information.
 
 **Contributions** (each conditional on the gates):
-* C1 codec: position-tied ViT phase tokens, any prefix decodable, token-level power handling
-  (gain, DC removal, prenorm), budget-specialised decoding (FiLM + LoRA heads + exits),
-  competitive with SwinJSCC / MambaJSCC at matched compute (G-A).
+* C1 codec: DeepJSCC-MIMO's architecture class made rate-adaptive: one ViT JSCC that decodes
+  any prefix (phase-major position-tied tokens), token-level power handling (gain, DC removal,
+  prenorm), budget-specialised decoding (FiLM + LoRA heads + exits); its cost against per-rate
+  (DeepJSCC-MIMO-style) models, and its standing against SwinJSCC / MambaJSCC at matched
+  compute (G-A, G-D).
 * C2 allocation: concave-hull curves, equal-slope allocation optimal for the Lagrangian
   relaxation, exact average rate by time-sharing, predicted curves from transmitter-side
-  features and fed-back SNR, a multi-user formulation (G-B).
+  features and fed-back SNR, a multi-user formulation; open-loop (no feedback, unlike
+  JSCCformer-f) and joint across images (unlike PADC's per-image quality floor) (G-B).
 * C3 analysis: nesting is nearly free for a Gaussian source under linear analog coding
   (`tools/toy_nesting.py`: <= 0.2 dB); the learned code's measured penalty and the share that
   budget specialisation recovers (G-C).
 * C4 evaluation to TWC standard: Kodak and CLIC; AWGN and Rayleigh (block and fast); SNR
-  mismatch; PSNR, MS-SSIM, LPIPS; SwinJSCC at its published size, MambaJSCC, NTSCC,
-  DeepJSCC-l++, BPG + LDPC; parameters, FLOPs, latency; three seeds for every small effect.
+  mismatch; PSNR, MS-SSIM, LPIPS; DeepJSCC-MIMO (SISO, per rate), SwinJSCC at its published
+  size, MambaJSCC, NTSCC, DeepJSCC-l++, PADC's allocation rule, BPG + LDPC; parameters, FLOPs,
+  latency; three seeds for every small effect.
 
 If G-B fails (allocation gains are small), the fallback is an architecture paper (C1 + C3).
 That only works if G-A shows a clear matched-compute win, and then IEEE TCCN or a Globecom/ICC
@@ -150,10 +216,10 @@ version fits better than TWC.
 
 | gate | test | pass | if it fails |
 |---|---|---|---|
-| G-A matched compute | ViT p8 384x6 vs Swin large, 2000 epochs, same protocol (this wave) | ViT ahead by >= 0.3 dB mean over CBRs on Kodak | no backbone or interface claim; the paper rests on C2 / C3 with the better backbone |
-| G-B allocation | cross-fitted oracle on Kodak (this wave), then CLIC | >= +0.2 dB or >= 10% bandwidth saving at 1/24-1/12, CI clear of 0; a policy recovering >= half of it | C2 shrinks to a section; architecture paper only |
+| G-A matched compute | ViT p8 384x6 vs Swin large, 2000 epochs, same protocol (this wave) | ViT ahead by >= 0.3 dB mean over CBRs on Kodak: keep the ViT (context, not a claim: DeepJSCC-MIMO showed ViT > Swin on CIFAR) | report the ViT's cost, or move the token design to the hybrid; C1-C3 carry over |
+| G-B allocation | cross-fitted oracle on Kodak (this wave), then CLIC | >= +0.2 dB or >= 10% bandwidth saving at 1/24-1/12, CI clear of 0, AND ahead of PADC's rule (`equal_q`) on the same curves; a policy recovering >= half of it | C2 shrinks to a section (or to PADC's rule on a new codec); architecture paper only |
 | G-C budget specialisation | specialists (this wave), LoRA heads / exits, seeds | closes >= 30% of the matched-protocol gap at 1/8 with 2+ seeds, without losing at 1/48 | report as an ablation, not a contribution |
-| G-D baselines | official-size SwinJSCC, MambaJSCC, NTSCC numbers (later turns) | on par or better at matched compute | reconsider the venue |
+| G-D baselines | DeepJSCC-MIMO (SISO, one model per rate), official-size SwinJSCC, MambaJSCC, NTSCC, PADC's rule (later turns) | on par or better at matched compute; the single model within the nesting penalty of the per-rate DeepJSCC-MIMO models | reconsider the venue |
 
 ## 4. This turn's wave (`COMMANDS.txt`)
 

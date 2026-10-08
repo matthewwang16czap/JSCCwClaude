@@ -187,7 +187,9 @@ python tools/compare_runs.py ${SWH}_w1 history/swin_large_awgn_DIV2K_256_m1 \
   history/vit_p8d384x6s4_awgn_DIV2K_256_m1 ${VT}_w1 --test
 
 # 4b. G-B: per-image allocation at a fixed mean rate, the cross-fitted oracle
-#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving)
+#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving).
+#     The table also prints `equal_q`: PADC's per-image rule (IEEE TWC 2023: each image the
+#     least budget reaching a common quality) on the same curves. G-B needs oracle > equal_q.
 python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective psnr \
   --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_vit_psnr.txt
 python tools/alloc_policy.py oracle --curves curves/swin_w1_kodak.npz --objective psnr \
@@ -216,7 +218,7 @@ python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
 #                                                      interface ablation
 #        within +-0.1 dB or below                    -> no backbone claim; the paper rests on
 #                                                      allocation + nesting analysis
-#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0
+#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0, and above equal_q
 #                                                    -> allocation is a contribution: next turn
 #                                                      trains the predictor (alloc_policy train)
 #        smaller                                     -> allocation is a section, not the story

@@ -22,6 +22,13 @@ alloc/core.py): the target average budget is met exactly, in expectation.
                  draws and scored on the other half (the ceiling)
     oracle_psnr  the oracle for PSNR: does the perceptual objective allocate
                  differently from the fidelity one?
+    equal_q      PADC's rule (Zhang et al., IEEE TWC 2023) on the oracle's curves:
+                 every image gets the least budget that reaches a common quality
+                 level (max-min fairness), the level set by the average budget.
+                 Same information as the oracle, other rule: the equal-slope
+                 rule's margin over it is what the allocation rule adds. (Not
+                 in `eval`: the predictor learns curves relative to the smallest
+                 budget, and an equal-quality rule needs absolute levels.)
 
 --objective is what the allocation maximises ('lpips', 'dists', 'psnr', or a
 mix such as 'lpips:0.7,psnr:0.3'); its first metric is the PRIMARY one, whose
@@ -202,7 +209,7 @@ def cmd_oracle(a):
     targets, per_unit = targets_of(d, a.targets)
     scales = metric_scales(np.nanmean(d["scores"], axis=(1, 2)))
     q_sim = objective(d["clean"].astype(np.float64), metrics, spec, scales)
-    selectors = {"sim": q_sim, "oracle": ("oracle", spec)}
+    selectors = {"sim": q_sim, "oracle": ("oracle", spec), "equal_q": ("equal", spec)}
     if spec != [("psnr", 1.0)] and "psnr" in metrics:
         selectors["oracle_psnr"] = ("oracle", [("psnr", 1.0)])
     per_snr = run(d, lambda s: selectors, targets, scales, primary, a.folds)
