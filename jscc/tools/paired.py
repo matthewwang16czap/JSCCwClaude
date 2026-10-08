@@ -2,6 +2,7 @@
 
     python tools/paired.py history/<control> history/<variant A> [history/<variant B> ...]
     python tools/paired.py <control> <variant> --metric lpips_vgg --snrs 1 4
+    python tools/paired.py <control> <specialist> --cbrs 1/8     # only the rows that matter
 
 Every variant is compared with the FIRST run (the control). The test records the
 same image under the same channel draw in every run (the evaluation reseeds per
@@ -48,6 +49,9 @@ def main():
     ap.add_argument("runs", nargs="+", help="control first, then the variants")
     ap.add_argument("--metric", default="psnr")
     ap.add_argument("--snrs", nargs="+", type=float, default=None, help="only these SNRs (dB)")
+    ap.add_argument("--cbrs", nargs="+", default=None,
+                    help="print only these CBRs, e.g. 1/8 for a 1/8 specialist ('all' then "
+                         "averages over these only)")
     ap.add_argument("--boot", type=int, default=4000, help="bootstrap resamples")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
@@ -60,6 +64,12 @@ def main():
         raise SystemExit("the runs scored different (CBR, image) cells: same test set, protocol "
                          "and --eval-cbrs are needed for a paired comparison")
     cbrs = sorted({c for c, _ in keys}, key=Fraction)
+    if a.cbrs:
+        want = {Fraction(c) for c in a.cbrs}
+        cbrs = [c for c in cbrs if Fraction(c) in want]
+        if not cbrs:
+            raise SystemExit(f"none of --cbrs {a.cbrs} was scored")
+        keys = [k for k in keys if k[0] in cbrs]
     sign = 1.0 if a.metric in HIGHER_IS_BETTER else -1.0
     sign_note = "" if sign > 0 else " (lower is better: positive = the variant is better)"
     print(f"{a.metric.upper()}, variant minus control{sign_note}; mean over SNRs and channel draws, "

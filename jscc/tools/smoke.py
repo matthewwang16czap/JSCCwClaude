@@ -195,8 +195,8 @@ def check_cascade(x):
            "a bodiless stage without a skip is refused")
     raises(["--backbone", "vit", "--cascade", "--eval-cbrs", "1/20"],
            "a CBR that is not a level is refused")
-    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "attn", "--mod-width", "100"],
-           "an attention width that heads cannot divide is refused")
+    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "attn", "--mod-depths", "1",
+            "--mod-width", "100"], "an attention width that heads cannot divide is refused")
     raises(["--backbone", "vit", "--rate-sampling", "sandwich", "--rates-per-step", "1"],
            "sandwich sampling needs 2 or more budgets per step")
 
@@ -338,6 +338,67 @@ def check_cascade(x):
         parts.append(build("vit", "--cascade", *flag)[1].run_name)
     ok("sandwich" in parts[0] and "casc-" in parts[1] and "sandwich" not in parts[1],
        f"run names mark the scheme ({parts[1]}; {parts[0]})")
+
+
+def check_budget_heads(x):
+    """AdaTok's per-budget LoRA heads in the ViT decoder trunk (--rate-mod lora|both)."""
+    from utils.common import param_groups
+
+    print("[budget heads]")
+    check_backbone("vit", x, "--rate-mod", "both")
+    film, cfg = build("vit")
+    with torch.no_grad():
+        for p in film.parameters():
+            p.add_(0.05 * torch.randn_like(p))
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "w.pt")
+        save_weights(film, path)
+        for extra in ([], ["--cascade"]):
+            both, _ = build("vit", "--rate-mod", "both", *extra)
+            report = load_weights(both, path)
+            both.seed_levels()
+            new = [k for k in report.missing_keys
+                   if not k.startswith(("enc_cascade.", "dec_cascade."))]
+            film.channel.kind = both.channel.kind = "none"
+            worst = max(diff(film(x, 10.0, c)[0], both(x, 10.0, c)[0]) for c in cfg.cbrs)
+            ok(new and all(".lora_fc" in k for k in new) and worst < 1e-5,
+               f"vit --rate-mod both{' --cascade' if extra else ''} loaded from a film checkpoint "
+               f"== that model at all 5 CBRs (max diff {worst:.1e}; {len(new)} LoRA tensors new)")
+    both.train()
+    both(x, torch.tensor([0.0, 10.0]), units=[cfg.cbr_units[1]], want_metrics=False)[1].backward()
+    g = sum(float(p.grad.abs().sum()) for n, p in both.named_parameters()
+            if ".lora_fc" in n and n.endswith(".B") and p.grad is not None)
+    ok(g > 0, "the LoRA heads of the active budget anchors receive a gradient")
+    groups = param_groups(both, 0.0, 1e-3, 4.0)
+    names = {id(p): n for n, p in both.named_parameters()}
+    boosted = {names[id(p)] for gr in groups if "lr" in gr for p in gr["params"]}
+    lora = {n for n in names.values() if ".lora_fc" in n}
+    ok(lora and lora <= boosted and all(".lora_fc" in n or n.startswith(("enc_cascade.", "dec_cascade."))
+                                        for n in boosted),
+       "--mod-lr-mult covers the LoRA heads and the cascade stages, nothing else")
+
+
+def check_eval_seed(x):
+    """Validation and test draw their channel noise from --eval-seed, not --seed, so runs
+    of different training seeds are scored on the same draws (paired comparisons)."""
+    from engine import evaluate
+
+    print("[eval seed]")
+    model, cfg = build("swin")
+    images = [x[i:i + 1] for i in range(x.shape[0])]
+
+    def mse(out, ref, keys=None):
+        return {"mse": ((out.float() - ref) ** 2).mean((1, 2, 3))}
+
+    def scores(seed, eval_seed):
+        cfg.seed, cfg.eval_seed = seed, eval_seed
+        torch.manual_seed(seed)
+        _, records = evaluate(model, images, cfg, [1.0], cfg.eval_cbrs[:2], mse, per_image=True)
+        return [r["mse"] for r in records]
+
+    a, b, c = scores(42, 42), scores(43, 42), scores(42, 43)
+    ok(len(a) == 2 * len(images) and a == b and a != c,
+       "test channel draws follow --eval-seed, not the training --seed")
 
 
 def check_perception(x):
@@ -684,6 +745,8 @@ def main():
     for backbone in ("swin", "hybrid", "vit"):
         check_backbone(backbone, x)
     check_cascade(x)
+    check_budget_heads(x)
+    check_eval_seed(x)
     check_perception(x)
     check_allocation(x)
     check_frontier()

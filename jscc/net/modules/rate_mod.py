@@ -1,4 +1,5 @@
-"""Budget-conditioned decoder modulation (FiLM), made continuous.
+"""Budget-conditioned decoder modulation: FiLM, and AdaTok's per-budget LoRA heads
+(MH-LoRA, Lu et al., arXiv 2606.07185) made continuous.
 
 The decoder is told only HOW MANY tokens arrived (the receiver counts them), so
 this is rate conditioning, not channel conditioning. K anchors are log-spaced
@@ -9,6 +10,10 @@ the modulation is the identity.
 
     film  per-anchor scale and shift of the normalised activations (cheap; the
           best validated setting for the hybrid and the ViT)
+    lora  per-anchor rank-r residual on the MLP (AdaTok's MH-LoRA): budget-specific
+          capacity inside the decoder trunk, at no extra decoder passes
+    both  the two together (--rate-mod both: FiLM loads from a film checkpoint and the
+          LoRA heads start as the identity, so a fine-tune starts exactly at it)
 """
 
 import math
@@ -18,12 +23,16 @@ import torch.nn as nn
 
 
 class Budget:
-    """Mixing weights for one decode: (rows, anchors)."""
+    """Mixing weights for one decode.
 
-    __slots__ = ("w",)
+    `pairs` is set when the whole batch shares one budget -- then the active
+    anchors are known on the host and the LoRA path needs no device sync."""
 
-    def __init__(self, w):
+    __slots__ = ("w", "pairs")
+
+    def __init__(self, w, pairs=None):
         self.w = w
+        self.pairs = pairs
 
 
 class BudgetMixer(nn.Module):
@@ -48,10 +57,11 @@ class BudgetMixer(nn.Module):
     def forward(self, lengths, batch, device, dtype):
         """lengths: an int (whole batch) or a (batch,) tensor."""
         if not torch.is_tensor(lengths):
+            pairs = self._pairs(lengths)
             w = torch.zeros(self.k)
-            for i, v in self._pairs(lengths):
+            for i, v in pairs:
                 w[i] = v
-            return Budget(w.to(device=device, dtype=dtype).expand(batch, -1))
+            return Budget(w.to(device=device, dtype=dtype).expand(batch, -1), pairs)
         a = self.anchors.float()
         k = lengths.to(device=device, dtype=torch.float32).reshape(-1)
         k = k.clamp(a[0], a[-1]).unsqueeze(-1)
@@ -75,12 +85,37 @@ class FiLM(nn.Module):
         return x * (1.0 + (w @ self.gamma).unsqueeze(1)) + (w @ self.beta).unsqueeze(1)
 
 
-class BlockMod(nn.Module):
-    """What one transformer block gets: a FiLM before attention and before the MLP."""
+class LoRA(nn.Module):
+    """sum_k w_k B_k A_k x -- interpolation over the MODULATIONS, not their
+    factors (mixing A and B separately would add cross terms that belong to
+    no anchor)."""
 
-    def __init__(self, dim, anchors, mode="film"):
+    def __init__(self, fin, fout, anchors, rank=16):
         super().__init__()
-        if mode != "film":
-            raise ValueError(f"rate_mod must be none|film, got {mode!r}")
-        self.film1 = FiLM(dim, anchors)
-        self.film2 = FiLM(dim, anchors)
+        self.A = nn.Parameter(torch.empty(anchors, rank, fin))
+        self.B = nn.Parameter(torch.zeros(anchors, fout, rank))
+        nn.init.normal_(self.A, std=0.02)
+
+    def forward(self, x, b):
+        if b.pairs is not None:
+            out = None
+            for i, v in b.pairs:
+                term = v * ((x @ self.A[i].t()) @ self.B[i].t())
+                out = term if out is None else out + term
+            return out
+        u = torch.einsum("bni,kri->bnkr", x, self.A)
+        return torch.einsum("bnkr,kor,bk->bno", u, self.B, b.w.to(u.dtype))
+
+
+class BlockMod(nn.Module):
+    """What one transformer block gets. mode: film | lora | both."""
+
+    def __init__(self, dim, hidden, anchors, mode="film", rank=16):
+        super().__init__()
+        if mode not in ("film", "lora", "both"):
+            raise ValueError(f"rate_mod must be film|lora|both, got {mode!r}")
+        film, lora = mode in ("film", "both"), mode in ("lora", "both")
+        self.film1 = FiLM(dim, anchors) if film else None
+        self.film2 = FiLM(dim, anchors) if film else None
+        self.lora_fc1 = LoRA(dim, hidden, anchors, rank) if lora else None
+        self.lora_fc2 = LoRA(hidden, dim, anchors, rank) if lora else None

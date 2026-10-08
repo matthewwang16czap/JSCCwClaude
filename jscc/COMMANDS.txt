@@ -1,0 +1,229 @@
+================================================================================
+ COMMANDS.txt — wave c2, revised: the gates of the TWC plan (docs/ASSESSMENT.md v2)
+ rev 2026-10-08. Everything runs on the server, from the jscc/ directory.
+ GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
+================================================================================
+
+This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
+are kept under the same names; its encoder-only runs are dropped; the matched-compute
+pair, the allocation oracle, the LoRA budget heads and a second seed are added.
+
+WHY THIS WAVE (docs/ASSESSMENT.md). Three questions decide what the paper can claim:
+
+  G-A  matched compute. The wave-1 ViT that beats Swin uses 27x its parameters and
+       16x its FLOPs. Does a ViT with token transmission still win at the SAME
+       compute? ViT p8 384x6 (21.6 M, 43.9 GFLOPs) against Swin large (12.7 M,
+       41.8 GFLOPs, the published SwinJSCC size class), both from scratch, wave-1
+       protocol.
+  G-B  per-image allocation (the "adaptive" half of AdaTok's flow). At a fixed mean
+       rate, how much does giving each image its own token budget gain? The
+       cross-fitted oracle on Kodak, for the wave-1 ViT and Swin (prefix models).
+  G-C  budget-specialised decoding. How big is the multi-rate penalty under the c1
+       protocol (1/8 and 1/48 specialists), how much of it a specialised DECODER
+       alone can recover (1/8 with the encoder frozen: the ceiling for any
+       decoder-side head), and how much AdaTok's per-budget LoRA heads recover, alone
+       and stacked with the linear exits; plus a second seed of the c1 control and of
+       the c1 linear exits.
+
+  id   run                                            protocol              answers
+  M1   vit p8 384x6 s4, from scratch                   2000 epochs, uniform  G-A
+  M2   swin large, from scratch                        2000 epochs, uniform  G-A
+  A1   allocation sweep + oracle, wave-1 vit           Kodak, no training    G-B
+  A2   allocation sweep + oracle, wave-1 swin          Kodak, no training    G-B
+  V1   vit 1/8 specialist                              c1 fine-tune          G-C: the gap at 1/8
+  V2   vit 1/8, encoder frozen at w1 (decoder trains)  c1 fine-tune          G-C: the decoder's share
+  V4   vit 1/48 specialist                             c1 fine-tune          G-C: the gap at 1/48
+  W1   swin 1/8 specialist                             c1 fine-tune          G-C (swin)
+  W2   swin 1/48 specialist                            c1 fine-tune          G-C (swin)
+  L1   vit + LoRA budget heads (FiLM + LoRA, rank 16)  c1 fine-tune, grid    G-C: AdaTok's heads
+  L2   vit + LoRA budget heads + linear exits          c1 fine-tune, grid    G-C: the stack
+  R1   vit c1 control, seed 43                         c1 fine-tune, grid    seed noise
+  R2   vit linear exits, seed 43                       c1 fine-tune, grid    does c1 replicate?
+
+  card   queue (in order)                                           about
+  GPU 2  M1                                                         the probe says (section 2)
+  GPU 3  M2                                                         the probe says (section 2)
+  GPU 4  A1 -> A2 -> V1 -> V2 -> V4 -> W1 -> W2                     ~17 h
+  GPU 5  L1 -> L2 -> R1 -> R2                                       ~16 h
+  (a c1 fine-tune is ~3.8 h for vit and ~2.7 h for swin by your logs; a run with a
+   frozen half is faster; a sweep ~20-40 min)
+
+GOTCHA: if you already ran part of the OLD c2 sheet: its V1, V2, V4, W1, W2 are exactly
+the runs here, under the same names. Leave them out of the GPU 4 queue (a rerun would
+overwrite the directory with the same run). If its V3, W3 or W4 (encoder or decoder
+frozen) finished, add `${VT}_fix1-8_frz-dec_c2` (V3) to the first line of 4c and
+`${SWH}_fix1-8_frz-enc_c2 ${SWH}_fix1-8_frz-dec_c2` to the swin 1/8 line. Move its .out
+files away first (mkdir -p old_c2 && mv c2_gpu*.out old_c2/) so the greps below stay clean.
+GOTCHA: if you already have Kodak curve files of the wave-1 ViT and Swin from the earlier
+allocation wave, skip A1 / A2 and run section 4b on those files: the same question.
+GOTCHA: the specialists are evaluated at all five CBRs on purpose: the evaluation seeds
+each (SNR, CBR) cell by its position in the CBR list, so only a run scored on the same
+five CBRs gets the same channel draws as the c1 control. Read a specialist at its OWN
+CBR only (--cbrs in section 4); its other rows are meaningless.
+GOTCHA: NEW --eval-seed (default 42): the channel draws of validation and test no
+longer follow --seed, so R1 / R2 (seed 43) are scored on the same draws as every c1 run
+and pair with them. Runs of seed 42 are scored exactly as before.
+GOTCHA: L1 / L2 load the w1 FiLM weights and add LoRA heads that start as the identity
+(their B factors are zero), so they start exactly at the w1 model; --mod-lr-mult 4
+trains the heads (and the exits) faster, as in c1.
+GOTCHA: M1 / M2 are from scratch, like wave 1. Compare them with each other (same code,
+same protocol); the wave-1 runs are context only (older channel backend).
+
+--------------------------------------------------------------------------------
+ 0. GET THE CODE, ENVIRONMENT
+--------------------------------------------------------------------------------
+
+cd ~/projects/JSCCwClaude-main     # the clone you used for c1
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull && cd jscc
+#   (or, once this branch is merged:  git checkout main && git pull && cd jscc)
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID    # CUDA index N = nvidia-smi index N (keep it set)
+
+W1S=history/swin_base_awgn_DIV2K_256_w1/models/last.pt
+W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
+ls -l $W1S $W1V                                           # both must exist
+ls -d history/*_grid_c1 history/*casc-mmmm-d0000_c1       # c1 controls + linear exits (4 dirs)
+mkdir -p curves results
+
+# from scratch, the wave-1 protocol (2000 epochs, uniform budgets)
+SCR="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --valid-freq 40 --amp --training --tag m1"
+# fine-tunes, the c1 protocol
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag c2"
+SW="--backbone swin --pretrained $W1S"
+VI="--backbone vit --pretrained $W1V"
+SWEEP="--img-size 256 --channel-type awgn --amp --split test --testset Kodak \
+  --snrs 1 4 7 10 13 --draws 4"
+
+--------------------------------------------------------------------------------
+ 1. CPU GATES — a few minutes. All must pass.
+--------------------------------------------------------------------------------
+
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py            # ends with "all checks passed"; [budget heads] is new
+
+--------------------------------------------------------------------------------
+ 2. GPU PROBE — a minute per line: memory and speed of M1, M2 and the LoRA fine-tunes
+--------------------------------------------------------------------------------
+
+CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone vit --token-dim 384 --depth 6 \
+  --heads 6 --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=3 python tools/probe.py --backbone swin --model-size large \
+  --batch-size 16 --amp
+CUDA_VISIBLE_DEVICES=5 python tools/probe.py --backbone vit --rate-mod both --cascade \
+  --batch-size 16 --amp
+# "h per 100k steps" is the time of a 2000-epoch run. Keep "reserved" <= ~22 GiB; if
+# swin large is above, add --batch-size 8 to M2; if the LoRA probe (the third line: the
+# big vit with LoRA heads and exits, as in L2) is above, add --batch-size 8 to L1 and L2
+# (accumulation keeps the effective batch at 16). Send the three lines.
+
+--------------------------------------------------------------------------------
+ 3. THE WAVE — queued on cards 2-5 (jobs on one card run in order)
+--------------------------------------------------------------------------------
+
+# GPU 2 — M1: vit p8 384x6, from scratch (G-A)
+CUDA_VISIBLE_DEVICES=2 nohup python main.py $SCR --backbone vit --token-dim 384 --depth 6 \
+  --heads 6 > c2_gpu2_M1_vit384.out 2>&1 &
+
+# GPU 3 — M2: swin large, from scratch (G-A)
+CUDA_VISIBLE_DEVICES=3 nohup python main.py $SCR --backbone swin --model-size large \
+  > c2_gpu3_M2_swinL.out 2>&1 &
+
+# GPU 4 — A1, A2: allocation sweeps (G-B); then V1, V2, V4, W1, W2: specialists (G-C)
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python tools/alloc_sweep.py $SWEEP --backbone vit --pretrained $W1V --out curves/vit_w1_kodak.npz > c2_gpu4_A1_sweep_vit.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/alloc_sweep.py $SWEEP --backbone swin --pretrained $W1S --out curves/swin_w1_kodak.npz > c2_gpu4_A2_sweep_swin.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/8 > c2_gpu4_V1_vit_spec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/8 --freeze encoder > c2_gpu4_V2_vit_dec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/48 > c2_gpu4_V4_vit_spec48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW --fixed-cbr 1/8 > c2_gpu4_W1_swin_spec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW --fixed-cbr 1/48 > c2_gpu4_W2_swin_spec48.out 2>&1
+" > /dev/null 2>&1 &
+
+# GPU 5 — L1, L2: AdaTok-style LoRA budget heads, alone and with the linear exits;
+#         R1, R2: a second seed of the c1 control and of the c1 linear exits (G-C)
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-mod both --rate-sampling grid --mod-lr-mult 4 > c2_gpu5_L1_vit_lora.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-mod both --cascade --mod-lr-mult 4 > c2_gpu5_L2_vit_lora_exits.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-sampling grid --seed 43 > c2_gpu5_R1_vit_control_s43.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --cascade --mod-lr-mult 4 --seed 43 > c2_gpu5_R2_vit_exits_s43.out 2>&1
+" > /dev/null 2>&1 &
+
+# --- right after launch -----------------------------------------------------------
+grep -h "parameters, effective batch" c2_gpu*.out   # M1 ~21.6 M, M2 ~12.7 M, L1 / L2 slightly above 142.4 M
+grep -h "loaded" c2_gpu*.out          # fine-tunes: 0 unexpected; L1 / L2 / R2: only new tensors missing
+tail -n 2 c2_gpu*.out                 # img/s, loss, the diag check
+nvidia-smi -i 2,3,4,5                 # <= ~22 GiB per card
+
+# --- while it runs ----------------------------------------------------------------
+grep -h "froze the" c2_gpu4_V2_vit_dec8.out   # once V2 starts: "froze the encoder"
+grep -h "non-finite" c2_gpu*.out      # skipped optimiser steps: expect none
+ls history/ | grep -E "_m1$|_c2$"     # run directories (names in section 4)
+# M1 vs M2 at matched epochs, as they go (validation crops, last 5 validations so far):
+python tools/compare_runs.py history/swin_large_awgn_DIV2K_256_m1 \
+  history/vit_p8d384x6s4_awgn_DIV2K_256_m1 --window 5
+
+--------------------------------------------------------------------------------
+ 4. READING THE WAVE (send back everything this section prints)
+--------------------------------------------------------------------------------
+
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SWH=history/swin_base_awgn_DIV2K_256
+
+# 4a. G-A: matched compute, Kodak paired over images (control = Swin large)
+python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1
+python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1 \
+  --metric msssim
+python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1 \
+  --metric lpips_vgg
+#     context, the four sizes on one table (wave-1 runs used the older channel backend)
+python tools/compare_runs.py ${SWH}_w1 history/swin_large_awgn_DIV2K_256_m1 \
+  history/vit_p8d384x6s4_awgn_DIV2K_256_m1 ${VT}_w1 --test
+
+# 4b. G-B: per-image allocation at a fixed mean rate, the cross-fitted oracle
+#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving)
+python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective psnr \
+  --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_vit_psnr.txt
+python tools/alloc_policy.py oracle --curves curves/swin_w1_kodak.npz --objective psnr \
+  --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_swin_psnr.txt
+python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective lpips \
+  | tee results/c2_oracle_vit_lpips.txt
+
+# 4c. G-C: the gap, the decoder's share, and what closes it, paired against the c1 control
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-8_c2 ${VT}_fix1-8_frz-enc_c2 \
+  ${VT}_casc-mmmm-d0000_c1 ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2 --cbrs 1/8
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-48_c2 ${VT}_casc-mmmm-d0000_c1 \
+  ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2 --cbrs 1/48
+python tools/paired.py ${VT}_grid_c1 ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2
+python tools/paired.py ${VT}_grid_c1 ${VT}_both_grid_c2 --metric lpips_vgg
+python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-8_c2 ${SWH}_casc-mmmm-d0000_c1 --cbrs 1/8
+python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-48_c2 ${SWH}_casc-mmmm-d0000_c1 --cbrs 1/48
+
+# 4d. seeds: does the c1 exit effect replicate, and how far apart are two controls?
+python tools/paired.py ${VT}_grid_s43_c2 ${VT}_casc-mmmm-d0000_s43_c2
+python tools/paired.py ${VT}_grid_c1 ${VT}_grid_s43_c2
+python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
+
+# Decision (docs/ASSESSMENT.md, section 3):
+#   G-A  vit384 - swinL >= +0.3 dB mean over CBRs   -> the token/ViT claim holds at matched
+#                                                      compute; next: the same-backbone
+#                                                      interface ablation
+#        within +-0.1 dB or below                    -> no backbone claim; the paper rests on
+#                                                      allocation + nesting analysis
+#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0
+#                                                    -> allocation is a contribution: next turn
+#                                                      trains the predictor (alloc_policy train)
+#        smaller                                     -> allocation is a section, not the story
+#   G-C  (exits or LoRA) - control at 1/8 >= 30% of (specialist - control), no loss at 1/48,
+#        and the seed-43 pair shows the same sign    -> budget-specialised decoding is a
+#                                                      contribution
+#        V2 (decoder only) far below V1 (specialist) -> the penalty is in the shared ENCODER:
+#                                                      no decoder head can close it; next turn
+#                                                      conditions the encoder on the budget
+#                                                      (the transmitter knows it)

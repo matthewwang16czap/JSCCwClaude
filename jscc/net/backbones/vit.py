@@ -85,7 +85,7 @@ class ViTEncoder(nn.Module):
 
 class ViTDecoder(nn.Module):
     def __init__(self, tile, patch, dim, depth, heads, n_tokens, sym, order, zero_init,
-                 rate_mod, anchors, l_min, refine_ch=0):
+                 rate_mod, anchors, rank, l_min, refine_ch=0):
         super().__init__()
         self.tile, self.patch, self.dim = int(tile), int(patch), int(dim)
         self.side = self.tile // self.patch
@@ -95,7 +95,7 @@ class ViTDecoder(nn.Module):
         self.embeds = nn.ModuleList([nn.Linear(2 * sym, dim) for _ in range(self.P)])
         self.phase = nn.Parameter(torch.zeros(self.P, dim))
         self.mixer = BudgetMixer(l_min, n_tokens, anchors) if rate_mod != "none" else None
-        self.trunk = Trunk(dim, depth, heads, rate_mod=rate_mod, anchors=anchors)
+        self.trunk = Trunk(dim, depth, heads, rate_mod=rate_mod, anchors=anchors, rank=rank)
         self.head = nn.Linear(dim, 3 * patch * patch)
         self.refine = Refine(refine_ch) if refine_ch else None
         o = position_order(order, self.side, self.side)
@@ -171,5 +171,6 @@ def build(cfg):
                   heads=cfg.heads, n_tokens=cfg.n_tokens, sym=cfg.sym,
                   order=cfg.phase_order, zero_init=cfg.zero_init)
     return (ViTEncoder(**common),
-            ViTDecoder(rate_mod=cfg.rate_mod, anchors=cfg.rate_anchors, l_min=cfg.l_min,
+            ViTDecoder(rate_mod=cfg.rate_mod, anchors=cfg.rate_anchors, rank=cfg.rate_rank,
+                       l_min=cfg.l_min,
                        refine_ch=cfg.refine_ch, **common))

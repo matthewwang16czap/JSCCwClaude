@@ -88,18 +88,19 @@ def evaluate(model, loader, cfg, snrs, cbrs, suite, repeats=1, per_image=False):
     """Every (SNR, CBR) cell over the whole loader, scored by `suite`
     (utils/metrics.py).
 
-    Cell (i, j) reseeds torch and Sionna with seed + 1000 i + j, so every
-    checkpoint of a configuration sees the same channel draws (common random
-    numbers). `cbr` in the output is the CBR actually transmitted; NaN values
-    (a metric undefined for an image) are left out of the means. Afterwards the
-    caller's random stream continues from a fresh point drawn beforehand (it
-    must not restart from the same state after every validation)."""
+    Cell (i, j) reseeds torch and Sionna with eval_seed + 1000 i + j, so every
+    checkpoint, of any configuration and any training --seed, sees the same
+    channel draws (common random numbers). `cbr` in the output is the CBR
+    actually transmitted; NaN values (a metric undefined for an image) are left
+    out of the means. Afterwards the caller's random stream continues from a
+    fresh point drawn beforehand (it must not restart from the same state after
+    every validation)."""
     resume = int(torch.randint(0, 2 ** 31 - 1, (1,)))
     model.eval()
     results, records = [], []
     for i, snr in enumerate(snrs):
         for j, cbr in enumerate(cbrs):
-            reseed(cfg, cfg.seed + 1000 * i + j)
+            reseed(cfg, cfg.eval_seed + 1000 * i + j)
             sums, counts, n, sent = defaultdict(float), defaultdict(int), 0, None
             t0 = time.perf_counter()
             for r in range(repeats):

@@ -15,6 +15,9 @@ def create_parser():
                    help="train, then test; without it only test --pretrained")
     g.add_argument("--amp", action="store_true", help="bf16 autocast (fp32 if unsupported)")
     g.add_argument("--seed", type=int, default=42, help="rank r uses seed + r")
+    g.add_argument("--eval-seed", type=int, default=42,
+                   help="seeds the channel draws of validation and test, the same for "
+                        "every --seed, so runs of different seeds are paired")
     g.add_argument("--pretrained", default=None, help="weights to start from, or to test")
     g.add_argument("--resume", action="store_true",
                    help="continue from <run dir>/models/train_state.pt")
@@ -43,9 +46,12 @@ def create_parser():
                    help="zero the residual branches of the token transformers")
     g.add_argument("--phase-order", default="spread", choices=["spread", "raster"],
                    help="hybrid, vit: position order within a phase")
-    g.add_argument("--rate-mod", default=None, choices=["none", "film"],
-                   help="budget modulation of the token decoder")
-    g.add_argument("--rate-anchors", type=int, default=8)
+    g.add_argument("--rate-mod", default=None, choices=["none", "film", "lora", "both"],
+                   help="budget conditioning of the token decoder: film (default), lora = "
+                        "AdaTok's per-budget LoRA heads on every trunk MLP, both")
+    g.add_argument("--rate-anchors", type=int, default=8,
+                   help="budget anchors (log-spaced) of the FiLM / LoRA heads")
+    g.add_argument("--rate-rank", type=int, default=16, help="rank of each LoRA head")
     g.add_argument("--refine-ch", type=int, default=0,
                    help="vit: width of an optional conv tail (0 = off)")
 
@@ -69,8 +75,9 @@ def create_parser():
                         "from a deeper exit into the shared shallower code: 1 = joint training, "
                         "0 = every stage trained on a detached input")
     g.add_argument("--mod-lr-mult", type=float, default=1.0,
-                   help="learning-rate multiplier of the cascade modules (new, randomly "
-                        "initialised parameters; useful when fine-tuning a --pretrained backbone)")
+                   help="learning-rate multiplier of NEW modules: the cascade stages and the "
+                        "LoRA budget heads (randomly initialised; useful when fine-tuning a "
+                        "--pretrained model)")
 
     g = p.add_argument_group("channel")
     g.add_argument("--channel-type", default="awgn", choices=["awgn", "rayleigh", "none"])

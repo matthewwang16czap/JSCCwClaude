@@ -160,7 +160,27 @@ rate.
   assumes unit symbol variance, which the per-token gain violates (up to e^4
   between tokens). Whether that costs anything is open.
 
-## Cascade wave c1 (`COMMANDS_CASCADE.txt`): what would count as evidence
+## Compute of the backbones (measured 2026-10-08)
+
+`torch.utils.flop_counter` on CPU, one 256x256 image at the top budget, encoder + decoder:
+
+| model | params | encoder GFLOPs | decoder GFLOPs | total |
+|---|---|---|---|---|
+| swin small | 3.31 M | 4.87 | 4.87 | 9.7 |
+| swin base (the baseline) | 5.27 M | 9.26 | 9.26 | 18.5 |
+| swin large | 12.67 M | 20.89 | 20.89 | 41.8 |
+| hybrid (Swin + token trunk) | 12.54 M | 20.57 | 20.57 | 41.1 |
+| vit p16 384x6 s16 (wave-1 small) | 22.11 M | 5.62 | 5.62 | 11.2 |
+| vit p8 384x6 s4 | 21.56 M | 21.93 | 21.93 | 43.9 |
+| vit p8 512x8 s4 | 50.83 M | 51.79 | 51.79 | 103.6 |
+| vit p8 768x10 s4 (wave-1 best) | 142.39 M | 145.33 | 145.33 | 290.7 |
+
+The wave-1 ViT lead over Swin base (+0.46 to +0.90 dB on Kodak) costs 27x the parameters and
+16x the FLOPs. The two token models nearest Swin's compute (vit p16 at 11 GFLOPs, hybrid at 41)
+lost to it from 1/16 up. ViT p8 384x6 and Swin large are the matched pair (~42-44 GFLOPs);
+Swin large is also the published SwinJSCC size class.
+
+## Cascade wave c1: what would have counted as evidence (the plan)
 
 Background: the tail probes (above) showed the nested code's last third
 carries almost nothing (-0.02 dB from 1/12 to 1/8 without noise, against +1.00 dB for a
@@ -187,3 +207,73 @@ spatial), all-spatial; then gradient sharing 0.5 and a reversed depth schedule. 
 
 Warm starts keep `z0` ordered. The fair test of the top rate is from scratch (`--mod-skip
 none`, `--cascade-grad` < 1): wave c2, after these results.
+
+## Cascade wave c1: results (2026-10-08)
+
+Kodak, last checkpoint, PSNR in dB, mean over SNR 1-13, variant minus the grid-trained prefix
+control (same w1 start, same 400 epochs, same five budgets), paired over the 24 images
+(`tools/paired.py`). Rows marked * are the sum of two paired tables (variant - mixed, mixed -
+control), exact for means, no interval printed.
+
+| vit (token) | 1/48 | 1/24 | 1/16 | 1/12 | 1/8 | all |
+|---|---|---|---|---|---|---|
+| control (absolute) | 27.110 | 29.218 | 30.584 | 31.154 | 31.659 | 29.945 |
+| linear (depth 0) | +0.028 | +0.036 | +0.048 | +0.058 | +0.069 | +0.048 |
+| all-mlp | +0.011 | +0.033 | +0.049 | +0.054 | +0.069 | +0.043 |
+| mixed mlp mlp attn attn | +0.031 | +0.045 | +0.042 | +0.053 | +0.076 | +0.049 |
+| all-attention | +0.010 | +0.021 | +0.039 | +0.059 | +0.064 | +0.039 |
+| mixed, --cascade-grad 0.5 * | -0.211 | -0.021 | +0.034 | +0.082 | +0.142 | +0.005 |
+| mixed, depths 4 3 2 1 * | +0.017 | +0.030 | +0.053 | +0.065 | +0.074 | +0.047 |
+
+| swin (feature) | 1/48 | 1/24 | 1/16 | 1/12 | 1/8 | all |
+|---|---|---|---|---|---|---|
+| control (absolute) | 26.218 | 28.340 | 29.798 | 30.642 | 31.206 | 29.240 |
+| linear (depth 0) | +0.022 | +0.033 | +0.012 | +0.023 | +0.007 | +0.019 |
+| all-mlp | +0.043 | +0.033 | +0.013 | +0.032 | +0.018 | +0.028 |
+| mixed mlp mlp swin swin | +0.045 | +0.046 | +0.012 | +0.024 | +0.007 | +0.027 |
+| all-window | +0.036 | +0.036 | +0.017 | +0.027 | +0.009 | +0.025 |
+| mixed, --cascade-grad 0.5 * | -0.013 | +0.022 | +0.022 | +0.070 | +0.074 | +0.035 |
+| mixed, depths 4 3 2 1 * | +0.055 | +0.042 | +0.021 | +0.032 | +0.014 | +0.033 |
+
+1. **Real but negligible.** Every arm is above the control with intervals clear of 0 at
+   almost every CBR, by +0.02 to +0.08 dB: 6-15x below the +0.3 dB gate (G1 fails), and the
+   size of run-to-run training noise (the 5-validation windows have sd 0.05-0.15 dB; no
+   second seed was run). The validation windows agree in sign (vit +0.05 to +0.13, swin ~0).
+2. **The linear arm takes all of it.** A per-rate linear map with no body (0.02 M parameters
+   on vit, 0.09 M on swin) matches every module arm within 0.01 dB. Capacity at the
+   bottleneck buys nothing. Answer to "which module at which rate": linear, at every rate,
+   on both interfaces (now the default).
+3. **No stage wants spatial context.** The factorial reads late stages (mixed - all-mlp at
+   1/24, 1/48): vit +0.012 / +0.019, swin +0.013 / +0.001; early stages (all-spatial - mixed
+   at 1/16, 1/12): vit -0.002 / +0.005, swin +0.006 / +0.003. Nothing reaches +0.05.
+   Early-stage attention costs vit 0.02 dB at 1/48 and 1/24.
+4. **The depth schedule does not matter** (1 2 3 4 vs 4 3 2 1 within 0.015 dB): a
+   consequence of 2, so "deeper for fewer channels" is not supported.
+5. **Gradient sharing moves quality between rates and adds none.** `--cascade-grad 0.5`
+   against the default: vit +0.066 at 1/8, -0.242 at 1/48; swin +0.067 / -0.058. This
+   knob only scales what the deep exits send into the shared code and ENCODER, so the
+   encoder is a contested resource; the code layout is not.
+6. **Top rate**: the best 1/8 gain is +0.14 dB (vit, grad share 0.5, paid at 1/48) against
+   the 0.29-0.71 dB a 1/8 specialist gained in the tail probes (other protocol). G4 fails.
+7. Side metrics: vit LPIPS-VGG better by 0.003-0.005 at every CBR (96-100% of images),
+   MS-SSIM +0.001; swin flat (LPIPS-VGG 0.001 worse).
+8. Transient: at epoch 40 vit depths 4 3 2 1 was -0.2 to -1.6 dB and swin all-window -0.6 to
+   -0.8 dB below the control (4x module learning rate on fresh bodies); both recovered by
+   epoch 240. The sheet's "-1 dB at epoch 40 means stop" rule was too strict.
+
+Reading: in these models the nesting penalty does not live in the code layout at the
+bottleneck. What is left is the capacity the rates share in the backbones, and point 5
+puts at least part of it in the encoder. Wave c2 measures the specialist gap under this
+protocol and splits it between encoder and decoder.
+
+## Wave c2, re-planned (2026-10-08)
+
+The wave c2 planned above (the specialist gap, split between encoder and decoder) was
+re-planned before it ran, after the reassessment (`docs/ASSESSMENT.md` v2). Kept: the 1/8 and 1/48 specialists (vit and swin) and the vit 1/8 run with the encoder
+frozen (the decoder's share of the gap, the ceiling for any decoder-side budget head).
+Dropped: the encoder-only runs. Added: the matched-compute pair (vit p8 384x6 against swin
+large, from scratch, gate G-A), the allocation oracle on the wave-1 models (G-B), AdaTok's
+per-budget LoRA heads in the vit decoder trunk (`--rate-mod both`), alone and with the
+linear exits, and a second seed of the c1 control and of the c1 linear exits (G-C).
+`--eval-seed` (new, default 42) keeps the test's channel draws fixed across training seeds,
+so the seed-43 runs pair with the c1 runs; seed-42 runs are scored exactly as before.
