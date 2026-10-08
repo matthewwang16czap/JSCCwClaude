@@ -1,0 +1,164 @@
+================================================================================
+ COMMANDS.txt — wave c2: how big is the multi-rate penalty here, and is it in
+ the encoder or the decoder?
+ rev 2026-10-08. Everything runs on the server, from the jscc/ directory.
+ GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
+================================================================================
+
+WHERE WE ARE (docs/NOTES.md, "Cascade wave c1: results"). The depth cascade beat
+the grid-trained prefix control by only +0.02 to +0.08 dB on Kodak, and a per-rate
+LINEAR stage got all of it: module bodies, spatial context and depth schedules
+added nothing. The one knob that moved anything, --cascade-grad, acts on the shared
+encoder and only traded the top rate (+0.07 dB at 1/8) against the bottom one
+(-0.24 dB at 1/48, vit). So the penalty of serving five rates with one model is
+not in the code layout at the bottleneck. This wave asks where it is.
+
+THE QUESTION: under exactly the c1 protocol (fine-tune of the wave-1 checkpoint,
+400 epochs, lr 5e-5), how much does a model trained for ONE rate gain over the
+multi-rate control, and does that gain need a dedicated encoder, a dedicated
+decoder, or both?
+
+  run    model                                trained part        rate    answers
+  V1     vit 1/8 specialist                   everything          1/8     the gap at 1/8 (G)
+  V2     vit 1/8, encoder frozen at w1        decoder only        1/8     the decoder's share (D)
+  V3     vit 1/8, decoder frozen at w1        encoder only        1/8     the encoder's share (E)
+  V4     vit 1/48 specialist                  everything          1/48    the gap at 1/48
+  W1-W4  the same for swin (W1 1/8, W2 1/48, W3 1/8 decoder only, W4 1/8 encoder only)
+
+All start from the wave-1 checkpoints, like the c1 control, so every run has the
+same 400 epochs of extra training; the control is c1's grid run (already done).
+
+  card   queue (in order)                                       about
+  GPU 2  V1 vit 1/8 specialist     -> W3 swin 1/8, decoder only    6 h
+  GPU 3  V2 vit 1/8, decoder only  -> W4 swin 1/8, encoder only    5.5 h
+  GPU 4  V3 vit 1/8, encoder only  -> W1 swin 1/8 specialist       6 h
+  GPU 5  V4 vit 1/48 specialist    -> W2 swin 1/48 specialist      6.5 h
+  (a full vit job is about 3.8 h, a swin job 2.7 h, from your c1 logs; a run with a
+   frozen half is faster. Optional section 4 adds ~4 h on one card.)
+
+GOTCHA: the specialists are evaluated at all five CBRs on purpose: the evaluation
+seeds each (SNR, CBR) cell by its position in the CBR list, so only a run scored on
+the same five CBRs gets the same channel draws as the c1 control (paired, common
+random numbers). Read a specialist at its OWN CBR only; its other rows are
+meaningless.
+GOTCHA: "froze the encoder" / "froze the decoder" must appear in the frozen runs'
+logs (section 2). A frozen half stays in eval mode, so its DC estimates do not move.
+
+--------------------------------------------------------------------------------
+ 0. GET THE CODE, ENVIRONMENT
+--------------------------------------------------------------------------------
+
+cd ~/projects/JSCCwClaude-main     # the clone you used for c1
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull && cd jscc
+#   (or, once this branch is merged:  git checkout main && git pull && cd jscc)
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID    # CUDA index N = nvidia-smi index N (keep it set)
+
+W1S=history/swin_base_awgn_DIV2K_256_w1/models/last.pt
+W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
+ls -l $W1S $W1V                                           # both must exist
+ls -d history/*_grid_c1                                   # the two c1 controls must exist
+
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag c2"
+SW="--backbone swin --pretrained $W1S"
+VI="--backbone vit --pretrained $W1V"
+
+--------------------------------------------------------------------------------
+ 1. CPU GATES — a few minutes. All must pass.
+--------------------------------------------------------------------------------
+
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py            # ends with "all checks passed"
+
+--------------------------------------------------------------------------------
+ 2. THE WAVE — 8 fine-tunes, queued on cards 2-5 (jobs on one card run in order)
+--------------------------------------------------------------------------------
+
+# GPU 2 — V1 vit 1/8 specialist;  W3 swin 1/8, encoder frozen (decoder trains)
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=2 python main.py $FT $VI --fixed-cbr 1/8 > c2_gpu2_V1_vit_spec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT $SW --fixed-cbr 1/8 --freeze encoder > c2_gpu2_W3_swin_dec8.out 2>&1
+" > /dev/null 2>&1 &
+
+# GPU 3 — V2 vit 1/8, encoder frozen (decoder trains);  W4 swin 1/8, decoder frozen (encoder trains)
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=3 python main.py $FT $VI --fixed-cbr 1/8 --freeze encoder > c2_gpu3_V2_vit_dec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT $SW --fixed-cbr 1/8 --freeze decoder > c2_gpu3_W4_swin_enc8.out 2>&1
+" > /dev/null 2>&1 &
+
+# GPU 4 — V3 vit 1/8, decoder frozen (encoder trains);  W1 swin 1/8 specialist
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/8 --freeze decoder > c2_gpu4_V3_vit_enc8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW --fixed-cbr 1/8 > c2_gpu4_W1_swin_spec8.out 2>&1
+" > /dev/null 2>&1 &
+
+# GPU 5 — V4 vit 1/48 specialist;  W2 swin 1/48 specialist
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --fixed-cbr 1/48 > c2_gpu5_V4_vit_spec48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT $SW --fixed-cbr 1/48 > c2_gpu5_W2_swin_spec48.out 2>&1
+" > /dev/null 2>&1 &
+
+# --- right after launch -----------------------------------------------------------
+grep -h "loaded" c2_gpu*.out          # 0 missing, 0 unexpected
+grep -h "froze the" c2_gpu*.out       # V2 / W3 froze the encoder, V3 / W4 the decoder
+tail -n 2 c2_gpu*.out                 # img/s, loss, the diag check
+nvidia-smi -i 2,3,4,5                 # <= ~22 GiB per card
+
+# --- while it runs ----------------------------------------------------------------
+grep -h "non-finite" c2_gpu*.out      # skipped optimiser steps: expect none
+ls history/ | grep _c2$               # run directories (names in section 3)
+
+--------------------------------------------------------------------------------
+ 3. READING THE WAVE (send back everything this section prints)
+--------------------------------------------------------------------------------
+
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SWH=history/swin_base_awgn_DIV2K_256
+
+# 3a. the gap at 1/8 and its split, paired over Kodak against the c1 control; the c1
+#     linear cascade and grad-share 0.5 arms are listed for scale
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-8_c2 ${VT}_fix1-8_frz-enc_c2 \
+  ${VT}_fix1-8_frz-dec_c2 ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmaa-d1234_cg0.5_c1 --cbrs 1/8
+python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-8_c2 ${SWH}_fix1-8_frz-enc_c2 \
+  ${SWH}_fix1-8_frz-dec_c2 ${SWH}_casc-mmmm-d0000_c1 ${SWH}_casc-mmss-d1234_cg0.5_c1 --cbrs 1/8
+
+# 3b. the gap at 1/48
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-48_c2 ${VT}_casc-mmmm-d0000_c1 --cbrs 1/48
+python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-48_c2 ${SWH}_casc-mmmm-d0000_c1 --cbrs 1/48
+
+# 3c. the same on the validation windows (read each specialist at its own CBR only)
+python tools/compare_runs.py ${VT}_grid_c1 ${VT}_fix1-8_c2 ${VT}_fix1-8_frz-enc_c2 \
+  ${VT}_fix1-8_frz-dec_c2 ${VT}_fix1-48_c2 --window 5
+python tools/compare_runs.py ${SWH}_grid_c1 ${SWH}_fix1-8_c2 ${SWH}_fix1-8_frz-enc_c2 \
+  ${SWH}_fix1-8_frz-dec_c2 ${SWH}_fix1-48_c2 --window 5
+
+# Decision. G = specialist - control at 1/8 (V1 / W1), D = decoder-only (V2 / W3),
+# E = encoder-only (V3 / W4), all paired at 1/8:
+#   G < ~0.15 dB          the multi-rate penalty is small under this protocol: the
+#                         nesting story ends here, and the paper must be about
+#                         something else
+#   D >= ~0.7 G           the decoder is where rates compete -> next: per-rate low-rank
+#                         adapters inside the decoder backbone (no extra compute: the
+#                         decoder already runs once per rate)
+#   E >= ~0.7 G           the encoder -> per-rate branches of the last encoder blocks
+#                         (costly), or report --cascade-grad as a rate-priority knob
+#   D + E ~ G, each partial    both halves -> adapters on both sides
+#   D + E well below G    the gain needs both halves to adapt together
+# And the 1/48 gap: large -> low rates pay too; small -> a top-rate effect only.
+
+--------------------------------------------------------------------------------
+ 4. OPTIONAL — how big is seed noise at this protocol? (one card, ~3.8 h)
+--------------------------------------------------------------------------------
+
+# Every c1 difference was below 0.1 dB, and no run was repeated. A second seed of
+# the vit control says how much of a paired difference is training noise. Run it
+# when a card is free:
+CUDA_VISIBLE_DEVICES=2 nohup python main.py $FT $VI --rate-sampling grid --seed 43 \
+  > c2_gpu2_vit_control_s43.out 2>&1 &
+# then: control vs control, all five CBRs
+python tools/paired.py ${VT}_grid_c1 ${VT}_grid_s43_c2

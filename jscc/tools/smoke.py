@@ -195,8 +195,8 @@ def check_cascade(x):
            "a bodiless stage without a skip is refused")
     raises(["--backbone", "vit", "--cascade", "--eval-cbrs", "1/20"],
            "a CBR that is not a level is refused")
-    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "attn", "--mod-width", "100"],
-           "an attention width that heads cannot divide is refused")
+    raises(["--backbone", "vit", "--cascade", "--mod-kinds", "attn", "--mod-depths", "1",
+            "--mod-width", "100"], "an attention width that heads cannot divide is refused")
     raises(["--backbone", "vit", "--rate-sampling", "sandwich", "--rates-per-step", "1"],
            "sandwich sampling needs 2 or more budgets per step")
 

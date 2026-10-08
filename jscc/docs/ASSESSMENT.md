@@ -1,10 +1,48 @@
 # Assessment: depth-cascade rate adaptation for deep JSCC
 
-Written before any cascade run exists. It judges the idea from the literature and from
-what this tree has measured; the experiments in `COMMANDS_CASCADE.txt` are what can
-change it. "TWS" is read as IEEE Transactions on Wireless Communications (TWC).
+Written before any cascade run existed; wave c1 has now run (`docs/NOTES.md`, "Cascade
+wave c1: results"). "TWS" is read as IEEE Transactions on Wireless Communications (TWC).
 
-## Verdict
+## Update after wave c1 (2026-10-08): the bottleneck cascade fails its gates
+
+| gate | outcome |
+|---|---|
+| G1 any arm >= +0.3 dB mean | **fails**: best +0.049 dB (vit), +0.035 dB (swin) |
+| G2 the linear arm helps | it takes ALL of the gain (vit +0.048, swin +0.019); bodies add <= 0.01 dB |
+| G3 same sign on both interfaces | holds, at +0.02 to +0.05 dB |
+| G4 1/8 gain >= 0.25 dB | **fails**: +0.08 (default), +0.14 with `--cascade-grad 0.5`, paid with -0.21 at 1/48 |
+| G5 from scratch | not run; low prior (below) |
+| G6 overhead | linear: +0.02 M (vit), +0.09 M (swin) |
+
+**Verdict.** The depth cascade at the bottleneck, as proposed, does not remove the nesting
+penalty and is not a paper method, for TWC or anywhere. The gain is real on Kodak but at
+the level of seed noise, and a per-rate LINEAR map gets all of it, so the extra depth,
+spatial context and depth schedule (the substance of the proposal) do nothing.
+
+**What it does establish**, which is worth keeping: the penalty is not in the code layout at
+the bottleneck. The one knob with an effect, gradient sharing, acts on the shared encoder
+and only moves quality between rates. So the rates compete for backbone capacity.
+
+**G5 (from scratch) has a low prior**: starting from scratch changes how the top code is
+organised, not the two findings that bottleneck capacity is worth nothing and that the
+rates compete in the backbone. Run it only if wave c2 puts the gap in the code layout.
+
+**Where the idea can still live.** "Each rate its own network, sharing the backbones" may
+still be right with the per-rate part moved to where the rates compete. Wave c2
+(`COMMANDS.txt`) measures the fixed-rate specialist gap under this protocol and splits it
+between encoder and decoder:
+* gap mostly in the DECODER: per-rate low-rank adapters inside the decoder backbone. The
+  decoder already runs once per rate, so they cost no compute; this is the cascade idea
+  moved into the backbone, and a TWC-sized study if it closes most of the gap;
+* gap mostly in the ENCODER: per-rate branches of the last encoder blocks (the original
+  U-Net picture with the split moved earlier; costs an encoder pass per rate when several
+  rates are trained), or report `--cascade-grad` as a rate-priority knob;
+* gap small under this protocol: the nesting penalty is a protocol artefact of the tail
+  probes, and the paper has to be about something else.
+
+The sections below are the pre-registration as written before c1; they stand as the record.
+
+## Verdict (before c1)
 
 1. **The mechanism is not new; the study around it can be.** Rate adaptation by exiting
    at different depths of a JSCC autoencoder (the encoder has several downsampling

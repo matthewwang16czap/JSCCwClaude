@@ -8,9 +8,10 @@ protocol and the evaluation. Two ways to make the rate adaptive:
   and knows how many arrived. Nothing else about the channel reaches any network.
 * **cascade** (`--cascade`, `net/cascade.py`, `docs/CASCADE.md`): a stack of small
   modules between backbone encoder and decoder, one exit per predefined CBR; each
-  rate has its own module path, the backbones are shared. Judge it with
-  `docs/ASSESSMENT.md` (novelty, related work, venue) and run it with
-  `COMMANDS_CASCADE.txt`.
+  rate has its own module path, the backbones are shared. Wave c1 tested it: only
+  +0.02 to +0.08 dB over a matched prefix control, all of it from a per-rate linear
+  stage (`docs/NOTES.md`; verdict in `docs/ASSESSMENT.md`). `COMMANDS.txt` holds the
+  current wave: where the nesting penalty lives (specialists, encoder vs decoder).
 
 | `--backbone` | model | rate unit at 256 px | parameters |
 |---|---|---|---|
@@ -20,7 +21,8 @@ protocol and the evaluation. Two ways to make the rate adaptive:
 
 The AdaTok backbone (learned 1D latent tokens, MH-LoRA budget heads) was removed:
 it did not turn tokens into detail (`docs/NOTES.md`, wave 1). `--cascade` adds
-1.76 M parameters (+33%) to `swin` and 2.71 M (+1.9%) to `vit` at the defaults.
+0.09 M parameters to `swin` and 0.02 M to `vit` at the defaults (linear stages); the
+module bodies of wave c1 add 1.76 M (+33%) and 2.71 M (+1.9%).
 
 All models fit one 24 GB RTX 3090 at batch 16 and 256 px. Estimated training
 peaks: hybrid ~21 GiB, vit ~19, swin ~16; `tools/probe.py` measures the real
@@ -53,13 +55,13 @@ python tools/paired.py history/<control> history/<variant> --metric psnr   # pai
 ```
 
 A test-only run needs the model flags the checkpoint was trained with.
-`COMMANDS_CASCADE.txt` holds the current wave of runs, ready to paste.
+`COMMANDS.txt` holds the current wave of runs, ready to paste.
 
 ## Layout
 
 ```
 main.py                 train / test driver (one GPU or torchrun)
-COMMANDS_CASCADE.txt    the current wave: depth-cascade module bake-off, copy-paste ready
+COMMANDS.txt            the current wave (c2: the specialist gap, encoder vs decoder), copy-paste ready
                         (the sheets of earlier waves are gone from the tree: they are in git
                         history, commit 6b02b27, and in jscc_clean.zip)
 engine.py               one training epoch; the evaluation grid
@@ -103,8 +105,9 @@ Flags left unset take the backbone's defaults (`BACKBONE_DEFAULTS` in
   patch-edge artefacts; it is off so the arm stays a plain transformer.
 - `swin`: `--model-size base --window-size 8`, no warm-up.
 
-- `--cascade` (swin, vit): `--mod-kinds mlp mlp swin swin` (vit: `attn`) `--mod-depths 1 2 3 4`
-  `--mod-width 96` (vit 128) `--mod-skip proj --cascade-grad 1`, grid rate sampling; see
+- `--cascade` (swin, vit): linear stages (`--mod-depths 0`, the learned skip initialised to
+  truncation) `--mod-skip proj --cascade-grad 1`, grid rate sampling; the bodies of wave c1
+  are `--mod-kinds mlp mlp attn attn --mod-depths 1 2 3 4` (swin: `swin` for `attn`), see
   `docs/CASCADE.md`. `--mod-lr-mult` trains the new modules faster when fine-tuning.
 
 All arms: AdamW, lr 1e-4, cosine decay to 5% (`--lr-floor`), batch 16 at 256 px,

@@ -11,4 +11,5 @@ Everything lives in [`jscc/`](jscc/):
   literature, novelty, IEEE TWC fit, go / no-go gates.
 * [`jscc/docs/CASCADE.md`](jscc/docs/CASCADE.md): design, module choice per rate and per
   interface, training strategy, what it cannot do.
-* [`jscc/COMMANDS_CASCADE.txt`](jscc/COMMANDS_CASCADE.txt): the current wave, copy-paste ready.
+* [`jscc/docs/NOTES.md`](jscc/docs/NOTES.md): what every wave measured, wave c1 (the cascade) included.
+* [`jscc/COMMANDS.txt`](jscc/COMMANDS.txt): the current wave, copy-paste ready (GPUs 2-5 only).

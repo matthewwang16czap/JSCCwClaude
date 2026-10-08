@@ -37,14 +37,15 @@ BACKBONE_DEFAULTS = {
 
 # Depth-cascade modules (--cascade, net/cascade.py), one stage per step down the
 # rate ladder (4 stages for the 5 predefined CBRs). `width` is the hidden width of
-# a stage body. Hypothesis behind the kinds: the first stages (1/8 -> 1/12 -> 1/16)
-# only fold a few dropped channels into the kept ones, which needs no spatial
-# context; the deep ones (-> 1/24 -> 1/48) must decide WHERE to spend the little
-# that is left, which does. Depth grows as the rate falls: narrower code, more
-# nonlinear work. COMMANDS_CASCADE.txt tests this per level.
+# a stage body (unused at depth 0). Wave c1 (docs/NOTES.md) chose the defaults: a
+# per-rate LINEAR stage (depth 0, the learned truncation-initialised skip) took all
+# of the cascade's gain on Kodak (vit +0.048 dB, swin +0.019 dB over the
+# grid-trained prefix control); mlp / attention / window bodies, at any depth
+# schedule, added <= 0.01 dB. The bodies stay available for ablations:
+# --mod-kinds mlp mlp attn attn --mod-depths 1 2 3 4 is wave c1's mixed arm.
 MODULE_DEFAULTS = {
-    "swin": dict(kinds=["mlp", "mlp", "swin", "swin"], depths=[1, 2, 3, 4], width=96),
-    "vit": dict(kinds=["mlp", "mlp", "attn", "attn"], depths=[1, 2, 3, 4], width=128),
+    "swin": dict(kinds=["mlp", "mlp", "mlp", "mlp"], depths=[0, 0, 0, 0], width=96),
+    "vit": dict(kinds=["mlp", "mlp", "mlp", "mlp"], depths=[0, 0, 0, 0], width=128),
 }
 
 

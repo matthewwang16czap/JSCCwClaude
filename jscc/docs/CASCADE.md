@@ -1,10 +1,13 @@
 # Depth cascade: one module path per rate, shared backbones
 
 Design note for `--cascade` (`net/cascade.py`). What it is, why, which module goes where
-and why, how it is trained, what it cannot do, and how to read the experiments in
-`COMMANDS_CASCADE.txt`. Nothing here has been trained yet: the code is checked on CPU for
-invariants (`tools/smoke.py`, `[cascade]`), the choices below are hypotheses with a test
-each.
+and why, how it is trained, what it cannot do, and how the experiments were read.
+
+**Status after wave c1 (2026-10-08, `docs/NOTES.md`):** the hypotheses of section 4 were
+tested and failed. Every arm beat the grid-trained prefix control by only +0.02 to
++0.08 dB, and a per-rate LINEAR stage got all of it; mlp, attention and window bodies,
+in any depth schedule, added <= 0.01 dB. The default is now the linear stage. The
+sections below are the design as built and tested, kept as the record.
 
 ## 1. The idea
 
@@ -94,7 +97,8 @@ Three body kinds, parameter-matched per block (8 w^2, checked by the smoke test)
 | `attn` | channels + all positions of a tile / image | global attention + MLP(2w); fixed sinusoid positions (scale 0.25) |
 | `swin` | channels + a shifted 8x8-position window | Swin block + MLP(2w); relative positions, any image size |
 
-Defaults (`MODULE_DEFAULTS` in `configs/config.py`), one entry per stage in the order
+The design as tested in wave c1 (`--mod-kinds ... --mod-depths 1 2 3 4`; since c1 the
+default is depth 0, a linear stage), one entry per stage in the order
 1/8 -> 1/12 -> 1/16 -> 1/24 -> 1/48:
 
 | | feature transmission (`swin`) | token transmission (`vit`) |
@@ -106,25 +110,30 @@ Defaults (`MODULE_DEFAULTS` in `configs/config.py`), one entry per stage in the 
 | extra parameters | 1.76 M (+33% of 5.3 M) | 2.71 M (+1.9% of 142 M) |
 | level seen by the decoder | zero-padded estimate of `z0` -> the baseline's linear expand | estimate of `z0` -> the per-phase embeddings (bias and phase identity only for phases that were sent) -> fold |
 
-Reasoning, each a hypothesis with a test:
+Reasoning, each a hypothesis with a test (outcomes from wave c1 in brackets):
 
 1. **Rate-specific stages beat truncation** because they remove the ordering constraint
    and give each rate its own power profile. Test: linear (depth 0) vs the prefix control.
+   [Holds, barely: vit +0.048 dB, swin +0.019 dB, at the level of seed noise.]
 2. **Capacity beyond a linear map helps** because compressing 64 -> 32 channels needs a
    nonlinear fold of the dropped channels into the kept ones. Test: mlp vs linear.
+   [Fails: within 0.01 dB of linear on both interfaces.]
 3. **Spatial context helps at low rates, not at high ones.** The first stages (1/8 -> 1/12
    -> 1/16) drop 64 / 32 channels per position and only have to fold them into the kept
    ones, which a per-position map can do. The deep stages (-> 1/24 -> 1/48) must decide
    WHERE to spend a code too small for per-position detail, so a position needs its
    neighbours. Test: the factorial mmmm / mmss(aa) / ssss(aaaa), read per level.
+   [Fails: no stage gains +0.05 dB; the largest is +0.019 (vit, late stages, 1/48).]
 4. **Depth grows as the rate falls**: narrower code, more nonlinear work, and a narrower
    input makes the extra depth cheap. Test: depths 1 2 3 4 vs 4 3 2 1 (same parameters).
+   [Fails: within 0.015 dB, as it must once capacity is worth nothing.]
 5. **Position-tied codes, channels reduced**: stages keep every position and shrink the
    channels, never relabel or merge positions. Wave 1 showed untied 1D latents (AdaTok)
    losing to position-tied phase tokens; the multi-exit CNN JSCC that halves the spatial
    size per stage is a different design point that is not tried here.
 6. **Width** is a free knob that scales the overhead (swin: width 192 would be +120%).
    The default is a guess; it is the first thing to shrink if Swin's +33% matters.
+   [Moot: at depth 0 the width is unused and the overhead is 0.02 M (vit) / 0.09 M (swin).]
 
 Considered and not built: separate full decoders per rate (K x parameters, kills the
 point), conv bodies (the swin window covers local mixing), entropy / hyperprior models
@@ -147,7 +156,7 @@ point), conv bodies (the swin window covers local mixing), entropy / hyperprior 
   on a detached input, the backbone only by the top level. In between trades the top
   rate's freedom to specialise against the low rates' ability to shape the code they
   compress. This is the knob for the paper's Pareto figure.
-* **Warm start** (fine-tune screening, `COMMANDS_CASCADE.txt`): `--pretrained` a prefix
+* **Warm start** (fine-tune screening, wave c1): `--pretrained` a prefix
   checkpoint, `--mod-lr-mult 4` (new, randomly initialised parameters learn faster than
   the converged backbone). The control is the same checkpoint fine-tuned identically with
   `--rate-sampling grid` and no modules, so the only difference is the modules. The
@@ -169,7 +178,7 @@ point), conv bodies (the swin window covers local mixing), entropy / hyperprior 
 * Per-sample budgets (a `(B,)` tensor of units) are a prefix feature.
 * Not trained or evaluated for Rayleigh fading yet (the channel code supports it).
 
-## 7. Reading the results (`COMMANDS_CASCADE.txt`)
+## 7. Reading the results (wave c1's sheet, now in git history)
 
 Per CBR, differences against the control, mean over the last 5 validations
 (`tools/compare_runs.py`) and on Kodak with paired intervals over images
