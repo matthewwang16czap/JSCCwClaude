@@ -12,8 +12,12 @@ Everything lives in [`jscc/`](jscc/):
   go / no-go gates.
 * [`jscc/docs/SURVEY.md`](jscc/docs/SURVEY.md): related work (rate-adaptive JSCC, token
   communication, adaptive tokenizers such as AdaTok, bandwidth allocation), by threat level.
+* [`jscc/docs/PROBLEM.md`](jscc/docs/PROBLEM.md): the target problem since 2026-10-09:
+  opportunistic scheduling of encode-once token prefixes over a fading multi-user downlink,
+  why this codec fits it and the published ones do not, baselines, gates.
 * [`jscc/docs/CASCADE.md`](jscc/docs/CASCADE.md): design, module choice per rate and per
   interface, training strategy, what it cannot do.
 * [`jscc/docs/NOTES.md`](jscc/docs/NOTES.md): what every wave measured, wave c1 (the cascade) included.
 * [`jscc/COMMANDS.txt`](jscc/COMMANDS.txt): the current wave (matched compute, allocation
-  oracle, specialists, LoRA budget heads, seeds), copy-paste ready (GPUs 2-5 only).
+  oracle, specialists, LoRA budget heads, seeds; section 5: mixed-SNR prefixes for the target
+  problem), copy-paste ready (GPUs 2-5 only).

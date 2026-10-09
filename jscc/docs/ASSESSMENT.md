@@ -1,6 +1,7 @@
 # Assessment v2: adaptive-length token communication, aimed at IEEE TWC
 
-2026-10-08, after cascade wave c1. Supersedes v1 (in git history at commit 0af2e1f). The
+2026-10-08, after cascade wave c1; updated 2026-10-09 (sections 0.8, 1f; the target problem
+moved to `docs/PROBLEM.md`). Supersedes v1 (in git history at commit 0af2e1f). The
 literature behind it is in `docs/SURVEY.md`; measurements in `docs/NOTES.md`. "TWS" is read as
 IEEE Transactions on Wireless Communications (TWC).
 
@@ -39,6 +40,11 @@ IEEE Transactions on Wireless Communications (TWC).
    the rate) and JSCCformer-f (IEEE TWC 2024: feedback-driven stopping). Enough for TWC only as
    the combination: one ViT JSCC for every rate + an open-loop joint allocation that beats
    PADC's rule + the measured nesting penalty.
+8. **After PADC and JSCCformer-f in full (section 1f), 7 no longer holds:** a single model
+   that decodes any length, per-image PSNR prediction and per-image rate choice are all in
+   PADC; content-adaptive stopping with a ViT is in JSCCformer-f. The paper moves to the
+   problem these designs cannot serve: opportunistic scheduling of encode-once token prefixes
+   over a fading multi-user downlink (`docs/PROBLEM.md`, gates P-A to P-D).
 
 ## 1. Your four points, checked
 
@@ -181,7 +187,48 @@ Consequences:
    allocation make it channel-aware. A MIMO version is a natural extension later (ordered tokens
    on eigenmodes sorted by gain), not a requirement.
 
+### 1f. After reading PADC and JSCCformer-f in full (2026-10-09)
+
+PADC (Zhang et al., IEEE TWC 2023; paper and code, github.com/wyzhang-ustb): DeepJSCC-V is an
+ADJSCC CNN whose encoder AND decoder take the SNR (five attention blocks each); its latent is
+H/4 x W/4 x 48 and rate R keeps the first round(96 R) of the 48 channels (a channel prefix in
+~1/96 steps; R counts complex symbols per real source value, like this tree's CBR); it is
+trained with R ~ U(0.05, 0.5) and SNR ~ U{0..27} dB, so ONE model serves every rate and SNR;
+its decoder is not told R (zero padding). Against four per-rate ADJSCC models it is on par,
+slightly below at R = 1/16. OraNet, an MLP on the code's channel-wise mean and std plus SNR
+and R, predicts each image's PSNR with 0.07-0.42 dB mean absolute error on Kodak; a data-level
+rule picks one R for all images and an instance-level rule each image's least R meeting a
+PSNR floor.
+
+JSCCformer-f (Wu et al., IEEE TWC 2024): DeepJSCC-MIMO's ViT over m blocks with channel-output
+feedback (or a transmitter-side copy of the decoder); one encoder and decoder for every block;
+in its variable-rate mode the transmitter stops when the decoder's estimate reaches a target
+PSNR (CIFAR10, perfect feedback, m = 8). Training every block prefix to be good costs it
+0.58-1.73 dB at the last block (Table VIII): a nesting penalty. Kodak, CBR 1/12, m = 2:
+30.84 / 32.05 / 33.16 dB at 1 / 4 / 7 dB.
+
+Status of the claims of 1e:
+* "one ViT JSCC that decodes any prefix, its cost against per-rate models" -- DeepJSCC-V is one
+  model that decodes any channel prefix, trained over random rates, with that cost measured.
+  What is left is the ViT and token form: **not a contribution**.
+* "predicted per-image curves" -- OraNet does it from code statistics, SNR and rate:
+  **not a contribution**.
+* "joint allocation of a shared budget" -- PADC's rules are per image or uniform, so the
+  equal-slope rule is still different, but it is classical: **a section, not a paper**.
+* "no side information" -- PADC's receiver also counts symbols: **not distinctive**.
+* "nesting-penalty analysis" -- PADC (Fig. 4) and JSCCformer-f (Table VIII) measure it too;
+  the encoder / decoder split and the linear-Gaussian bound remain: **supporting analysis**.
+* per-budget LoRA heads in a JSCC decoder: still unseen, small.
+
+So the earlier framing does not carry a TWC paper. What these two papers do NOT have is the
+combination this codec has by construction: a code produced once, before any SNR or rate is
+known, that decodes at any length, from tokens that may arrive at different SNRs, with only
+CQI feedback. That is exactly what an opportunistic multi-user scheduler over a fading
+channel needs, and the problem the paper should be about: `docs/PROBLEM.md`.
+
 ## 2. The paper to aim at
+
+(Superseded on 2026-10-09 by `docs/PROBLEM.md`; kept as the record of the previous framing.)
 
 **Working title**: prefix-decodable token communication with content- and channel-aware
 bandwidth allocation.

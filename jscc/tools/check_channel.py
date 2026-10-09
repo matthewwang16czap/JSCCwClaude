@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch  # noqa: E402
 
-from net.channel import Channel, seed_channel  # noqa: E402
+from net.channel import Channel, piecewise_snr, seed_channel  # noqa: E402
 
 BACKENDS = ("torch", "sionna") if importlib.util.find_spec("sionna") else ("torch",)
 
@@ -91,6 +91,21 @@ def main():
         yc = complex_of(Channel("awgn", backend)(x, 10.0, mask=mask))
         ok(float(yc[:, 6:].abs().max()) == 0.0,
            f"{backend}: masked symbols leave the channel as exact zeros")
+    for backend in BACKENDS:     # SNR profiles: piecewise SNR along the code (docs/PROBLEM.md)
+        x = torch.randn(2, 4000, 16)
+        seed(backend, 4)
+        a = Channel("awgn", backend)(x, torch.tensor([3.0, 8.0]))
+        seed(backend, 4)
+        b = Channel("awgn", backend)(x, torch.tensor([[3.0] * 4000, [8.0] * 4000]))
+        ok(torch.allclose(a, b, atol=1e-6), f"{backend}: a constant profile == one SNR per row")
+        prof = piecewise_snr(torch.tensor([[0.0, 10.0]] * 2), torch.tensor([[1500]] * 2), 4000)
+        seed(backend, 5)
+        e = complex_of(Channel("awgn", backend)(x, prof)) - Channel.normalize(complex_of(x))
+        v1, v2 = float(e[:, :1500].abs().pow(2).mean()), float(e[:, 1500:].abs().pow(2).mean())
+        ok(abs(v1 - 1.0) < 0.03 and abs(v2 / 0.1 - 1) < 0.03,
+           f"{backend}: per-chunk noise variance follows the profile ({v1:.3f} at 0 dB, "
+           f"{v2:.4f} at 10 dB)")
+    x = torch.randn(3, 10, 8)
     yc = complex_of(Channel("none")(x, 10.0, mask=mask))
     ok(float((yc[:, :6].abs().pow(2).mean(dim=(1, 2)) - 1).abs().max()) < 1e-5,
        "unit power per transmitted symbol, per row")

@@ -12,7 +12,9 @@ protocol and the evaluation. Two ways to make the rate adaptive:
   +0.02 to +0.08 dB over a matched prefix control, all of it from a per-rate linear
   stage (`docs/NOTES.md`; verdict in `docs/ASSESSMENT.md`). `COMMANDS.txt` holds the
   current wave: the gates of `docs/ASSESSMENT.md` (matched compute, per-image
-  allocation, budget-specialised decoding).
+  allocation, budget-specialised decoding), and the first measurements of the target
+  problem, `docs/PROBLEM.md`: scheduling encode-once token prefixes over a fading
+  multi-user downlink.
 
 | `--backbone` | model | rate unit at 256 px | parameters |
 |---|---|---|---|
@@ -85,11 +87,13 @@ alloc/                  per-image budget policy: core.py (allocation, statistics
                         sweep.py (curves), predictor.py (the policy), io.py
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
+                        mixed_snr.py (prefixes whose chunks arrived at different SNRs)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
 docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token communication,
                         adaptive tokenizers, allocation; the novelty matrix
+docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
 ```
 
 ## Defaults and the knobs worth knowing
@@ -125,6 +129,14 @@ Flags left unset take the backbone's defaults (`BACKBONE_DEFAULTS` in
 All arms: AdamW, lr 1e-4, cosine decay to 5% (`--lr-floor`), batch 16 at 256 px,
 effective batch 16 (with a smaller `--batch-size`, gradient accumulation fills
 the gap), grad clip 1.0, 2000 epochs, validation every 40.
+
+SNR profiles (`docs/PROBLEM.md`): a token prefix can be sent at a piecewise SNR along its
+tokens (slots of a block-fading channel after equalisation): pass a (B, n_tokens) tensor
+as `snr` to `JSCC.send`, built with `net.channel.piecewise_snr`. `--snr-chunks K` trains on
+such profiles (K chunks at random SNRs from `--snr-range`, cut at random token positions);
+`tools/mixed_snr.py` measures how a model decodes them and which effective-SNR rule
+predicts the result. `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute
+SNR x CBR table.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and

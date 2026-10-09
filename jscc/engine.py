@@ -6,7 +6,7 @@ from collections import defaultdict
 
 import torch
 
-from net.channel import seed_channel
+from net.channel import piecewise_snr, seed_channel
 from utils.common import amp_dtype
 
 
@@ -23,10 +23,21 @@ def autocast(cfg, device):
 
 
 def sample_snr(cfg, batch, device):
+    """One SNR per image, uniform over --snr-range. With --snr-chunks K > 1 a
+    per-token profile (batch, n_tokens) instead: K chunks at independent SNRs, cut
+    at K - 1 random token positions (tokens sent in slots of a block-fading
+    channel); a prefix shorter than a cut sees only the chunks before it."""
     lo, hi = cfg.train_snr_range
-    if hi > lo:
-        return torch.empty(batch, device=device).uniform_(lo, hi)
-    return torch.full((batch,), lo, device=device)
+
+    def draw(*shape):
+        if hi > lo:
+            return torch.empty(shape, device=device).uniform_(lo, hi)
+        return torch.full(shape, lo, device=device)
+
+    if cfg.snr_chunks <= 1:
+        return draw(batch)
+    cuts = torch.randint(1, cfg.n_tokens, (batch, cfg.snr_chunks - 1), device=device)
+    return piecewise_snr(draw(batch, cfg.snr_chunks), cuts.sort(1).values, cfg.n_tokens)
 
 
 def train_one_epoch(epoch, step, net, model, loader, optimizer, scheduler, cfg, log=None,
