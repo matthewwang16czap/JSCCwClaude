@@ -2,6 +2,7 @@
 
     python tools/compare_runs.py history/<run A> history/<run B> [--window 5] [--upto 1600]
     python tools/compare_runs.py history/<run A> history/<run B> --test
+    python tools/compare_runs.py history/<run> --test --per-snr     # absolute, SNR x CBR
 
 Default: the mean over the last W validations of each run, with the sd across
 that window. --test: the final test (logs/test.json). Single validations of
@@ -48,7 +49,28 @@ def main():
     ap.add_argument("--metric", default="psnr",
                     help="any key of the result files: psnr, ssim, msssim, lpips, lpips_vgg, "
                          "dists, cls_top1, cls_prob, det_f1, obj_psnr, bg_psnr, obj_lpips, dino_sim")
+    ap.add_argument("--per-snr", action="store_true",
+                    help="with --test: each run's absolute SNR x CBR table (to set against "
+                         "published per-SNR numbers)")
     a = ap.parse_args()
+    if a.per_snr:
+        if not a.test:
+            raise SystemExit("--per-snr reads the final test: add --test")
+        for run in a.runs:
+            path = os.path.join(run, "logs", "test.json")
+            if not os.path.exists(path):
+                raise SystemExit(f"{path} does not exist yet (the test runs after training)")
+            with open(path) as fh:
+                res = json.load(fh)
+            snrs = sorted({r["snr"] for r in res})
+            cbrs = list(dict.fromkeys(r["cbr_nominal"] for r in res))
+            cell = {(r["snr"], r["cbr_nominal"]): r.get(a.metric, float("nan")) for r in res}
+            print(f"{os.path.basename(run.rstrip('/'))}: {a.metric.upper()}, final test")
+            print(f"{'SNR dB':>8s} " + " ".join(f"{c:>9s}" for c in cbrs))
+            for snr in snrs:
+                print(f"{snr:8g} " + " ".join(f"{cell.get((snr, c), float('nan')):9.3f}"
+                                              for c in cbrs))
+        return
     table, cbrs = [], None
     for run in a.runs:
         if a.test:

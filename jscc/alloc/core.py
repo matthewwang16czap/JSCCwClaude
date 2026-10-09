@@ -129,6 +129,29 @@ def segments(q, cost, units):
             arr[:, 4].astype(np.int64), -arr[:, 0])
 
 
+def level_segments(q, cost, units):
+    """The equal-QUALITY order (PADC's rule, Zhang et al., IEEE TWC 2023): every
+    image gets the least budget at which its objective reaches a common level, and
+    the level rises until the budget is spent. Image i steps from candidate k to
+    k + 1 when the level passes q[i, k], so the steps are taken in increasing
+    q[i, k]; an image that never reaches the level ends at the largest budget.
+
+    Same format as segments() (the 4th array is the level, not a slope), so
+    allocate() and path() run the equal-quality rule unchanged, including the
+    time-shared last step that meets the target exactly. It maximises the
+    WORST image's quality, not the mean: at a matched average rate it is what a
+    per-image quality target amounts to."""
+    N, K = q.shape
+    q = np.maximum.accumulate(np.asarray(q, dtype=np.float64), axis=1)
+    rows = sorted((q[i, k], i, k) for i in range(N) for k in range(K - 1))
+    if not rows:
+        e = np.zeros(0, dtype=np.int64)
+        return e, e, e, np.zeros(0)
+    arr = np.array(rows)
+    k = arr[:, 2].astype(np.int64)
+    return arr[:, 1].astype(np.int64), k, k + 1, arr[:, 0]
+
+
 def allocate(segs, cost, units, target):
     """Per-image budgets that spend `target` units on average (cost-weighted).
 
@@ -276,7 +299,10 @@ def compare(draws, cost, units, metrics, selectors, targets, scales, primary, fo
                themselves. The oracle selects on one half of the draws
                (isotonic-smoothed) and is scored on the other half, then the
                halves swap; with a single draw it selects and scores on the
-               same numbers and is optimistic (flagged by `crossfit` False)
+               same numbers and is optimistic (flagged by `crossfit` False).
+               ("equal", spec) and ("equal", q) select the same way (measured,
+               or a fixed q) but allocate by the equal-quality rule
+               (level_segments, PADC) instead of the equal-slope one
     primary    metric whose equal-quality bandwidth saving is reported: 1 - (average
                budget at which the method first reaches uniform's quality at the
                target) / (the least uniform budget that reaches it). A method that
@@ -307,11 +333,15 @@ def compare(draws, cost, units, metrics, selectors, targets, scales, primary, fo
         for t in targets:
             out["uniform"][t] = out["uniform"][t] + share * realised(ev, uniform_weights(N, units, t))
         for name, how in selectors.items():
+            rule = segments
+            if isinstance(how, tuple) and how[0] == "equal":
+                rule, how = level_segments, (how[1] if isinstance(how[1], np.ndarray)
+                                             else ("oracle", how[1]))
             if isinstance(how, tuple) and how[0] == "oracle":
                 q = isotonic(objective(sel, metrics, how[1], scales))
             else:
                 q = np.asarray(how, dtype=np.float64)
-            segs = segments(q, cost, units)
+            segs = rule(q, cost, units)
             avg_path, qual_path = path(segs, ev, cost, units, signs)
             uni_path = (signs[jp] * ev[:, :, jp]).mean(0)          # uniform, budget by budget
             for t in targets:

@@ -114,6 +114,12 @@ class Config:
         self.rate_anchors, self.rate_rank = args.rate_anchors, args.rate_rank
         self.phase_order, self.refine_ch = args.phase_order, args.refine_ch
         self.cascade = bool(args.cascade)
+        self.snr_chunks = int(getattr(args, "snr_chunks", 1))
+        if self.snr_chunks < 1:
+            raise ValueError("--snr-chunks is a number of chunks (>= 1)")
+        if self.snr_chunks > 1 and (not self.token or self.cascade):
+            raise ValueError("--snr-chunks cuts a token prefix: it needs vit or hybrid without "
+                             "--cascade")
 
         # rate
         self.cbrs = [parse_cbr(c) for c in PREDEFINED_CBRS]
@@ -376,6 +382,8 @@ class Config:
             extra.append(f"k{self.rates_per_step}")
         if self.top_prob:
             extra.append(f"top{self.top_prob:g}")
+        if self.snr_chunks > 1:
+            extra.append(f"snrc{self.snr_chunks}")
         if self.fixed_cbr is not None:
             extra.append(f"fix{self.fixed_cbr.numerator}-{self.fixed_cbr.denominator}")
         if self.freeze != "none":

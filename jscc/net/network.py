@@ -20,7 +20,9 @@ Two rate schemes (--cascade selects the second):
              the level, so nothing is signalled.
 
 Per-sample budgets (the hook for a future allocation policy): pass a (B,)
-integer tensor as `units` to send()/decode() of a prefix token model. Each image
+integer tensor as `units` to send()/decode() of a prefix token model. SNR
+profiles (tokens sent in slots of different SNR, docs/PROBLEM.md): pass a
+(B, n_tokens) tensor as `snr` to send() of a prefix token model. Each image
 then transmits its own prefix; decoders use key padding (hybrid) or masked
 folding (vit). Only uniform budgets are trained and evaluated in this tree.
 """
@@ -180,7 +182,24 @@ class JSCC(nn.Module):
             raise ValueError(f"{t.numel()} values for {rows} rows ({batch} images)")
         return t
 
+    @staticmethod
+    def _profile(snr, rows, batch, length, device):
+        """A per-token SNR profile (B or rows, >= length) -> (rows, length). The
+        tiles of an image share its profile: token t of every tile goes out in
+        the same chunk (net/channel.py, piecewise_snr)."""
+        p = snr.to(device=device, dtype=torch.float32)
+        if p.shape[0] == batch and rows != batch:
+            p = p.repeat_interleave(rows // batch, 0)
+        if p.shape[0] != rows or p.shape[1] < length:
+            raise ValueError(f"an SNR profile of shape {tuple(snr.shape)} for {rows} rows of "
+                             f"{length} tokens ({batch} images)")
+        return p[:, :length]
+
     def send(self, enc, units, snr):
+        profile = torch.is_tensor(snr) and snr.dim() == 2 and snr.shape[1] > 1   # (B, 1): per row
+        if profile and (self.cascade or not self.token):
+            raise ValueError("an SNR profile (piecewise SNR along the code) needs a token "
+                             "model under the prefix scheme")
         if self.cascade:
             cw = self.codeword(enc, units)
             return self.channel(cw, self._rows(snr, cw.shape[0], enc["B"], cw.device,
@@ -192,12 +211,13 @@ class JSCC(nn.Module):
             return self.channel(z, self._rows(snr, z.shape[0], enc["B"], z.device, torch.float32))
         sym = enc["sym"]
         rows, M = sym.shape[:2]
-        snr = self._rows(snr, rows, enc["B"], sym.device, torch.float32)
+        snr = self._profile(snr, rows, enc["B"], M, sym.device) if profile else \
+            self._rows(snr, rows, enc["B"], sym.device, torch.float32)
         if torch.is_tensor(units):
             u = self._rows(units, rows, enc["B"], sym.device, torch.long)
             mask = token_valid(u, M).unsqueeze(-1).expand(-1, -1, sym.shape[-1] // 2)
             return self.channel(sym, snr, mask=mask)
-        y = self.channel(sym[:, :units], snr)
+        y = self.channel(sym[:, :units], snr[:, :units] if profile else snr)
         return F.pad(y, (0, 0, 0, M - units))
 
     def _expand(self, enc, rx, units):

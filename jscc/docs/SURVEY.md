@@ -2,7 +2,9 @@
 
 Survey for `docs/ASSESSMENT.md` (2026-10-08). The sandbox that wrote it cannot open
 arxiv.org, so most entries come from abstracts and search summaries, not full texts. Read the
-entries marked **read in full** before claiming novelty against them. "Threat" is how much the
+entries marked **read in full** before claiming novelty against them. DeepJSCC-MIMO was read in
+full on 2026-10-08, PADC (with its code) and JSCCformer-f on 2026-10-09 (the PDFs you
+uploaded); their entries and `docs/ASSESSMENT.md` sections 1e-1f reflect the full texts. "Threat" is how much the
 work overlaps what this tree can claim: HIGH = a reviewer will cite it against you.
 
 ## A. Rate- and bandwidth-adaptive deep JSCC (one model, many rates)
@@ -17,10 +19,16 @@ work overlaps what this tree can claim: HIGH = a reviewer will cite it against y
 | DeepJSCC-l++ ([2305.13161](https://arxiv.org/abs/2305.13161), Globecom 2023) | Swin/ViT; bandwidth ratio and SNR fed as side information; loss weights set per ratio | transformer "one model, many ratios" | MED |
 | **TS-JSCC**, "Single-model adaptive wireless image transmission via feature sparsity regularization" ([2608.21743](https://arxiv.org/abs/2608.21743), Aug 2026) | SwinJSCC + tail-structured L1 sparsity + an active-prefix transmission rule: per-image channel use varies under a shared mean CBR; a λ-controlled variant covers a range of rates | **the closest concurrent work to "AdaTok's flow in JSCC"**: tail-dropped prefix code, content-adaptive length, one model. **Read in full.** | HIGH |
 | **Timeliness-aware JSCC** ([2509.19754](https://arxiv.org/abs/2509.19754), Tsinghua) | a PPO policy picks the code length; the leading tokens are sent, the receiver zero-pads | **an RL policy choosing how many leading tokens to send**: AdaTok's GRPO step in JSCC form. **Read in full.** | HIGH |
+| **PADC**, Zhang, Zhang, Ma, Shao, Wang, Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication" (IEEE TWC 2023, vol. 22 no. 8, pp. 5486-5501, DOI 10.1109/TWC.2023.3234408; code github.com/wyzhang-ustb/Predictive-and-Adaptive-Deep-Coding-for-Wireless-Image-Transmission-in-Semantic-Communication). **Read in full, with its code** | DeepJSCC-V: an ADJSCC CNN (GDN residual blocks; SNR-conditioned attention blocks in encoder AND decoder), latent H/4 x W/4 x 48, rate R keeps the first round(96 R) channels (a channel prefix, ~1/96 steps; R in complex symbols per real source value, as this tree's CBR); trained with R ~ U(0.05, 0.5), SNR ~ U{0..27} dB: one model for every rate and SNR; decoder not told R (zero padding); on par with 4 per-rate ADJSCC models (slightly below at 1/16). OraNet: MLP on the code's channel-wise mean / std + SNR + R -> PSNR, 0.07-0.42 dB MAE on Kodak. Rules: one R for all images (data level) or each image's least R meeting a PSNR floor (instance level), 18 levels 1/3..1/20 or bisection. Kodak models: ImageNet 128 px crops | **one model for every length, per-image quality prediction and per-image rate choice, all in TWC.** Missing: an encoder that does not need the SNR, decoding of chunks at different SNRs, a shared budget across images or users, online length. `tools/alloc_policy.py oracle` prints its rule as `equal_q` | HIGH |
+| **JSCCformer-f**, Wu, Shao, Ozfatura, Mikolajczyk, Gündüz ([2306.09101](https://arxiv.org/abs/2306.09101), IEEE TWC 2024, vol. 23 no. 9, pp. 11904-11919). **Read in full** | DeepJSCC-MIMO's ViT (d 256, 8 blocks, 8 heads, DPE / CPE, Siamese input) over m blocks; the encoder input concatenates the image tokens with embedded feedback (raw channel outputs, or a transmitter-side copy of the decoder's estimate); one encoder and decoder for all blocks; noisy feedback studied; adapts to the SNR without an SNR input. Variable-rate mode (CIFAR10, m = 8, perfect feedback): stop when the estimate reaches a target PSNR, fine-tuned with the sum of intermediate losses -- which costs 0.58-1.73 dB at the last block (Table VIII, a nesting penalty). Kodak, CBR 1/12, m = 2: 30.84 / 32.05 / 33.16 dB at 1 / 4 / 7 dB. A 2-user broadcast extension | **content- and channel-adaptive length with a transformer, in TWC.** Closed-loop: channel-output feedback of every symbol and a decoder copy per link at the transmitter; single link; re-encodes every block | HIGH |
 | NTSCC, Dai et al. ([2112.10961](https://arxiv.org/abs/2112.10961), IEEE JSAC), improved NTSCC ([2303.14637](https://arxiv.org/abs/2303.14637)), MR-NTSCC ([2505.12740](https://arxiv.org/abs/2505.12740)) | a learned entropy model (hyperprior) sets how many channel symbols each latent element gets | content-adaptive variable length per element; strongest-PSNR family; needs side information for the lengths | HIGH (baseline) |
 | Semantic comm. with entropy- and channel-adaptive rate control ([2501.15414](https://arxiv.org/abs/2501.15414)) | rate from feature entropy, CSI and SNR, multi-user MIMO | adaptive rate in a wireless system setting | MED |
 | SA-OOSC ([2509.07436](https://arxiv.org/abs/2509.07436)); distributed NTSCC ([2503.21249](https://arxiv.org/abs/2503.21249), [2506.07391](https://arxiv.org/abs/2506.07391)) | variable length per patch from (MLLM-distilled) importance; learnable rate tokens | per-patch variable length, rate tokens as decoder conditioning | LOW-MED |
 | E2EC variable-length digital JSCC ([2511.07826](https://arxiv.org/abs/2511.07826)); VL-SCC; Rateless DeepJSCC / NTRSCC ([2603.21616](https://arxiv.org/abs/2603.21616)) | variable-length digital codewords via policy gradients; rateless LT-coded JSCC | variable length and rateless operation, digital | LOW-MED |
+| SA-RA-JSCC ([2606.17940](https://arxiv.org/abs/2606.17940), Jun 2026) | the SNR becomes one shared semantic vector that rescales all encoded features; a component aware of the rate budget | SNR and budget conditioning of a single model (like the FiLM here), no per-image length | LOW-MED |
+| DRJSCC, "Deep refinement-based JSCC over time-varying channels" ([2311.15309](https://arxiv.org/abs/2311.15309)) | encoded symbols split into blocks sent progressively; when the channel changes, the remaining blocks are re-encoded with the new CSI | progressive delivery over a time-varying channel, single link, re-encoding instead of encode-once | MED (for docs/PROBLEM.md) |
+| "Scalable deep JSCC for multi-user wireless image transmission with diverse bandwidth conditions" (2025, ResearchGate 397693533) | multi-layer codestream (base layers per resolution + enhancement layers); users take the layers their bandwidth allows; time-varying MIMO fading with finite states; multicast | layered DeepJSCC for heterogeneous users: the multicast version of a prefix code | MED-HIGH (for multicast framings) |
+| DP-JSCC, "Task-generalizable deep JSCC via hierarchical masked autoencoders" (Jan 2026) | progressive multi-stage transmission, rate adjustable without retraining | another progressive single-model code | MED |
 | HJSCC, hierarchical VAE ([2408.16340](https://arxiv.org/abs/2408.16340), AAAI 2025) | coarse-to-fine latents, bandwidth by the levels sent | depth-nested bandwidth adaptation | MED (for the cascade) |
 | Multi-exit JSCC, Zhang et al. ([2403.11693](https://arxiv.org/abs/2403.11693)) | CNN encoder with several downsampling modules, early exit, module-by-module training | the cascade's mechanism (depth exits) | HIGH (for the cascade) |
 | DiT-JSCC ([2601.03112](https://arxiv.org/abs/2601.03112)) | diffusion-transformer decoder; per-image split of a fixed budget by a complexity score | per-image budget heuristic | LOW |
@@ -29,9 +37,10 @@ work overlaps what this tree can claim: HIGH = a reviewer will cite it against y
 
 | work | backbone | relation | threat |
 |---|---|---|---|
-| DeepJSCC-MIMO, Wu, Shao, Bian, Mikolajczyk, Gündüz ([2309.00470](https://arxiv.org/abs/2309.00470), IEEE TWC 2024, vol. 23 no. 10, DOI 10.1109/TWC.2024.3422794; ICC 2023 version [2210.15347](https://arxiv.org/abs/2210.15347)) | ViT, patch tokens mapped to MIMO symbols, CSI-adaptive | **a ViT DeepJSCC is already in TWC**: "ViT for JSCC" is not new; your claim must be about the token interface and fairness | HIGH |
+| DeepJSCC-MIMO, Wu, Shao, Bian, Mikolajczyk, Gündüz ([2309.00470](https://arxiv.org/abs/2309.00470), IEEE TWC 2024, vol. 23 no. 10, DOI 10.1109/TWC.2024.3422794; ICC 2023 version [2210.15347](https://arxiv.org/abs/2210.15347)). **Read in full** | ViT (d 256, 8 blocks, 8 heads per side; 8x8 patch grid on CIFAR); every patch token is mapped by ONE linear layer to a fixed number of channel symbols, the whole codeword power-normalised; a "channel heatmap" (each symbol's noise variance after ZF / SVD equalisation) goes to the decoder (and to the encoder with CSIT), which learns power allocation over eigenmodes; Siamese decoder input layer; MSE (+0.1 LPIPS). One model per bandwidth ratio (SNR-universal over 0-22 dB). "Adaptive-M": one model sends only the first M_i antenna rows and the receiver zero-pads (<= 0.6 dB below per-M models). Complexity table: ViT beats CNN and Swin DeepJSCC with fewer parameters and FLOPs (CIFAR10, R 1/24, 5 dB: 24.41 vs 23.54 / 23.61 dB at 8 blocks). Kodak results from ImageNet 128 px training. Its conclusion names variable-length JSCC "depending on the channel state as well as the input signal" as future work | **already has: a ViT JSCC with patch tokens mapped straight to symbols (this tree's ViT at a fixed rate is nearly the same architecture), "ViT beats Swin at lower cost", and truncate-and-zero-pad adaptation of one model (over antennas).** Does not have: any rate adaptivity (one model per ratio), per-image length, allocation, SISO high-resolution matched-compute results. See `docs/ASSESSMENT.md` 1e | HIGH |
 | MambaJSCC ([2405.03125](https://arxiv.org/abs/2405.03125)), adaptive MambaJSCC ([2409.16592](https://arxiv.org/abs/2409.16592)) | visual state-space blocks | reports +0.1 dB (AWGN) to +0.5 dB (Rayleigh) over SwinJSCC at ~half the MACs; a current SOTA baseline | HIGH (baseline) |
 | FAJSCC ([2504.04758](https://arxiv.org/abs/2504.04758)) | importance-aware attention, adjustable encoder / decoder complexity | complexity-adaptive single model | LOW |
+| Implicit-JSCC ([2606.29737](https://arxiv.org/abs/2606.29737), Jun 2026) | encoder and decoder as fixed-point equilibria; the solver's convergence sets the depth, which theory ties to the SNR | "harder conditions need more depth", argued for the SNR; the cascade tested it for the rate and found nothing (`docs/NOTES.md`) | LOW |
 
 ## C. Token selection and token communications
 
@@ -80,7 +89,11 @@ So this tree's Swin baseline is smaller than the published SwinJSCC, and the ViT
 
 No paper found derives an equal-slope (Lagrangian) allocation across images for a learned JSCC
 at a fixed mean CBR, but that is classical rate allocation (Shoham and Gersho 1988; Ortega and
-Ramchandran 1998) applied to a new codec, and reviewers will say so. What is less common: a
+Ramchandran 1998) applied to a new codec, and reviewers will say so. The closest learned-JSCC
+rule is PADC's (section A, IEEE TWC 2023): predicted per-image PSNR, then each image's least
+rate meeting a quality floor. At a fixed total that is the equal-quality (max-min) rule;
+`tools/alloc_policy.py oracle` prints it as `equal_q` beside the equal-slope oracle on the same
+curves, so the margin of the rule itself is measured. What is less common: a
 single prefix code fine enough (one token = 4 complex symbols per 256 px tile) that the
 allocation is exact with time-sharing and needs no side information.
 
@@ -105,7 +118,14 @@ allocation is exact with time-sharing and needs no side information.
 | Devoto et al. | selection, not prefix | Y | - | user-set | - | - | Y |
 | AdaTok (tokenizer) | Y | - (1D) | Y (LoRA heads) | Y (GRPO) | n/a | n/a | n/a (discrete) |
 | 2604.10931 | - | - | - | - | - | Y | Y |
+| DeepJSCC-MIMO (TWC 2024) | - (one model per rate; antenna rows truncated, 3 levels) | Y (patch -> symbols) | (CSI heatmap) | - (named as future work) | Y (fixed length) | - (single link; power over eigenmodes) | Y |
+| PADC (TWC 2023) | Y (channel prefix, ~1/96 steps) | - (feature channels) | - (decoder told the SNR, not the rate) | Y (OraNet + quality floor) | Y (zero padding) | - (per image) | Y |
+| JSCCformer-f (TWC 2024) | Y (block by block) | Y (patch tokens) | (one decoder, intermediate losses) | Y (stops at a target, via feedback) | - (feedback link) | - (2-user broadcast) | Y |
 | **this tree** | **Y, 1-token steps** | **Y** | **Y: FiLM + LoRA heads + per-rate exits** | **Y: predicted curves + equal slope** | **Y (counts tokens)** | **possible (curves per SNR)** | **Y** |
 
 No single row matches this tree's, but every column is taken by someone. Novelty has to come from
 the combination, the evidence, and a wireless problem it solves better (docs/ASSESSMENT.md).
+After PADC and JSCCformer-f in full (2026-10-09) the matrix above is not enough: the problem
+is now opportunistic multi-user scheduling of encode-once token prefixes, and its own
+requirements matrix (encode-once, online length, mixed-SNR decoding, CQI-only feedback,
+many users) is in `docs/PROBLEM.md`, section 2. No surveyed work meets all of them.

@@ -8,7 +8,9 @@ Conventions (tools/check_channel.py measures them for both backends):
     TRANSMITTED complex symbol; `mask` marks the transmitted symbols and the
     untransmitted ones leave the channel as exact zeros
   * no = 10^(-SNR/10) is the noise variance per complex symbol (no/2 per real
-    dimension), Sionna's convention; one SNR per row
+    dimension), Sionna's convention; one SNR per row, or a per-position SNR
+    PROFILE (rows, N): piecewise SNR along the code, as for tokens sent in slots
+    of a block-fading channel and equalised with receiver CSI (piecewise_snr)
   * awgn:     sionna.phy.channel.AWGN
   * rayleigh: sionna.phy.channel.FlatFadingChannel with one antenna at each end,
     applied symbol by symbol: an i.i.d. h ~ CN(0, 1) per complex symbol plus
@@ -30,6 +32,15 @@ def seed_channel(seed):
     """Seed Sionna's generators (Sionna also reseeds torch's default ones)."""
     from sionna.phy import config
     config.seed = int(seed)
+
+
+def piecewise_snr(chunk_snr, cuts, length):
+    """An SNR profile (B, length) from chunk SNRs (B, K) and the K - 1 chunk
+    boundaries (B, K - 1), sorted positions in [0, length]: position t belongs to
+    chunk j = the number of boundaries <= t."""
+    t = torch.arange(length, device=chunk_snr.device)
+    j = (t.view(1, 1, -1) >= cuts.to(chunk_snr.device).unsqueeze(-1)).sum(1)
+    return chunk_snr.gather(1, j)
 
 
 class Channel(nn.Module):
@@ -60,8 +71,14 @@ class Channel(nn.Module):
 
     @staticmethod
     def noise_variance(snr_db, rows, device):
+        """(rows, 1, 1) for one SNR per row, (rows, N, 1) for a profile (rows, N)."""
         s = snr_db if torch.is_tensor(snr_db) else torch.tensor(float(snr_db))
-        s = s.to(device=device, dtype=torch.float32).reshape(-1)
+        s = s.to(device=device, dtype=torch.float32)
+        if s.dim() == 2:
+            if s.shape[0] != rows:
+                raise ValueError(f"an SNR profile of {s.shape[0]} rows for {rows} rows")
+            return torch.pow(10.0, -s / 10.0).unsqueeze(-1)
+        s = s.reshape(-1)
         if s.numel() == 1:
             s = s.expand(rows)
         if s.numel() != rows:
@@ -79,6 +96,11 @@ class Channel(nn.Module):
             yc = xc
         else:
             no = self.noise_variance(snr_db, R, x.device)
+            if no.shape[1] not in (1, xc.shape[1]):
+                raise ValueError(f"an SNR profile of {no.shape[1]} positions for a code of "
+                                 f"{xc.shape[1]}")
+            if no.shape[1] > 1:
+                no = no.expand(xc.shape).contiguous()   # a profile: one value per symbol
             if self.kind == "awgn":
                 yc = self._awgn(xc, no)
             else:

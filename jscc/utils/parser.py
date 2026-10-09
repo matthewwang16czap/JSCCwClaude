@@ -90,6 +90,11 @@ def create_parser():
                    help="evaluation SNRs (dB)")
     g.add_argument("--snr-range", nargs=2, type=float, default=[-2.0, 22.0],
                    help="training SNR range (dB), uniform per image")
+    g.add_argument("--snr-chunks", type=int, default=1,
+                   help="train on a piecewise SNR along the tokens: K chunks at independent "
+                        "SNRs from --snr-range, cut at random token positions (tokens sent "
+                        "in slots of a block-fading channel, docs/PROBLEM.md); 1 = one SNR "
+                        "per image. Token models, prefix scheme")
 
     g = p.add_argument_group("rate")
     g.add_argument("--rate-sampling", default=None, choices=["uniform", "grid", "sandwich"],

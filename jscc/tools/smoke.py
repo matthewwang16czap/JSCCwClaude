@@ -378,6 +378,74 @@ def check_budget_heads(x):
        "--mod-lr-mult covers the LoRA heads and the cascade stages, nothing else")
 
 
+def check_snr_profiles(x):
+    """Piecewise SNR along the tokens (docs/PROBLEM.md): channel, model, sampler, analysis."""
+    import itertools
+
+    import numpy as np
+
+    from engine import sample_snr
+    from net.channel import Channel, piecewise_snr
+    from tools.mixed_snr import analyse, effective_snr
+
+    print("[snr profiles]")
+    prof = piecewise_snr(torch.tensor([[1.0, 13.0, 4.0]]), torch.tensor([[3, 7]]), 10)
+    ok(prof.tolist() == [[1.0] * 3 + [13.0] * 4 + [4.0] * 3], "piecewise_snr cuts at the boundaries")
+    ch, z = Channel("awgn", "torch"), torch.randn(2, 6, 8)
+    torch.manual_seed(3)
+    a = ch(z, torch.tensor([5.0, 9.0]))
+    torch.manual_seed(3)
+    ok(torch.equal(a, ch(z, torch.tensor([[5.0] * 6, [9.0] * 6]))),
+       "a constant profile == one SNR per row, bit for bit")
+    big = torch.randn(1, 4000, 64)
+    y = ch(big, piecewise_snr(torch.tensor([[0.0, 10.0]]), torch.tensor([[2000]]), 4000))
+    e = torch.complex(y[..., :32], y[..., 32:]) - Channel.normalize(
+        torch.complex(big[..., :32], big[..., 32:]))
+    v1, v2 = float(e[:, :2000].abs().pow(2).mean()), float(e[:, 2000:].abs().pow(2).mean())
+    ok(abs(v1 - 1.0) < 0.02 and abs(v2 / 0.1 - 1) < 0.02,
+       f"per-chunk noise variance follows the profile ({v1:.3f} at 0 dB, {v2:.4f} at 10 dB)")
+    model, cfg = build("vit")
+    enc, u, half = model.encode(x), cfg.cbr_units[2], cfg.n_tokens // 2
+    torch.manual_seed(5)
+    r1 = model.send(enc, u, torch.tensor([3.0, 3.0]))
+    torch.manual_seed(5)
+    r2 = model.send(enc, u, torch.full((2, cfg.n_tokens), 3.0))
+    torch.manual_seed(5)
+    r3 = model.send(enc, u, piecewise_snr(torch.tensor([[3.0, 30.0]] * 2),
+                                          torch.tensor([[half]] * 2), cfg.n_tokens))
+    m = min(u, half)
+    ok(torch.equal(r1, r2) and torch.equal(r1[:, :m], r3[:, :m])
+       and (u <= half or not torch.equal(r1[:, half:u], r3[:, half:u])),
+       "vit: a constant per-token profile sends what one SNR sends; a profile changes the "
+       "noise of its own tokens only")
+    swin = build("swin")[0]
+    try:
+        swin.send(swin.encode(x), 48, torch.full((2, 10), 3.0))
+        ok(False, "swin refuses an SNR profile")
+    except ValueError:
+        ok(True, "swin refuses an SNR profile (prefix token models only)")
+    model3, cfg3 = build("vit", "--snr-chunks", "3")
+    s = sample_snr(cfg3, 4, torch.device("cpu"))
+    ok(s.shape == (4, cfg3.n_tokens) and all(len(set(r.tolist())) <= 3 for r in s)
+       and "snrc3" in cfg3.run_name,
+       f"--snr-chunks 3: per-token profiles of <= 3 levels; run name {cfg3.run_name}")
+    model3.train()
+    loss = model3(x, s[:2], want_metrics=False)[1]
+    ok(bool(torch.isfinite(loss)), "a training step on piecewise-SNR profiles")
+    raises(["--backbone", "swin", "--snr-chunks", "2"], "--snr-chunks is refused for swin")
+    raises(["--backbone", "vit", "--cascade", "--snr-chunks", "2"],
+           "--snr-chunks is refused with --cascade")
+    grid = [1.0, 4.0, 7.0, 10.0, 13.0]
+    profiles = list(itertools.product(grid, repeat=2))
+    offs = np.random.default_rng(0).uniform(25, 32, 6)
+    sc = np.array([[o + 0.4 * effective_snr(pr, [1, 1], "mean_db") for pr in profiles] for o in offs])
+    res = analyse(sc, profiles, grid, np.array([1, 1]))
+    ok(res["rules"]["mean_db"]["mae"] < 1e-9 and res["rules"]["noise"]["bias"] < 0
+       and abs(res["order"]["best_first_minus_last"]) < 1e-9,
+       "mixed-SNR analysis: an exact rule scores 0 error, a pessimistic one a negative bias, "
+       "a symmetric codec no order effect")
+
+
 def check_eval_seed(x):
     """Validation and test draw their channel noise from --eval-seed, not --seed, so runs
     of different training seeds are scored on the same draws (paired comparisons)."""
@@ -441,7 +509,8 @@ def check_allocation(x):
     import numpy as np
 
     from alloc import predictor as P
-    from alloc.core import allocate, compare, isotonic, metric_scales, path, segments
+    from alloc.core import (allocate, compare, isotonic, level_segments, metric_scales, path,
+                            segments)
     from alloc.sweep import codeword, draw_noise, send, sweep
 
     class OneBatch:                     # the sweep reads len(loader.dataset) and iterates
@@ -467,6 +536,15 @@ def check_allocation(x):
         exact &= abs((w * q).sum() - best) < 1e-9
         exact &= abs((w @ units * cost).sum() / cost.sum() - t) < 1e-9
     ok(exact, "equal-slope allocation == brute-force optimum, target rate met exactly")
+    qm = np.maximum.accumulate(q, axis=1)
+    tau = float(np.sort(qm[:, :-1].ravel())[N])         # a level some images have passed
+    least = np.array([np.searchsorted(qm[i, :-1], tau, side="left") for i in range(N)])
+    t_tau = float((cost * units[least]).sum() / cost.sum())
+    we, _ = allocate(level_segments(q, cost, units), cost, units, t_tau)
+    ws, _ = allocate(segs, cost, units, t_tau)
+    ok(np.allclose(we, np.eye(K)[least], atol=1e-6) and (we * q).sum() <= (ws * q).sum() + 1e-9,
+       "equal-quality rule (PADC) == the least budget reaching a common level; its mean "
+       "<= equal-slope's")
     y = isotonic(np.array([1.0, 3.0, 2.0, 2.0, 5.0, 4.0]))
     ok(bool(np.all(np.diff(y) >= 0)) and abs(y.sum() - 17.0) < 1e-9, "isotonic fit")
     Nn, D, units2 = 300, 4, np.linspace(1024, 6144, 11)
@@ -478,6 +556,11 @@ def check_allocation(x):
                   {"oracle": ("oracle", [("psnr", 1.0)])}, [3072.0], sc, "psnr")
     gain = float((res["oracle"][3072.0]["values"] - res["uniform"][3072.0])[:, 0].mean())
     ok(gain < 0.02, f"cross-fitted oracle harvests no noise on identical images ({gain:+.3f} dB)")
+    res = compare(draws, np.ones(Nn), units2, ["psnr", "lpips"],
+                  {"equal_q": ("equal", [("psnr", 1.0)]),
+                   "equal_fixed": ("equal", np.tile(flat, (Nn, 1)))}, [3072.0], sc, "psnr")
+    ok(all(abs(res[m][3072.0]["avg"] - 3072.0) < 1e-6 for m in ("equal_q", "equal_fixed")),
+       "the equal-quality rule meets the target average budget, from measured or fixed curves")
 
     from tools.alloc_policy import summarise, verdicts
 
@@ -747,6 +830,7 @@ def main():
     check_cascade(x)
     check_budget_heads(x)
     check_eval_seed(x)
+    check_snr_profiles(x)
     check_perception(x)
     check_allocation(x)
     check_frontier()

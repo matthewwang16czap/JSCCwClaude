@@ -1,8 +1,13 @@
 ================================================================================
  COMMANDS.txt — wave c2, revised: the gates of the TWC plan (docs/ASSESSMENT.md v2)
- rev 2026-10-08. Everything runs on the server, from the jscc/ directory.
+ rev 2026-10-09. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
+
+NEW on 2026-10-09: section 5, the first measurements for the new target problem
+(docs/PROBLEM.md: scheduling encode-once token prefixes over a fading multi-user
+downlink). Sections 0-4 are unchanged: if the wave is already running, leave it;
+`git pull` (no restart needed) and run section 5 when a card frees up.
 
 This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
 are kept under the same names; its encoder-only runs are dropped; the matched-compute
@@ -187,7 +192,9 @@ python tools/compare_runs.py ${SWH}_w1 history/swin_large_awgn_DIV2K_256_m1 \
   history/vit_p8d384x6s4_awgn_DIV2K_256_m1 ${VT}_w1 --test
 
 # 4b. G-B: per-image allocation at a fixed mean rate, the cross-fitted oracle
-#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving)
+#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving).
+#     The table also prints `equal_q`: PADC's per-image rule (IEEE TWC 2023: each image the
+#     least budget reaching a common quality) on the same curves. G-B needs oracle > equal_q.
 python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective psnr \
   --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_vit_psnr.txt
 python tools/alloc_policy.py oracle --curves curves/swin_w1_kodak.npz --objective psnr \
@@ -216,7 +223,7 @@ python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
 #                                                      interface ablation
 #        within +-0.1 dB or below                    -> no backbone claim; the paper rests on
 #                                                      allocation + nesting analysis
-#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0
+#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0, and above equal_q
 #                                                    -> allocation is a contribution: next turn
 #                                                      trains the predictor (alloc_policy train)
 #        smaller                                     -> allocation is a section, not the story
@@ -227,3 +234,61 @@ python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
 #                                                      no decoder head can close it; next turn
 #                                                      conditions the encoder on the budget
 #                                                      (the transmitter knows it)
+
+--------------------------------------------------------------------------------
+ 5. THE NEW PROBLEM: FIRST MEASUREMENTS (docs/PROBLEM.md, gates P-A and P-B)
+--------------------------------------------------------------------------------
+# A scheduled user receives its prefix in chunks, slot by slot, at the slots' SNRs. Does
+# the ViT decode such a mixed-SNR prefix as well as a constant-SNR one, and which simple
+# rule (mean dB / mean noise / mean capacity) predicts its quality? Needs `git pull`.
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
+VI="--backbone vit --pretrained $W1V"
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+mkdir -p results
+MIX="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --cbrs 1/24 1/12 1/8 --chunks 2"
+FTS="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag s1"
+
+# 5a. CPU, now: this tree's per-SNR Kodak numbers, to set against JSCCformer-f (CBR 1/12:
+#     30.84 / 32.05 / 33.16 dB at 1 / 4 / 7 dB, two-block feedback) and PADC (its Fig. 11)
+python tools/compare_runs.py ${VT}_w1 ${VT}_grid_c1 --test --per-snr
+
+# 5b. E1, ~10 min, ~3 GB: the w1 ViT on prefixes whose two halves had different SNRs.
+#     It fits next to M1 if section 2's probe showed M1 below ~19 GiB reserved: then run it
+#     now on GPU 2; otherwise run it when GPU 5's queue is done (change the 2 to 5).
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py --backbone vit --pretrained $W1V $MIX \
+  --out results/p1_mixed_w1.json | tee results/p1_mixed_w1.txt
+
+# 5c. E2, ~8 h on one card, when GPU 5's queue in section 3 is done (nvidia-smi -i 4,5):
+#     piecewise-SNR training (4 chunks at random SNRs per image) against its constant-SNR
+#     control, same w1 start, same 400 epochs, uniform budgets (every length stays
+#     decodable); then both on the mixed-SNR test of 5b.
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python main.py $FTS $VI > s1_gpu5_E2a_const.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FTS $VI --snr-chunks 4 > s1_gpu5_E2b_snrc4.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_s1/models/last.pt $MIX --out results/p1_mixed_s1.json > results/p1_mixed_s1.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_snrc4_s1/models/last.pt $MIX --out results/p1_mixed_snrc4_s1.json > results/p1_mixed_snrc4_s1.txt 2>&1
+" > /dev/null 2>&1 &
+
+# --- reading section 5 (send back everything it prints) ---------------------------
+cat results/p1_mixed_w1.txt results/p1_mixed_s1.txt results/p1_mixed_snrc4_s1.txt
+python tools/paired.py ${VT}_s1 ${VT}_snrc4_s1          # constant-SNR cost of piecewise training
+python tools/paired.py ${VT}_w1 ${VT}_s1                # what 400 more epochs alone did
+
+# Decision (docs/PROBLEM.md, section 5):
+#   P-A  E1 rule MAE <= 0.2 dB, small order effect  -> the SNR-blind decoder already handles
+#                                                      mixed prefixes; E2 only confirms
+#        E1 worse, E2b <= 0.2 dB and constant SNR
+#        within 0.1 dB of E2a                        -> train with --snr-chunks from now on
+#        neither                                     -> next turn: a per-token noise map
+#                                                      for the decoder (DeepJSCC-MIMO's heatmap)
+#   P-B  the rule with the smallest MAE              -> the utility model of the scheduler
+#                                                      simulator (next turn's code)
+
