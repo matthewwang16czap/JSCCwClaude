@@ -329,3 +329,95 @@ plus PF timing gain +0.47 dB over PF, re-planning them every slot +0.46, the myo
 +0.38. So the scheduler has two timescales: content-aware lengths, channel-aware timing; the
 size of the content part on REAL curves is the open number (G-B's oracle and the per-image
 utility of the next run).
+
+## Problem P1, step 2: the utility per phase, first scheduling numbers (2026-10-10)
+
+COMMANDS.txt section 6 on the server: `tools/mixed_snr.py --design full --chunks phase` on
+Kodak (24 images; per CBR 1/48 ... 1/8: the 5 constant profiles, each phase alone off 7 dB,
+10 held-out random profiles), `tools/utility_fit.py` per image, `tools/schedule_sim.py` on
+the fitted file (2000 frames), and 30 simulated frames of every policy decoded by the codec.
+
+| | snrc4 (piecewise-trained) | s1 (constant-SNR control) |
+|---|---|---|
+| kappa; fit rms | 1.769; 0.037 dB | 2.441; 0.092 dB |
+| rho at 1/8 (phase 1 ... 6) | 0.51 0.25 0.17 0.05 0.010 0.006 | 0.51 0.27 0.18 0.04 0.000 0.000 |
+| held-out MAE / p95 per image, 1/24 ... 1/8 | 0.03-0.07 / 0.10-0.23 dB | 0.12-0.29 / 0.39-0.79 dB |
+| best symmetric (noise) rule, MAE | 0.15-0.51 dB | 0.21-0.54 dB |
+| replay of 1862 scheduled histories: bias, MAE, p95 | +0.009, 0.083, 0.29 dB | +0.102, 0.195, 0.79 dB |
+| decoded mean PSNR on those histories, rr / pf / fixed_slope | 29.84 / 31.03 / 31.07 | 29.47 / 30.98 / 30.98 |
+
+1. **P-B passes for the piecewise-trained decoder.** Per image and per phase the additive
+   model predicts held-out profiles within 0.03-0.07 dB (p95 <= 0.23) and real schedules
+   within 0.08 dB (p95 0.29), with no bias; per policy the predicted means are within 0.04 dB
+   of the decoded ones. The constant-SNR decoder is predicted 2-4x worse and decodes the same
+   schedules 0.04-0.36 dB worse under every policy but max-SNR (most under round robin, which
+   sends 22% of its phases below 0 dB; max-SNR's slots are all good, where snrc4's constant-SNR
+   cost of 0.06 shows): piecewise training is worth having whatever the scheduler.
+2. **rho depends on the position, not on the prefix length** (for L >= 3: 0.51 / 0.25 / 0.17
+   / 0.05 / 0.01 / 0.01), and phases 5-6 carry under 2% of the noise sensitivity while still
+   adding 0.35-0.44 dB each at 1 dB SNR (0.08-0.13 at 13 dB): the tail is redundancy for the
+   head, as note 4 of P1 said.
+3. **Mean-PSNR scheduling on the real curves (gate P-C as stated): fails.**
+
+   | vs pf, dB [95% CI] | main (K 8, T 24) | same image | no fading | T 16 | T 36 | K 16, T 48 | pred noise 0.1 |
+   |---|---|---|---|---|---|---|---|
+   | rr | -1.12 | -1.09 | 0 | -0.90 | -1.17 | -1.42 | -1.12 |
+   | fixed_eq (PADC's rule) | -1.06 | -0.46 | -1.03 | -0.86 | -0.37 | -1.17 | -1.07 |
+   | fixed_slope | +0.050 [0.047, 0.053] | +0.05 | 0 | -0.02 | +0.05 | +0.05 | +0.05 |
+   | adaptive_slope | +0.050 | +0.05 | 0 | -0.02 | +0.06 | +0.05 | +0.05 |
+   | greedy | -0.23 | +0.03 | 0 | -0.20 | -0.26 | -0.24 | -0.23 |
+   | greedy_rel | -0.01 | +0.24 | 0 | -0.04 | -0.05 | -0.02 | -0.02 |
+
+   PF takes the multi-user diversity gain (+1.1 dB over round robin) and content-aware LENGTHS
+   add +0.05 dB on Kodak: per-image curves differ too little in slope for the equal-slope rule
+   to matter at 2-5 phases per user (G-B's oracle will say the same for one link). PADC's
+   equal-quality rule trades 1.06 dB of mean for +1.0 dB on the 5th-percentile user. One hint:
+   greedy_rel gains +0.24 dB when content is removed (same image), i.e. a channel-timing gain
+   PF does not see, which content diversity then drowns in its myopia.
+
+Designing the next policies on a stand-in (a utility with the measured MEAN curves of the
+snrc4 table, the fitted kappa and rho, and a Kodak-like content spread of 1.8 dB sd; script
+not in the tree): it reproduces the real ordering (fixed_slope +0.09 against the real +0.05,
+greedy_rel +0.04 against -0.01), so the numbers below are plausible, NOT results. Section 7
+runs them on the real utility and decodes them.
+
+4. **Equal shares with PF timing (`fixed_uni`) tie PF (+0.05)**: what PF needs is the
+   timing, not online lengths. For the mean objective one model per CBR with PF timing would
+   do as well as the prefix code (and skip the nesting penalty).
+5. **The advantage index (`slope_adv`) gains +0.52 dB over PF** (+0.39 to +0.74 over T 16-36,
+   K 16, equal mean SNRs, prediction noise; +0.47 with the same image; p5 user +0.6-0.9 dB):
+   serve the user whose predicted PSNR gain from THIS slot exceeds its gain from a slot at its
+   mean SNR by the most (lengths: fixed_slope's). Decomposition on the stand-in: with rho made
+   uniform +0.31, with phi made linear (kappa 100) +0.61. So about 0.3 dB is valuing a slot
+   in PSNR rather than in rate (a user near its noise-free quality gains little from a good
+   slot and takes the bad ones; PF, on log2(1 + snr), cannot see that) and about 0.2 dB is the
+   position (a noise-sensitive head phase waits for a peak, an insensitive tail phase takes a
+   fade). Variants: the gain ratio instead of the difference +0.39, the reference at mean + 2
+   dB +0.56, equal shares instead of equal-slope lengths +0.47.
+6. **A quality target changes the picture** (`--target`: the share of users whose image
+   reaches Q dB by the deadline, the QoS form of PADC's own objective). On the stand-in, Q =
+   30 dB, K = 8:
+
+   | satisfied | T 16 | T 24 | T 36 |
+   |---|---|---|---|
+   | pf (blind to the target) | 34.8% | 60.8% | 76.7% |
+   | pf_len (content-blind lengths at the mean SNR) | 34.2% | 57.0% | 77.9% |
+   | padc (per-image length at the mean SNR, shortest first, PF timing) | 57.0% | 70.0% | 75.7% |
+   | padc_adv (the same, advantage timing) | 64.0% | 77.8% | 82.8% |
+   | stop (online: stop when the realised SNRs got the image there) | 38.1% | 71.5% | 81.5% |
+   | stop_adv | 44.7% | 78.2% | 87.1% |
+   | online (stop_adv + shortest remaining need first, spare slots open to all) | 66.5% | 84.5% | 87.1% |
+   | online - padc, points [95% CI] | +9.5 [8.2, 10.9] | +14.5 [13.1, 16.0] | +11.5 [10.2, 12.8] |
+
+   Three parts, each needing a property of this codec: per-image sizing (the curves; padc vs
+   pf_len: +13 / +23 points at T 24 / 16, none at T 36), online stopping from the realised
+   slot SNRs (encode-once prefix + the mixed-SNR utility; stop_adv vs padc_adv: +0.4 / +4.3
+   points at T 24 / 36, what makes loose frames work), and advantage timing (+6-8 points on
+   padc, +6-7 on stop). Admission matters when the frame is tight (online vs stop_adv: +22
+   points at T 16, where stopping alone loses to padc's shortest-first). Tuning
+   on the stand-in: the planning SNR for future phases at mean + 0-3 dB and an overcommitted
+   admission change little once spare slots open to all; mean SNR, no overcommit is kept.
+
+So the scheduler's value is not where docs/PROBLEM.md first put it (content-aware lengths for
+mean quality): it is quality- and position-aware TIMING (any objective) and, for a quality
+target, per-image sizing with online stopping. Section 7 decides both on the real utility.

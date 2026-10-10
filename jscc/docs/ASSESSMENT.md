@@ -45,6 +45,14 @@ IEEE Transactions on Wireless Communications (TWC).
    PADC; content-adaptive stopping with a ViT is in JSCCformer-f. The paper moves to the
    problem these designs cannot serve: opportunistic scheduling of encode-once token prefixes
    over a fading multi-user downlink (`docs/PROBLEM.md`, gates P-A to P-D).
+9. **After the first measurements (2026-10-10, `docs/NOTES.md` P1 and P1 step 2):** P-A and
+   P-B pass (piecewise-SNR training makes the distortion additive over slots; the model
+   predicts the codec on real schedules within 0.08 dB). Content-aware LENGTHS for mean
+   quality do not carry a paper: +0.05 dB over PF on Kodak. The candidates are
+   quality-/position-aware timing (the advantage index, P-C1) and the QoS objective, the share
+   of users reaching a target, where PADC's own rule is the baseline (P-C2). Both were designed
+   on a stand-in utility; COMMANDS.txt section 7 decides them on the real utility and by
+   decoding. If both fail, the scheduling paper is off.
 
 ## 1. Your four points, checked
 

@@ -452,7 +452,7 @@ def check_schedule():
 
     from alloc.utility import Utility, fit, noise, phi
     from tools.mixed_snr import chunk_cuts, make_profiles
-    from tools.schedule_sim import simulate, targets
+    from tools.schedule_sim import need, simulate, targets
 
     print("[scheduling]")
     rng = np.random.default_rng(0)
@@ -506,6 +506,29 @@ def check_schedule():
        and all(abs(u.psnr(u.names.index(e["image"]), e["snrs"]) - e["predicted_psnr"]) < 1e-9
                for e in dumped),
        "--dump: one history per user, policy and frame, with the PSNR the model predicts")
+    tu = targets(u, np.arange(4), [3.0, 6.0, 9.0, 12.0], 10, "uni")
+    ok(tu.tolist() == [3, 3, 2, 2], f"fixed_uni: equal shares of the slots {tu.tolist()}")
+    summ, _, _ = simulate(u, 4, 12, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                          ["pf", "fixed_uni", "slope_adv"], seed=1)
+    ok(summ["slope_adv"]["vs_pf"] > 0.2 and abs(summ["fixed_uni"]["vs_pf"]) < 0.2,
+       f"advantage timing beats PF ({summ['slope_adv']['vs_pf']:+.2f} dB); fixed equal shares "
+       f"with PF timing about tie it ({summ['fixed_uni']['vs_pf']:+.2f})")
+    q3 = u.psnr(0, [7.0] * 3)
+    ok(need(u, 0, [], 7.0, q3) == 3 and need(u, 0, [7.0, 7.0], 7.0, u.psnr(0, [7.0])) == 0
+       and need(u, 0, [], 7.0, 60.0) == np.inf,
+       "target: phases still needed (3 to a 3-phase quality, 0 once there, inf if out of reach)")
+    pols = ["pf", "pf_len", "padc", "stop", "stop_adv", "online"]
+    summ, _, dumped = simulate(u, 4, 10, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), pols,
+                               seed=1, target=30.0, dump=1)
+    flat, _, _ = simulate(u, 4, 10, 60, (0.0, 15.0), "none", (-2.0, 22.0), ["pf", "padc", "online"],
+                          seed=1, target=30.0)
+    ok(summ["online"]["satisfied"] > summ["pf"]["satisfied"] + 0.05
+       and summ["online"]["satisfied"] >= summ["padc"]["satisfied"]
+       and flat["padc"]["satisfied"] > flat["pf"]["satisfied"] + 0.05
+       and len(dumped) == len(pols) * 4,
+       f"target {30} dB: online satisfies {100 * summ['online']['satisfied']:.0f}% (pf "
+       f"{100 * summ['pf']['satisfied']:.0f}%, padc {100 * summ['padc']['satisfied']:.0f}%); "
+       f"without fading padc's sizing alone beats pf")
 
 
 def check_eval_seed(x):
