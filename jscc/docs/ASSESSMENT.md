@@ -53,6 +53,13 @@ IEEE Transactions on Wireless Communications (TWC).
    of users reaching a target, where PADC's own rule is the baseline (P-C2). Both were designed
    on a stand-in utility; COMMANDS.txt section 7 decides them on the real utility and by
    decoding. If both fail, the scheduling paper is off.
+10. **Both pass, decoded by the codec (section 7):** the advantage index +0.465 dB mean PSNR
+   over PF; online admission + stopping +10.0 points of users at a 30 dB target over PADC's
+   per-image rule. The paper: a link-to-system abstraction for prefix DeepJSCC under
+   slot-varying SNR (piecewise training + the additive utility, 0.06-0.09 dB on real
+   schedules) and the two schedulers it enables. Still owed before writing: a realistic
+   transmitter (P-C3), the digital baseline (P-D), fixed-length per-CBR codes with the G-C
+   nesting penalty (section 4's results), correlated fading, and the codec gap.
 
 ## 1. Your four points, checked
 

@@ -52,6 +52,8 @@ phases left, so every policy can use the whole frame. Policies:
     stop         online stopping: a user is served (PF timing) until the model, from the
                  SNRs its phases actually had, predicts it at the target
     stop_adv     stop with the advantage index for timing
+    online_pf    online's admission and stopping with PF timing (the online policy for a
+                 digital utility, whose step curves give the advantage index nothing)
     online       stop_adv plus admission every slot: the users with the smallest remaining
                  need (phases at the mean SNR) that fit in the slots left are served first;
                  spare slots open to all. Content-aware sizing, channel-aware stopping and
@@ -63,8 +65,13 @@ average (mean objective) or the satisfied share (target), the share of served sl
 dB, phases per user, the "lift" (served slot SNR minus the user's mean SNR, dB), and the
 difference to pf (and to padc with a target) with a 95% bootstrap interval over frames.
 Ablations: --same-image (no content diversity: only the channel part), --fading none (no
-fading: only the content and mean-SNR part), --pred-noise (the transmitter's curves are off:
-log-normal errors on each image's noise-free MSE and sensitivity). --dump N writes the
+fading: only the content and mean-SNR part), --fade-corr r (slot gains correlated in time,
+Gauss-Markov), --pred-noise (the transmitter's curves are off: log-normal errors on each
+image's noise-free MSE and sensitivity), --belief FILE (the transmitter decides on its own
+calibrated curves, tools/utility_fit.py --calib; users are scored on --utility).
+--utility may also be a digital baseline (tools/digital_rd.py, alloc/digital.py: an image
+codec's R-D points over the same slots with ideal link adaptation; --link, --gap-db,
+--digital-mode, --digital-max-phases override the file). --dump N writes the
 delivery histories of the first N frames for tools/mixed_snr.py --design file, which decodes
 them with the codec itself.
 """
@@ -78,15 +85,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402
 
-from alloc.utility import Utility  # noqa: E402
+from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
                  "adaptive_slope", "slope_adv", "greedy", "greedy_rel")
-TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "stop", "stop_adv", "online")
+TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "stop", "stop_adv", "online_pf",
+                   "online")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
-NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "stop", "stop_adv", "online")
+NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "stop", "stop_adv", "online_pf", "online")
 PF_TIMING = ("pf", "fixed_uni", "fixed_eq", "fixed_slope", "adaptive_slope", "pf_len", "padc",
-             "stop")
+             "stop", "online_pf")
 ADV_TIMING = ("slope_adv", "padc_adv", "stop_adv", "online")
 
 
@@ -144,13 +152,6 @@ def need(belief, i, hist, snr_plan, goal):
     return np.inf
 
 
-def average_image(util):
-    """The content-blind transmitter's curve: geometric means over the pool (its PSNR is
-    the pool's mean PSNR)."""
-    g = lambda a: np.exp(np.log(np.maximum(a, 1e-12)).mean(0, keepdims=True))  # noqa: E731
-    return Utility(util.kappa, util.rho, g(util.dsrc), g(util.csens), ["average"], util.d_empty)
-
-
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
@@ -176,7 +177,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             if np.isfinite(L[k]) and L[k] <= left:
                 tgt[k], left = int(L[k]), left - int(L[k])
     rest = None                                               # online: phases still needed
-    if policy in ("stop", "stop_adv", "online"):
+    if policy in ("stop", "stop_adv", "online_pf", "online"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
     last = -1
     for t in range(T):
@@ -188,7 +189,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             ok &= np.array([len(h) < g for h, g in zip(hist, tgt)])
         if rest is not None:
             ok &= rest > 0                                    # not there yet
-            if policy == "online":        # admit the smallest needs that fit in the slots left;
+            if policy.startswith("online"):  # admit the smallest needs that fit in the slots left;
                 adm = np.zeros(K, dtype=bool)                 # spare slots open to the others
                 left = T - t
                 for k in np.argsort(rest, kind="stable"):
@@ -243,9 +244,26 @@ def bootstrap(d, n=2000, seed=0):
     return float(np.percentile(m, 2.5)), float(np.percentile(m, 97.5))
 
 
+def fades(rng, users, slots, fading, corr=0.0):
+    """Per-user slot gains in dB: i.i.d. Rayleigh (|h|^2 ~ Exp(1)), or with corr > 0 a
+    Gauss-Markov h_t = corr h_(t-1) + sqrt(1 - corr^2) w_t (Jakes: corr = J0(2 pi f_D T))."""
+    if fading == "none":
+        return np.zeros((users, slots))
+    if corr <= 0:
+        return 10 * np.log10(rng.exponential(1.0, (users, slots)))
+    w = (rng.standard_normal((users, slots)) + 1j * rng.standard_normal((users, slots))) / np.sqrt(2)
+    h = np.empty_like(w)
+    h[:, 0] = w[:, 0]
+    for t in range(1, slots):
+        h[:, t] = corr * h[:, t - 1] + np.sqrt(1.0 - corr ** 2) * w[:, t]
+    return 10 * np.log10(np.maximum(np.abs(h) ** 2, 1e-12))
+
+
 def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=0,
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
-             offset=0.0):
+             offset=0.0, belief_util=None, fade_corr=0.0):
+    """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
+    on it, users are scored on `util`."""
     if users > len(util.names) and not same_image:
         raise ValueError(f"{users} users but only {len(util.names)} images in the pool")
     rng = np.random.default_rng(seed)
@@ -256,11 +274,10 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
         imgs = (np.full(users, rng.integers(len(util.names))) if same_image
                 else rng.choice(len(util.names), users, replace=False))
         means = rng.uniform(mean_snr[0], mean_snr[1], users)
-        fade = 10 * np.log10(rng.exponential(1.0, (users, slots))) if fading == "rayleigh" \
-            else np.zeros((users, slots))
+        fade = fades(rng, users, slots, fading, fade_corr)
         snr = np.clip(means[:, None] + fade, clip[0], clip[1])
-        belief = util.perturbed(pred_noise, rng)
-        avg = average_image(belief) if target is not None else None
+        belief = (belief_util or util).perturbed(pred_noise, rng)
+        avg = belief.average() if target is not None else None
         for p in policies:
             hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
@@ -313,6 +330,17 @@ def main():
     ap.add_argument("--mean-snr", nargs=2, type=float, default=[0.0, 15.0],
                     help="users' mean SNRs, uniform in this range (dB)")
     ap.add_argument("--fading", default="rayleigh", choices=["rayleigh", "none"])
+    ap.add_argument("--fade-corr", type=float, default=0.0,
+                    help="slot-to-slot correlation of the Rayleigh gain (0: i.i.d. block fading)")
+    ap.add_argument("--belief", default=None,
+                    help="the transmitter's curves (tools/utility_fit.py --calib); default: the truth")
+    ap.add_argument("--link", default=None, choices=["cqi", "shannon"],
+                    help="digital utility files: link adaptation (default: the file's)")
+    ap.add_argument("--gap-db", type=float, default=None, help="digital, shannon link: SNR gap")
+    ap.add_argument("--digital-mode", default=None, choices=["step", "interp"],
+                    help="digital: best complete file, or an ideal scalable codec")
+    ap.add_argument("--digital-max-phases", type=int, default=None,
+                    help="digital: slots one user may take (default: the file's, 12)")
     ap.add_argument("--snr-clip", nargs=2, type=float, default=[-2.0, 22.0],
                     help="slot SNRs clipped to the codec's training range")
     ap.add_argument("--policies", nargs="+", default=None, choices=POLICIES,
@@ -337,14 +365,23 @@ def main():
     needs = sorted(set(a.policies) & set(NEEDS_TARGET))
     if needs and a.target is None:
         ap.error(f"{', '.join(needs)} need --target")
-    util = Utility.load(a.utility)
+    dig = {"link": a.link, "gap_db": a.gap_db, "mode": a.digital_mode, "P": a.digital_max_phases}
+    util = load_utility(a.utility, **dig)
+    belief = load_utility(a.belief, **dig) if a.belief else None
+    if belief is not None and belief.names != util.names:
+        ap.error("--belief must describe the same images, in the same order, as --utility")
+    if not 0.0 <= a.fade_corr < 1.0:
+        ap.error("--fade-corr is in [0, 1)")
     summary, base, dumped = simulate(util, a.users, a.slots, a.frames, a.mean_snr, a.fading,
                                      a.snr_clip, a.policies, a.seed, a.same_image,
                                      a.pred_noise, a.alpha, a.dump, a.target, a.margin,
-                                     a.plan_offset)
+                                     a.plan_offset, belief, a.fade_corr)
     print(f"{a.users} users, {a.slots} slots ({a.slots / a.users:.2f} phases per user, at most "
           f"{util.P}), {a.frames} frames, mean SNR U{a.mean_snr} dB, fading {a.fading}"
+          f"{f' (slot correlation {a.fade_corr:g})' if a.fade_corr else ''}"
           f"{', same image' if a.same_image else ''}"
+          f"{f', transmitter curves {a.belief}' if a.belief else ''}"
+          f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if getattr(util, 'kind', '') == 'digital' else ''}"
           f"{f', prediction noise {a.pred_noise:g}' if a.pred_noise else ''}"
           f"{f', alpha {a.alpha:g}' if a.alpha else ''}; utility {a.utility}")
     if a.target is None:

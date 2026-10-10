@@ -56,23 +56,24 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
   profiles within 0.03-0.07 dB and decoded schedules within 0.08 dB (p95 0.29), no bias.
   Separable over slots, position- and SNR-aware: the value of a slot to a user is a
   closed-form function of what it already holds.
-* Mean quality. First numbers on the real Kodak utility: PF takes the multi-user diversity
-  gain (+1.1 dB over round robin) and content-aware LENGTHS add only +0.05 dB (equal-slope,
-  fixed or re-planned); the myopic marginal-utility greedy loses 0.23 dB. What PF misses is
-  how much a slot is worth to the user in QUALITY: the ADVANTAGE index serves the user whose
-  predicted PSNR gain from this slot most exceeds its gain from a slot at its mean SNR
-  (`slope_adv`): +0.5 dB over PF on a stand-in utility, about 0.3 dB of it from valuing slots
-  in PSNR (users near their noise-free quality take the bad slots) and 0.2 dB from the
-  position (sensitive head phases wait for peaks). To be confirmed on the real utility and by
-  decoding (COMMANDS.txt section 7).
+* Mean quality. On the real Kodak utility PF takes the multi-user diversity gain (+1.1 dB
+  over round robin) and content-aware LENGTHS add only +0.05 dB (equal-slope, fixed or
+  re-planned); the myopic marginal-utility greedy loses 0.23 dB. What PF misses is how much a
+  slot is worth to the user in QUALITY: the ADVANTAGE index serves the user whose predicted
+  PSNR gain from this slot most exceeds its gain from a slot at its mean SNR (`slope_adv`):
+  +0.476 dB over PF, +0.465 decoded by the codec (`docs/NOTES.md`, P1 step 3), +0.46 dB on the
+  5th-percentile user. On a stand-in about 0.3 dB of it is valuing slots in PSNR (users near
+  their noise-free quality take the bad slots) and 0.2 dB the position (sensitive head phases
+  wait for peaks).
 * Quality target. The share of users reaching Q dB. `online`: every slot, admit the users with
   the smallest remaining need (phases at the mean SNR, from what they already hold) that fit
   in the slots left, open spare slots to all, serve by the advantage index, and stop a user as
   soon as the model says its realised SNRs got it there. Against PADC's rule (per-image length
-  at the mean SNR, fixed; given shortest-first admission and PF timing) the stand-in gives
-  +9.5 / +14.5 / +11.5 points at T = 16 / 24 / 36 (K = 8, Q = 30 dB). Its three parts each
-  need a property of this codec: per-image sizing (curves), online stopping (encode-once
-  prefix + mixed-SNR utility, no feedback beyond CQI) and advantage timing (the utility).
+  at the mean SNR, fixed; given shortest-first admission and PF timing): +9.4 points of users
+  at 30 dB (K = 8, T = 24), +10.0 decoded, +6.9 to +10.4 over targets, frame lengths, K = 16
+  and identical images. Its parts: per-image sizing (+5.0 points; the curves), online stopping
+  (+3.9; encode-once prefix + mixed-SNR utility, no feedback beyond CQI), advantage timing
+  (+3.2 to +3.4; the utility), admission (+2.0, +11 in tight frames).
 * Clairvoyant bound: all slot SNRs known in advance; the greedy on marginal utilities over
   (user, slot) pairs (the equal-slope rule of `alloc/core.py` generalised to slots).
 * Theory to state: (i) with the clairvoyant SNRs and concave utilities, the greedy is optimal
@@ -108,9 +109,10 @@ slots to bring all users to a target. Kodak and CLIC; K in {4, 8, 16}; mean SNRs
 |---|---|---|
 | P-A mixed-SNR decoding | `tools/mixed_snr.py` on the w1 ViT, then on a `--snr-chunks 4` fine-tune vs its constant-SNR control (COMMANDS.txt section 5) | a mixed prefix within ~0.2 dB of the model's prediction; constant-SNR quality within 0.1 dB of the control. **2026-10-10: passes with `--snr-chunks` training (additive within 0.06 dB on 2-chunk means; constant-SNR cost 0.06-0.10 dB); fails for constant-SNR decoders** |
 | P-B utility model | the same runs, then per phase (COMMANDS.txt section 6) | MAE <= 0.2 dB per image on held-out profiles. **2026-10-10: passes for snrc4 (held-out 0.03-0.07 dB per image and phase, replayed schedules 0.08 dB); s1 0.12-0.29** |
-| P-C1 mean quality | simulator on the real utility, then the codec on the schedules (section 7) | >= 0.3 dB mean PSNR over PF, decoded, K = 8, Rayleigh. **2026-10-10: content-aware lengths +0.05 (the first form of this gate fails); the advantage index is the candidate** |
-| P-C2 quality target | the same, with `--target` | >= 5 points more users at the target than PADC's rule (with shortest-first admission and PF timing), decoded, K = 8, T = 24, 30 dB |
-| P-D separation | the digital baselines | ahead at low and mid SNR, honest about high SNR |
+| P-C1 mean quality | simulator on the real utility, then the codec on the schedules (section 7) | >= 0.3 dB mean PSNR over PF, decoded, K = 8, Rayleigh. **2026-10-10: content-aware lengths +0.05 (the first form fails); the advantage index passes: +0.476 simulated, +0.465 [0.39, 0.53] decoded; +0.34 to +0.49 over every scenario** |
+| P-C2 quality target | the same, with `--target` | >= 5 points more users at the target than PADC's rule (with shortest-first admission and PF timing), decoded, K = 8, T = 24, 30 dB. **2026-10-10: passes: +9.4 simulated, +10.0 [7.3, 12.9] decoded (+9.6 with a 0.2 dB margin, 0.2% missed); +6.9 to +10.4 over the scenarios, +4.2 with 10% curve errors** |
+| P-C3 realistic transmitter | the same with `--belief` (each image calibrated from 2P constant decodes; kappa, rho from other images), correlated fading (section 8) | P-C1 and P-C2 still pass |
+| P-D separation | `tools/digital_rd.py` + the same schedulers on a digital utility (alloc/digital.py: BPG, ideal CQI link adaptation, free file switching) | ahead of BPG + CQI link adaptation at low and mid SNR; honest against the capacity bound |
 
 G-A, G-B and G-C of `docs/ASSESSMENT.md` stay relevant: G-A picks the codec, G-B says how much
 the content part of the utility can add, G-C prices the prefix.
@@ -128,7 +130,12 @@ the content part of the utility can add, G-C prices the prefix.
 * The decoder may need a per-token noise map (DeepJSCC-MIMO's heatmap idea) for strongly mixed
   profiles; that is the next code change if P-A fails after `--snr-chunks` training.
 * Correlated fading (Jakes) and OFDMA change the numbers, not the method; both belong in the
-  paper's evaluation.
+  paper's evaluation (`--fade-corr`: Gauss-Markov slot gains; on the stand-in a correlation of
+  0.9 widens online's lead over padc, whose fixed lengths cannot react to a long fade).
+* The transmitter's knowledge of each image's curves: 10% log-MSE errors halve the target
+  lead (+4.2). The base station has the image and the codec, so it can calibrate each image
+  from 2P constant-SNR decodes of its own (`tools/utility_fit.py --calib`), with kappa and rho
+  measured once on other images: gate P-C3.
 * The codec's competitiveness: at CBR 1/12 and 1 / 4 / 7 dB on Kodak this tree's w1 ViT gives
   28.94 / 30.26 / 31.35 dB, JSCCformer-f 30.84 / 32.05 / 33.16 with two-block feedback; after
   discounting ~1 dB of feedback gain, still ~0.8-0.9 dB behind, and about on par with PADC's
