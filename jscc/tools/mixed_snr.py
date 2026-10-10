@@ -34,7 +34,9 @@ Designs (--design):
             validate on. Use with --chunks phase and the phase CBRs (1/48 ... 1/8)
     file    every entry of --profiles-json ({"entries": [{"image", "snrs"}]}, one SNR per
             phase in delivery order; tools/schedule_sim.py --dump writes it): decoded and
-            scored, next to the PSNR the utility model predicted for it
+            scored, next to the PSNR the utility model predicted for it; with a "target"
+            (schedule_sim.py --target), also the share of users that reach it, decoded
+            against predicted
 
 --chunks K cuts a prefix into K equal parts; --chunks phase cuts it at phase
 boundaries (a phase = one token per patch position: CBR 1/48 at 256 px), so a
@@ -57,6 +59,7 @@ from data.datasets import sweep_dataset  # noqa: E402
 from engine import autocast, reseed  # noqa: E402
 from net.channel import piecewise_snr  # noqa: E402
 from net.network import JSCC  # noqa: E402
+from tools.schedule_sim import bootstrap  # noqa: E402
 from utils.common import load_weights  # noqa: E402
 from utils.metrics import MetricSuite  # noqa: E402
 from utils.parser import create_parser  # noqa: E402
@@ -204,6 +207,37 @@ def score_profiles(model, cfg, enc, x, k, units, cuts, profiles, suite, seed):
     return out
 
 
+def paired_report(entries, target=None):
+    """Decoded differences between policies on the same frames (tools/schedule_sim.py
+    dumps every policy on the same images and fades): per frame the users' mean PSNR, or
+    with a target the share that reaches it, minus pf's (and padc's), 95% bootstrap CIs
+    over frames. A user that received nothing scores as the model's empty prefix."""
+    frames = {}
+    for e in entries:
+        if "frame" not in e or "user" not in e:
+            return
+        a = e.get("actual_psnr")
+        a = e.get("predicted_psnr", 0.0) if a is None else a
+        v = float(a >= target) if target is not None else float(a)
+        frames.setdefault(e.get("policy", "?"), {}).setdefault(e["frame"], []).append(v)
+    for base in ("pf", "padc"):
+        if base not in frames or len(frames) < 2:
+            continue
+        what = "share reaching the target" if target is not None else "mean PSNR"
+        scale, unit = (100.0, " pts") if target is not None else (1.0, " dB")
+        print(f"decoded, paired by frame: {what} minus {base}'s")
+        for pol in sorted(frames):
+            if pol == base:
+                continue
+            common = sorted(set(frames[pol]) & set(frames[base]))
+            if not common:
+                continue
+            d = np.array([np.mean(frames[pol][f]) - np.mean(frames[base][f]) for f in common])
+            lo, hi = bootstrap(d)
+            print(f"  {pol:14s} {scale * d.mean():+7.3f}{unit} [{scale * lo:+.3f}, {scale * hi:+.3f}]  "
+                  f"({len(common)} frames)")
+
+
 def run_file(model, cfg, args, ds, loader, suite):
     with open(args.profiles_json) as f:
         spec = json.load(f)
@@ -246,6 +280,18 @@ def run_file(model, cfg, args, ds, loader, suite):
             a = np.mean([e["actual_psnr"] for e in sel])
             pr = np.mean([e["predicted_psnr"] for e in sel])
             print(f"  {pol:12s} users {len(sel):5d}  actual mean PSNR {a:7.3f}  predicted {pr:7.3f}")
+    tgt = spec.get("target")
+    if tgt is not None:                     # target runs: a user with nothing is not satisfied
+        print(f"target {tgt:g} dB: share of users at or above it, actual (decoded) vs predicted; "
+              f"'missed' = predicted to make it but decoded below")
+        for pol in sorted({e.get("policy", "?") for e in entries}):
+            sel = [e for e in entries if e.get("policy", "?") == pol]
+            act = np.array([(e.get("actual_psnr") or 0.0) >= tgt for e in sel])
+            pre = np.array([e.get("predicted_psnr", 0.0) >= tgt for e in sel])
+            print(f"  {pol:12s} users {len(sel):5d}  actual {100 * act.mean():5.1f}%  predicted "
+                  f"{100 * pre.mean():5.1f}%  missed {100 * (pre & ~act).mean():4.1f}%  "
+                  f"extra {100 * (act & ~pre).mean():4.1f}%")
+    paired_report(entries, tgt)
     spec["entries"] = entries
     spec["decoded_by"] = {"checkpoint": cfg.pretrained, "run_name": cfg.run_name}
     return spec

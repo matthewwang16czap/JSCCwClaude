@@ -4,10 +4,11 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-NEW on 2026-10-10: section 6 (after your section-5 results): the utility model per
-phase and the first scheduling numbers, about 40 min on GPU 5 plus a few CPU minutes.
-Section 5 is done; sections 0-4 are unchanged (send 4b-4d when you have them: the
-allocation oracle sizes the content part of the scheduler). `git pull` first.
+NEW on 2026-10-10 (second sheet of the day): section 7, after your section-6 results.
+About 12 CPU minutes and 20 min on GPU 5; an optional ~5 h data run for GPU 4 (7e).
+Sections 5 and 6 are done; sections 0-4 are unchanged (send 4b-4d when you have them).
+Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull origin
+claude/gifted-newton-cfldb8` (main stops at section 5).
 
 This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
 are kept under the same names; its encoder-only runs are dropped; the matched-compute
@@ -236,7 +237,7 @@ python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
 #                                                      (the transmitter knows it)
 
 --------------------------------------------------------------------------------
- 5. THE NEW PROBLEM: FIRST MEASUREMENTS (docs/PROBLEM.md, gates P-A and P-B)
+ 5. THE NEW PROBLEM: FIRST MEASUREMENTS (docs/PROBLEM.md, gates P-A and P-B) -- DONE
 --------------------------------------------------------------------------------
 # A scheduled user receives its prefix in chunks, slot by slot, at the slots' SNRs. Does
 # the ViT decode such a mixed-SNR prefix as well as a constant-SNR one, and which simple
@@ -293,7 +294,7 @@ python tools/paired.py ${VT}_w1 ${VT}_s1                # what 400 more epochs a
 #                                                      simulator (next turn's code)
 
 --------------------------------------------------------------------------------
- 6. PROBLEM P1, STEP 2: the utility model per phase, first scheduling numbers
+ 6. PROBLEM P1, STEP 2: the utility model per phase, first scheduling numbers -- DONE
     (docs/PROBLEM.md gates P-B and P-C; section 5's results: docs/NOTES.md "Problem P1")
 --------------------------------------------------------------------------------
 # Section 5 showed: after --snr-chunks training the distortion is ADDITIVE over chunks
@@ -369,3 +370,106 @@ cat results/sched.txt results/replay.txt
 #   replay: snrc4 predicted - actual within ~0.2 dB; (s1 - snrc4) actual on the same
 #        histories = what piecewise training is worth under scheduling
 
+--------------------------------------------------------------------------------
+ 7. PROBLEM P1, STEP 3: the advantage index and the quality target, on the real utility
+    (docs/NOTES.md "P1, step 2"; docs/PROBLEM.md gates P-C1 and P-C2)
+--------------------------------------------------------------------------------
+# Section 6: P-B passes (the model predicts the codec on real schedules within 0.08 dB), but
+# content-aware lengths add only +0.05 dB over PF. Two new things, designed on a stand-in
+# utility (the real mean curves + a synthetic content spread), now on the real one:
+#   * mean PSNR: slope_adv, the ADVANTAGE index (serve the user whose PSNR gain from this
+#     slot most exceeds its gain from a slot at its mean SNR); stand-in: +0.5 dB over PF.
+#     fixed_uni (equal shares, PF timing) checks whether online lengths matter at all.
+#   * --target Q: the share of users that reach Q dB. padc = PADC's per-image length at the
+#     mean SNR (plus shortest-first admission and PF timing); online = admission by remaining
+#     need + advantage timing + stopping on the realised SNRs; stand-in: +10-15 points.
+# Then schedules of both are DECODED by the codec, with paired differences per frame.
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+S1=${VT}_s1/models/last.pt
+U=results/utility_snrc4.json
+SIM="--utility $U --frames 2000"
+REP="--img-size 256 --channel-type awgn --amp --testset Kodak --design file"
+
+# 7a. CPU, ~45 s each: mean PSNR, all policies (now with fixed_uni and slope_adv), the
+#     scenarios of 6d plus equal mean SNRs
+python tools/schedule_sim.py $SIM --out results/s7_mean_main.json | tee results/s7_mean.txt
+python tools/schedule_sim.py $SIM --same-image | tee -a results/s7_mean.txt
+python tools/schedule_sim.py $SIM --slots 16 | tee -a results/s7_mean.txt
+python tools/schedule_sim.py $SIM --slots 36 | tee -a results/s7_mean.txt
+python tools/schedule_sim.py $SIM --users 16 --slots 48 | tee -a results/s7_mean.txt
+python tools/schedule_sim.py $SIM --mean-snr 5 5 | tee -a results/s7_mean.txt
+python tools/schedule_sim.py $SIM --pred-noise 0.1 | tee -a results/s7_mean.txt
+
+# 7b. CPU, ~35 s each (~90 s with 16 users): the quality target. 30 dB is about the mean
+#     quality of 3 phases at 7 dB; then 28 / 32 dB, tight / loose frames, 16 users, the
+#     same image (no content diversity), curves with errors, future phases planned 2 dB up
+python tools/schedule_sim.py $SIM --target 30 --out results/s7_tgt30.json | tee results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 28 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 32 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --slots 16 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --slots 36 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --users 16 --slots 48 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --same-image | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --pred-noise 0.1 | tee -a results/s7_tgt.txt
+python tools/schedule_sim.py $SIM --target 30 --plan-offset 2 | tee -a results/s7_tgt.txt
+
+# 7c. CPU, seconds: 60 frames of schedules to decode (fewer policies, twice 6e's frames);
+#     the target ones twice: aiming at the target itself and 0.2 dB above it (the model's
+#     error is 0.08 dB MAE, 0.29 p95)
+python tools/schedule_sim.py --utility $U --frames 60 --dump 60 \
+  --policies rr pf fixed_uni fixed_slope slope_adv --out results/s7_rep_mean.json
+python tools/schedule_sim.py --utility $U --frames 60 --dump 60 --target 30 \
+  --policies pf padc padc_adv stop_adv online --out results/s7_rep_tgt.json
+python tools/schedule_sim.py --utility $U --frames 60 --dump 60 --target 30 --margin 0.2 \
+  --policies pf padc padc_adv stop_adv online --out results/s7_rep_tgt_m02.json
+
+# 7d. GPU 5, ~5 min each: decode them. Each prints predicted vs decoded per policy, then the
+#     DECODED differences to pf (and padc), paired by frame: those are the gates
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --profiles-json results/s7_rep_mean_histories.json --out results/s7_dec_mean_snrc4.json \
+  | tee results/s7_dec.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
+  --profiles-json results/s7_rep_mean_histories.json --out results/s7_dec_mean_s1.json \
+  | tee -a results/s7_dec.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --profiles-json results/s7_rep_tgt_histories.json --out results/s7_dec_tgt_snrc4.json \
+  | tee -a results/s7_dec.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --profiles-json results/s7_rep_tgt_m02_histories.json --out results/s7_dec_tgt_m02_snrc4.json \
+  | tee -a results/s7_dec.txt
+
+# 7e. OPTIONAL, GPU 4 if it is idle (nvidia-smi -i 4), ~4-5 h: does more training data close
+#     part of the codec's gap to JSCCformer-f (docs/PROBLEM.md, risks)? E2b's recipe (from w1,
+#     --snr-chunks 4) on DIV2K + Flickr2K for the same number of image samples (400 epochs x
+#     800 images = 93 epochs x 3450). Needs $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR (2650 PNGs,
+#     https://cv.snu.ac.kr/research/EDSR/Flickr2K.tar); skip it if the folder is missing.
+ls $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR | wc -l       # expect 2650
+W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
+FTD="--trainset DIV2K Flickr2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 93 --valid-freq 31 --lr 5e-5 --warmup-steps 200 \
+  --tag d1 --snr-chunks 4"
+CUDA_VISIBLE_DEVICES=4 nohup python main.py $FTD --backbone vit --pretrained $W1V \
+  > s7_gpu4_D1_snrc4_flickr.out 2>&1 &
+# when it has finished (tail s7_gpu4_D1_snrc4_flickr.out):
+python tools/compare_runs.py ${VT}_snrc4_s1 history/vit_p8d768x10s4_awgn_DIV2K+Flickr2K_256_snrc4_d1 \
+  --test --per-snr
+
+# --- reading section 7 (send back everything it prints) ---------------------------
+cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
+# and 7e's compare_runs table if you ran it
+
+# Decision (docs/PROBLEM.md, section 5):
+#   P-C1  s7_mean, main case: slope_adv - pf >= +0.3 dB, AND decoded (s7_dec, first file,
+#         "minus pf's" block) >= +0.3 dB          -> the mean-quality claim is the index
+#   P-C2  s7_tgt, 30 dB: online - padc >= +5 points, AND decoded (the margin 0.2 file,
+#         "minus padc's" block) >= +5 points with 'missed' <= ~3% -> the QoS claim, the
+#         paper's lead
+#   both fail                                      -> the scheduling paper is off; I re-plan
+#         around the codec-side results (docs/ASSESSMENT.md)
+#   the s1 decode of the mean schedules: what piecewise training is worth under slope_adv

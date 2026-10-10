@@ -140,8 +140,11 @@ such profiles (K chunks at random SNRs from `--snr-range`, cut at random token p
 `--chunks K | phase`); `tools/utility_fit.py` fits the additive model of
 `alloc/utility.py` to it (D = Dsrc(L) + C(L) sum_j rho_L[j] phi(n_j), held-out profiles
 scored); `tools/schedule_sim.py` simulates opportunistic multi-user scheduling on it
-(round robin, max-SNR, PF, PADC-style fixed lengths, equal-slope lengths, greedy) and
-`--dump`s histories that `mixed_snr.py --design file` replays through the codec.
+for the mean PSNR (round robin, max-SNR, PF, equal shares, PADC-style and equal-slope
+lengths, the advantage index `slope_adv`, greedy) or, with `--target Q`, for the share of
+users reaching Q dB (PADC's per-image lengths, online stopping, `online`: admission by
+remaining need + advantage timing), and `--dump`s histories that `mixed_snr.py --design
+file` replays through the codec (decoded differences between policies, paired by frame).
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`

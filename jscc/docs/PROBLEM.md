@@ -23,8 +23,9 @@ that decide whether it carries a TWC paper.
   the next S / (sym x tiles) tokens of every tile. At the deadline user k holds L_k tokens per
   tile that arrived over its slots' SNRs, and decodes once.
 * Objective: maximise the mean (or an alpha-fair function) of the users' quality at the
-  deadline; variants: the slots needed to bring every user to a target (makespan), the share
-  of users above a target.
+  deadline; or, the QoS form (PADC's own objective, made multi-user): the share of users whose
+  image reaches a target quality by the deadline; variant: the slots needed to bring every
+  user to a target (makespan).
 
 ## 2. Why this codec, and not the published ones
 
@@ -32,7 +33,7 @@ that decide whether it carries a TWC paper.
 |---|---|---|---|---|
 | the code exists before the slot SNRs are known | yes: SNR- and rate-agnostic encoder | no: the encoder's attention blocks take the SNR | no: the encoder re-encodes every block from feedback | per-rate models trained over random SNR: yes |
 | the length is decided online, slot by slot | yes: any prefix decodes | prefix code (channel prefix), but the length is chosen before sending | yes, block by block | no: one length per model |
-| a prefix whose chunks had different SNRs decodes | to be shown (gate P-A; `--snr-chunks` training) | decoder conditioned on ONE SNR for the whole code | yes (feedback carries it) | n/a |
+| a prefix whose chunks had different SNRs decodes | yes after `--snr-chunks` training (P-A); predicted per image within 0.08 dB (P-B) | decoder conditioned on ONE SNR for the whole code | yes (feedback carries it) | n/a |
 | no feedback beyond CQI | yes | yes | no: channel-output feedback of every symbol, a decoder copy per user at the transmitter | yes |
 | content-aware marginal value of a slot, before sending | per-image curves (alloc/) | OraNet (per image, per SNR, per rate) | from the decoder copy | no |
 | many users | yes | per-image rule, no shared budget | single link (and a 2-user broadcast) | n/a |
@@ -46,31 +47,42 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
 
 ## 3. The scheduler
 
-* Utility model (gate P-B), as measured on 2026-10-10 (`docs/NOTES.md`, Problem P1): NOT an
+* Utility model (gate P-B, passed 2026-10-10, `docs/NOTES.md` P1 and P1 step 2): NOT an
   effective SNR of the chunks -- the code is ordered and early tokens are 2-20x more
   noise-sensitive -- but an additive noise-sensitivity model, valid once the decoder is trained
   on piecewise SNRs (`--snr-chunks`):
   D_k(L; n_1..n_L) = Dsrc_k(L) + C_k(L) sum_j rho_L[j] phi(n_j), phi(n) = n / (1 + n / kappa)
-  (`alloc/utility.py`, fitted by `tools/utility_fit.py`). Separable over slots, position- and
-  SNR-aware: the value of a slot to a user is a closed-form function of what it already holds.
-* Online policy: in slot t, serve argmax_k w_k [q_k(L_k + D, history + g_k(t)) - q_k(L_k,
-  history)] -- the marginal utility of the slot, which grows with the slot's SNR (multi-user
-  diversity) and with the image's need (content). w_k = U'(q_k) gives alpha-fairness (w = 1:
-  mean quality). A threshold version (serve only above an opportunity cost lambda_k) handles
-  short deadlines; dynamic programming for small K is the benchmark.
-* First simulations (`tools/schedule_sim.py`, on an illustrative utility, `docs/NOTES.md`): the
-  myopic greedy is beaten by a TWO-TIMESCALE policy: equal-slope lengths from the content (at
-  the users' mean SNRs) plus PF timing from the CQI. With identical images PF alone already
-  takes the multi-user diversity gain (+1.1 dB over round robin) and nothing content-aware adds
-  to it; with a synthetic content spread the two-timescale policy adds +0.47 dB over PF. The
-  content part on real per-image curves decides P-C.
+  (`alloc/utility.py`, fitted by `tools/utility_fit.py`): per image and phase, held-out
+  profiles within 0.03-0.07 dB and decoded schedules within 0.08 dB (p95 0.29), no bias.
+  Separable over slots, position- and SNR-aware: the value of a slot to a user is a
+  closed-form function of what it already holds.
+* Mean quality. First numbers on the real Kodak utility: PF takes the multi-user diversity
+  gain (+1.1 dB over round robin) and content-aware LENGTHS add only +0.05 dB (equal-slope,
+  fixed or re-planned); the myopic marginal-utility greedy loses 0.23 dB. What PF misses is
+  how much a slot is worth to the user in QUALITY: the ADVANTAGE index serves the user whose
+  predicted PSNR gain from this slot most exceeds its gain from a slot at its mean SNR
+  (`slope_adv`): +0.5 dB over PF on a stand-in utility, about 0.3 dB of it from valuing slots
+  in PSNR (users near their noise-free quality take the bad slots) and 0.2 dB from the
+  position (sensitive head phases wait for peaks). To be confirmed on the real utility and by
+  decoding (COMMANDS.txt section 7).
+* Quality target. The share of users reaching Q dB. `online`: every slot, admit the users with
+  the smallest remaining need (phases at the mean SNR, from what they already hold) that fit
+  in the slots left, open spare slots to all, serve by the advantage index, and stop a user as
+  soon as the model says its realised SNRs got it there. Against PADC's rule (per-image length
+  at the mean SNR, fixed; given shortest-first admission and PF timing) the stand-in gives
+  +9.5 / +14.5 / +11.5 points at T = 16 / 24 / 36 (K = 8, Q = 30 dB). Its three parts each
+  need a property of this codec: per-image sizing (curves), online stopping (encode-once
+  prefix + mixed-SNR utility, no feedback beyond CQI) and advantage timing (the utility).
 * Clairvoyant bound: all slot SNRs known in advance; the greedy on marginal utilities over
   (user, slot) pairs (the equal-slope rule of `alloc/core.py` generalised to slots).
 * Theory to state: (i) with the clairvoyant SNRs and concave utilities, the greedy is optimal
   for the relaxed problem (equal slopes); (ii) for long frames and i.i.d. fading, the
   marginal-utility rule is the gradient scheduler, asymptotically optimal for sums of concave
-  utilities (Stolyar; Agrawal and Subramanian); (iii) the price of prefix coding is the
-  nesting penalty (measured: 0.2-0.5 dB), which the scheduling gain has to exceed.
+  utilities (Stolyar; Agrawal and Subramanian) -- the advantage index is its finite-deadline,
+  fixed-quota form; (iii) for the target, shortest-remaining-need first is the classic rule
+  for the number of jobs meeting a deadline (Moore-Hodgson with known sizes); (iv) the price
+  of prefix coding is the nesting penalty (measured: 0.2-0.5 dB), which the scheduling gain
+  has to exceed.
 
 ## 4. Baselines
 
@@ -95,8 +107,9 @@ slots to bring all users to a target. Kodak and CLIC; K in {4, 8, 16}; mean SNRs
 | gate | test | pass |
 |---|---|---|
 | P-A mixed-SNR decoding | `tools/mixed_snr.py` on the w1 ViT, then on a `--snr-chunks 4` fine-tune vs its constant-SNR control (COMMANDS.txt section 5) | a mixed prefix within ~0.2 dB of the model's prediction; constant-SNR quality within 0.1 dB of the control. **2026-10-10: passes with `--snr-chunks` training (additive within 0.06 dB on 2-chunk means; constant-SNR cost 0.06-0.10 dB); fails for constant-SNR decoders** |
-| P-B utility model | the same runs, then per phase (COMMANDS.txt section 6) | MAE <= 0.2 dB per image on held-out profiles. **2026-10-10: every symmetric rule fails (0.23-0.71 dB); the additive model fits the means within 0.09 dB; per image and per phase: section 6** |
-| P-C scheduling gain | simulator on curve files (next turn), then the codec in the loop | >= 0.5 dB mean PSNR over PF with the same codes, and >= 0.3 dB over PADC-style fixed lengths, K = 8, Rayleigh |
+| P-B utility model | the same runs, then per phase (COMMANDS.txt section 6) | MAE <= 0.2 dB per image on held-out profiles. **2026-10-10: passes for snrc4 (held-out 0.03-0.07 dB per image and phase, replayed schedules 0.08 dB); s1 0.12-0.29** |
+| P-C1 mean quality | simulator on the real utility, then the codec on the schedules (section 7) | >= 0.3 dB mean PSNR over PF, decoded, K = 8, Rayleigh. **2026-10-10: content-aware lengths +0.05 (the first form of this gate fails); the advantage index is the candidate** |
+| P-C2 quality target | the same, with `--target` | >= 5 points more users at the target than PADC's rule (with shortest-first admission and PF timing), decoded, K = 8, T = 24, 30 dB |
 | P-D separation | the digital baselines | ahead at low and mid SNR, honest about high SNR |
 
 G-A, G-B and G-C of `docs/ASSESSMENT.md` stay relevant: G-A picks the codec, G-B says how much
@@ -104,8 +117,14 @@ the content part of the utility can add, G-C prices the prefix.
 
 ## 6. Risks
 
-* PF with prefix codes may take most of the gain (multi-user diversity is content-blind); the
-  semantic part then rests on G-B's oracle size. Report both parts separately.
+* PF with prefix codes takes most of the mean-quality gain, and content-aware lengths add
+  +0.05 dB on Kodak (measured): the mean-quality claim rests on the advantage index, the
+  content claim on the quality target. Report the parts separately.
+* For mean quality the prefix code itself is not required: equal shares with PF timing tie PF
+  (what one model per CBR allows), and the advantage index works on any code split over slots
+  once the decoder is trained piecewise (with uniform rho: about +0.3 of its +0.5 dB on the
+  stand-in), so a per-CBR codec without the nesting penalty is the fair baseline there. What
+  is prefix-specific: the position part of the index and, for the target, online stopping.
 * The decoder may need a per-token noise map (DeepJSCC-MIMO's heatmap idea) for strongly mixed
   profiles; that is the next code change if P-A fails after `--snr-chunks` training.
 * Correlated fading (Jakes) and OFDMA change the numbers, not the method; both belong in the
