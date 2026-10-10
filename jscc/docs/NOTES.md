@@ -277,3 +277,55 @@ per-budget LoRA heads in the vit decoder trunk (`--rate-mod both`), alone and wi
 linear exits, and a second seed of the c1 control and of the c1 linear exits (G-C).
 `--eval-seed` (new, default 42) keeps the test's channel draws fixed across training seeds,
 so the seed-43 runs pair with the c1 runs; seed-42 runs are scored exactly as before.
+
+## Problem P1: mixed-SNR prefixes (2026-10-10)
+
+`tools/mixed_snr.py`, Kodak, two equal chunks per prefix (chunk 1 = the first half of the
+tokens), every pair of chunk SNRs from 1, 4, 7, 10, 13 dB. Three models: the w1 ViT, its
+400-epoch constant-SNR fine-tune (s1) and the same fine-tune on 4-chunk piecewise SNRs
+(snrc4, `--snr-chunks 4`).
+
+| | 1/24 | 1/12 | 1/8 |
+|---|---|---|---|
+| constant 1 / 7 / 13 dB, w1 | 27.27 / 29.40 / 30.56 | 28.94 / 31.35 / 32.76 | 29.73 / 31.86 / 32.98 |
+| snrc4 - s1 at constant SNR | -0.06 to -0.07 | -0.06 to -0.10 | -0.06 to -0.10 |
+| best symmetric rule, MAE / p95 (s1) | noise 0.23 / 0.63 | noise 0.45 / 0.86 | 0.68 / 1.48 |
+| best symmetric rule, MAE / p95 (snrc4) | noise 0.28 / 0.86 | 0.55 / 1.37 | 0.71 / 1.65 |
+| order effect, best chunk first - last (s1 / snrc4) | +0.34 / +0.55 | +0.89 / +1.10 | +1.35 / +1.42 |
+| [13, 1] dB (s1 / snrc4) | 28.02 / 29.35 | 30.80 / 31.73 | 32.57 / 32.70 |
+
+1. **No symmetric rule works** (mean dB, mean noise, mean capacity: MAE 0.23-0.71 dB, p95 up
+   to 2 dB), and none can: the code is ordered, so WHICH tokens a slot carries matters. The
+   first half of a prefix is 2-20x more noise-sensitive than the second.
+2. **A constant-SNR decoder mis-reads mixed prefixes.** w1 and s1 at 1/24: a clean first chunk
+   and a 1 dB second chunk score BELOW a 7 dB first chunk with the same second chunk (27.93 <
+   28.16): the SNR-blind decoder infers the noise level from what it sees and over-trusts the
+   noisy half. Piecewise training removes it (+1.33 dB on that profile, +0.94 at 1/12) at a
+   constant-SNR cost of 0.06-0.10 dB.
+3. **After piecewise training the distortion is ADDITIVE over chunks.** A two-way additive fit of
+   the 5 x 5 MSE table has max error 0.06 / 0.01 / 0.03 dB (1/24 / 1/12 / 1/8) for snrc4, against
+   0.53 / 0.39 / 0.09 for s1. A compact form fits as well (`alloc/utility.py`):
+   D = Dsrc(L) + C(L) [rho phi(n1) + (1 - rho) phi(n2)], phi(n) = n / (1 + n / kappa), ONE kappa
+   = 1.78 for all CBRs; rho = 0.68 / 0.80 / 0.94; rms error 0.04 / 0.02 / 0.02 dB (max 0.09). This is the
+   utility model a scheduler needs: separable over slots, position- and SNR-aware.
+4. **The late tokens act like redundancy, not detail.** The fitted noise-free quality is 31.05 /
+   33.41 / 33.52 dB at 1/24 / 1/12 / 1/8: from 1/12 to 1/8 almost no new source information,
+   while the noise sensitivity C drops from 14.6e-4 to 11.1e-4 (the same "tail carries
+   nothing" seen without noise in the tail probes, now with a reason: it buys robustness).
+5. Per-SNR, for the literature: w1 at 1/12 is 28.94 / 30.26 / 31.35 dB at 1 / 4 / 7 dB, about
+   on par with PADC's DeepJSCC-V (read off its Fig. 11) and 1.8-1.9 dB below JSCCformer-f's
+   two-block-feedback numbers (30.84 / 32.05 / 33.16; 1.6-1.8 below its random-SNR "lite"
+   version). About 1 dB of that is feedback, judging by its m = 1 vs m = 2 ablation on CIFAR
+   (+0.8 to +1.05 dB); the rest is the codec. JSCCformer-f trains on ImageNet crops, this tree
+   on DIV2K.
+
+Illustrative scheduling (`tools/schedule_sim.py` on a 6-phase utility EXTRAPOLATED from the
+2-chunk means: lengths 1, 3, 5 interpolated, phase shares assumed geometric; 8 users, 24
+slots, mean SNRs U[0, 15] dB, Rayleigh block fading; NOT a result, a plausibility check):
+PF beats round robin by +1.09 dB (multi-user diversity), and with every user on the same
+image the content-aware policies only tie PF (+0.02). With a SYNTHETIC content spread
+(half the images saturating after 2 phases), equal-slope lengths fixed before the frame
+plus PF timing gain +0.47 dB over PF, re-planning them every slot +0.46, the myopic greedy
++0.38. So the scheduler has two timescales: content-aware lengths, channel-aware timing; the
+size of the content part on REAL curves is the open number (G-B's oracle and the per-image
+utility of the next run).

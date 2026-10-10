@@ -4,10 +4,10 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-NEW on 2026-10-09: section 5, the first measurements for the new target problem
-(docs/PROBLEM.md: scheduling encode-once token prefixes over a fading multi-user
-downlink). Sections 0-4 are unchanged: if the wave is already running, leave it;
-`git pull` (no restart needed) and run section 5 when a card frees up.
+NEW on 2026-10-10: section 6 (after your section-5 results): the utility model per
+phase and the first scheduling numbers, about 40 min on GPU 5 plus a few CPU minutes.
+Section 5 is done; sections 0-4 are unchanged (send 4b-4d when you have them: the
+allocation oracle sizes the content part of the scheduler). `git pull` first.
 
 This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
 are kept under the same names; its encoder-only runs are dropped; the matched-compute
@@ -291,4 +291,81 @@ python tools/paired.py ${VT}_w1 ${VT}_s1                # what 400 more epochs a
 #                                                      for the decoder (DeepJSCC-MIMO's heatmap)
 #   P-B  the rule with the smallest MAE              -> the utility model of the scheduler
 #                                                      simulator (next turn's code)
+
+--------------------------------------------------------------------------------
+ 6. PROBLEM P1, STEP 2: the utility model per phase, first scheduling numbers
+    (docs/PROBLEM.md gates P-B and P-C; section 5's results: docs/NOTES.md "Problem P1")
+--------------------------------------------------------------------------------
+# Section 5 showed: after --snr-chunks training the distortion is ADDITIVE over chunks
+# (alloc/utility.py), symmetric effective-SNR rules fail, early tokens dominate. Now:
+# measure that per phase (one chunk = one phase) for 1/48 ... 1/8, fit the model per image,
+# simulate the scheduler on it, and replay simulated schedules through the codec itself.
+# GPU 5 is free since section 5c finished (use 4 instead if it is idle: change the 5).
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+S1=${VT}_s1/models/last.pt
+mkdir -p results
+MIXP="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --design full --chunks phase --cbrs 1/48 1/24 1/16 1/12 5/48 1/8 --random-profiles 10"
+REP="--img-size 256 --channel-type awgn --amp --testset Kodak --design file \
+  --profiles-json results/sched_main_histories.json"
+SIM="--utility results/utility_snrc4.json --frames 2000"
+
+# 6a. CPU, now: what section 5's reading could not print (VT was not set in that shell),
+#     and the utility fit on section 5's files (per image, two chunks)
+python tools/paired.py ${VT}_s1 ${VT}_snrc4_s1
+python tools/compare_runs.py ${VT}_s1 ${VT}_snrc4_s1 --test --per-snr
+python tools/compare_runs.py ${VT}_w1 ${VT}_grid_c1 --test --per-snr
+python tools/utility_fit.py --mixed results/p1_mixed_snrc4_s1.json
+python tools/utility_fit.py --mixed results/p1_mixed_s1.json
+
+# 6b. GPU 5, ~5-10 min each: one chunk per phase, 1/48 ... 1/8 -- constant profiles, each phase
+#     alone off 7 dB, 10 held-out random profiles per CBR -- for the piecewise-trained model
+#     and for its constant-SNR control
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $MIXP \
+  --out results/p2_full_snrc4.json | tee results/p2_full_snrc4.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $MIXP \
+  --out results/p2_full_s1.json | tee results/p2_full_s1.txt
+
+# 6c. CPU, seconds: fit per image (held-out errors next to the best symmetric rule's) and
+#     write the scheduler's utility file
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --out results/utility_snrc4.json \
+  | tee results/p2_fit_snrc4.txt
+python tools/utility_fit.py --mixed results/p2_full_s1.json | tee results/p2_fit_s1.txt
+
+# 6d. CPU, about a minute each: the scheduler on the Kodak utility. The main case first
+#     (8 users, 24 slots = 3 phases each on average, mean SNRs U[0, 15] dB, Rayleigh), then
+#     the channel part alone (same image), the content part alone (no fading), tight and
+#     loose frames, more users, and curves predicted with errors
+python tools/schedule_sim.py $SIM --users 8 --slots 24 --out results/sched_main.json --dump 30 \
+  | tee results/sched.txt
+python tools/schedule_sim.py $SIM --users 8 --slots 24 --same-image | tee -a results/sched.txt
+python tools/schedule_sim.py $SIM --users 8 --slots 24 --fading none | tee -a results/sched.txt
+python tools/schedule_sim.py $SIM --users 8 --slots 16 | tee -a results/sched.txt
+python tools/schedule_sim.py $SIM --users 8 --slots 36 | tee -a results/sched.txt
+python tools/schedule_sim.py $SIM --users 16 --slots 48 | tee -a results/sched.txt
+python tools/schedule_sim.py $SIM --users 8 --slots 24 --pred-noise 0.1 | tee -a results/sched.txt
+
+# 6e. GPU 5, a few minutes each: 30 frames of simulated schedules (every policy) decoded by
+#     the codec itself -- does the model predict the codec under real schedules (snrc4), and
+#     what does the constant-SNR decoder (s1) lose on the very same schedules?
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --out results/replay_snrc4.json | tee results/replay.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
+  --out results/replay_s1.json | tee -a results/replay.txt
+
+# --- reading section 6 (send back everything it prints) ---------------------------
+cat results/p2_full_snrc4.txt results/p2_fit_snrc4.txt results/p2_fit_s1.txt
+cat results/sched.txt results/replay.txt
+
+# Decision (docs/PROBLEM.md, section 5):
+#   P-B  snrc4 held-out MAE <= 0.2 dB per image  -> the simulator speaks for the codec
+#   P-C  sched_main: best content-aware policy - pf >= +0.5 dB and >= +0.3 over fixed_eq
+#        (PADC's rule); --same-image isolates the channel part, --fading none the content part
+#   replay: snrc4 predicted - actual within ~0.2 dB; (s1 - snrc4) actual on the same
+#        histories = what piecewise training is worth under scheduling
 
