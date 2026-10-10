@@ -446,6 +446,68 @@ def check_snr_profiles(x):
        "a symmetric codec no order effect")
 
 
+def check_schedule():
+    """The utility model (alloc/utility.py), its fit, and the scheduler simulator."""
+    import numpy as np
+
+    from alloc.utility import Utility, fit, noise, phi
+    from tools.mixed_snr import chunk_cuts, make_profiles
+    from tools.schedule_sim import simulate, targets
+
+    print("[scheduling]")
+    rng = np.random.default_rng(0)
+    N, P, kappa = 6, 6, 1.8
+    rho = [(0.5 ** np.arange(L)) / (0.5 ** np.arange(L)).sum() for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    for i in range(0, N, 2):                       # smooth images: little to gain after 2 phases
+        dsrc[i, 2:] = dsrc[i, 1] * np.linspace(0.98, 0.95, P - 2)
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)   # as measured
+    u = Utility(kappa, rho, dsrc, csens, [f"im{i}" for i in range(N)])
+    with tempfile.TemporaryDirectory() as tmp:
+        u.save(os.path.join(tmp, "u.json"))
+        v = Utility.load(os.path.join(tmp, "u.json"))
+    ok(abs(v.psnr(3, [4.0, 9.0]) - u.psnr(3, [4.0, 9.0])) < 1e-12 and u.psnr(0, []) == 10.0
+       and u.psnr(1, [13.0] * 3) > u.psnr(1, [1.0] * 3) and u.psnr(1, [7.0, 1.0]) > u.psnr(1, [1.0, 7.0]),
+       "utility: save/load, empty = d_empty, better with SNR, the first phase counts most")
+    grid = [1.0, 4.0, 7.0, 10.0, 13.0]
+    ok(chunk_cuts(4096, "phase", 1024) == [1024, 2048, 3072] and chunk_cuts(3000, "2", 1024) == [1500],
+       "mixed_snr: chunk boundaries by phase and in equal parts")
+    levels = []
+    for L in range(1, P + 1):
+        prof, kinds = make_profiles("full", L, grid, 7.0, 8, rng)
+        F = phi(noise(np.array(prof)), kappa)
+        D = dsrc[:, L - 1:L] + csens[:, L - 1:L] * (F @ rho[L - 1])[None, :]
+        levels.append({"key": str(L), "profiles": prof, "kinds": kinds,
+                       "psnr": (-10 * np.log10(D)).tolist()})
+    ok(sum(k == "constant" for k in levels[2]["kinds"]) == 5 and "random" in levels[2]["kinds"]
+       and levels[0]["kinds"] == ["constant"] * 5,
+       "mixed_snr full design: constants first, one chunk at a time, held-out random profiles")
+    k_hat, params, rep = fit(levels)
+    worst = max(r["held_out"]["mae"] for r in rep["levels"].values() if "held_out" in r)
+    rho_err = max(np.abs(params[str(L)][2] - rho[L - 1]).max() for L in range(1, P + 1))
+    ok(abs(k_hat / kappa - 1) < 0.05 and worst < 0.01 and rho_err < 0.01,
+       f"utility fit recovers the model: kappa {k_hat:.3f} (true {kappa}), rho within {rho_err:.4f}, "
+       f"held-out MAE {worst:.4f} dB")
+    tg = targets(u, np.arange(4), [3.0, 6.0, 9.0, 12.0], 10, "slope")
+    ok(tg.sum() == 10 and tg.max() <= P, f"equal-slope targets spend the slots: {tg.tolist()}")
+    summ, base_p, dumped = simulate(u, 4, 10, 60, (0.0, 15.0), "none", (-2.0, 22.0),
+                                    ["rr", "pf", "maxsnr", "fixed_slope", "greedy"], seed=1, dump=2)
+    ok(summ["greedy"]["mean_psnr"] > summ["pf"]["mean_psnr"] + 0.05
+       and abs(summ["rr"]["mean_psnr"] - summ["pf"]["mean_psnr"]) < 0.05
+       and summ["maxsnr"]["p5_psnr"] == 10.0,
+       "simulator without fading: content-aware greedy > PF = RR; max-SNR starves a user "
+       f"(greedy {summ['greedy']['vs_pf']:+.2f} dB vs pf)")
+    summ, _, _ = simulate(u, 4, 10, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["rr", "pf"], seed=1)
+    ok(summ["pf"]["mean_psnr"] > summ["rr"]["mean_psnr"] and
+       summ["pf"]["deep_fade_share"] < summ["rr"]["deep_fade_share"],
+       "simulator with fading: PF beats RR and avoids deep fades (multi-user diversity)")
+    ok(len(dumped) == 2 * 5 * 4 and all(len(e["snrs"]) <= P for e in dumped)
+       and all(abs(u.psnr(u.names.index(e["image"]), e["snrs"]) - e["predicted_psnr"]) < 1e-9
+               for e in dumped),
+       "--dump: one history per user, policy and frame, with the PSNR the model predicts")
+
+
 def check_eval_seed(x):
     """Validation and test draw their channel noise from --eval-seed, not --seed, so runs
     of different training seeds are scored on the same draws (paired comparisons)."""
@@ -831,6 +893,7 @@ def main():
     check_budget_heads(x)
     check_eval_seed(x)
     check_snr_profiles(x)
+    check_schedule()
     check_perception(x)
     check_allocation(x)
     check_frontier()

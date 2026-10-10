@@ -84,10 +84,12 @@ net/cascade.py          depth cascade: stages, module kinds, per-level token pos
 net/backbones/          swin_linear.py  hybrid.py  vit.py
 net/modules/            swin.py  transformer.py  rate_mod.py  common.py
 alloc/                  per-image budget policy: core.py (allocation, statistics),
-                        sweep.py (curves), predictor.py (the policy), io.py
+                        sweep.py (curves), predictor.py (the policy), io.py,
+                        utility.py (additive noise-sensitivity model of a prefix, for scheduling)
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
                         mixed_snr.py (prefixes whose chunks arrived at different SNRs)
+                        utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -134,9 +136,13 @@ SNR profiles (`docs/PROBLEM.md`): a token prefix can be sent at a piecewise SNR 
 tokens (slots of a block-fading channel after equalisation): pass a (B, n_tokens) tensor
 as `snr` to `JSCC.send`, built with `net.channel.piecewise_snr`. `--snr-chunks K` trains on
 such profiles (K chunks at random SNRs from `--snr-range`, cut at random token positions);
-`tools/mixed_snr.py` measures how a model decodes them and which effective-SNR rule
-predicts the result. `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute
-SNR x CBR table.
+`tools/mixed_snr.py` measures how a model decodes them (`--design grid | full | file`,
+`--chunks K | phase`); `tools/utility_fit.py` fits the additive model of
+`alloc/utility.py` to it (D = Dsrc(L) + C(L) sum_j rho_L[j] phi(n_j), held-out profiles
+scored); `tools/schedule_sim.py` simulates opportunistic multi-user scheduling on it
+(round robin, max-SNR, PF, PADC-style fixed lengths, equal-slope lengths, greedy) and
+`--dump`s histories that `mixed_snr.py --design file` replays through the codec.
+`tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and
