@@ -54,6 +54,11 @@ phases left, so every policy can use the whole frame. Policies:
     stop_adv     stop with the advantage index for timing
     online_pf    online's admission and stopping with PF timing (the online policy for a
                  digital utility, whose step curves give the advantage index nothing)
+    plan, plan_adv  padc / padc_adv with the spare slots planned before the frame as for
+                 fixed codes (fill: left-out users first, at the longest run that fits)
+    replan_adv   plan_adv re-planned every slot from what each user holds, stopping each
+                 user at the target: the planner of fixed codes plus a prefix code's
+                 online length
     online       stop_adv plus admission every slot: the users with the smallest remaining
                  need (phases at the mean SNR) that fit in the slots left are served first;
                  spare slots open to all. Content-aware sizing, channel-aware stopping and
@@ -96,13 +101,14 @@ from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
                  "adaptive_slope", "slope_adv", "greedy", "greedy_rel")
-TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "stop", "stop_adv", "online_pf",
-                   "online")
+TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
+                   "online_pf", "online", "replan_adv")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
-NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "stop", "stop_adv", "online_pf", "online")
+NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
+                "online", "replan_adv")
 PF_TIMING = ("pf", "fixed_uni", "fixed_eq", "fixed_slope", "adaptive_slope", "pf_len", "padc",
-             "stop", "online_pf")
-ADV_TIMING = ("slope_adv", "padc_adv", "stop_adv", "online")
+             "plan", "stop", "online_pf")
+ADV_TIMING = ("slope_adv", "padc_adv", "plan_adv", "stop_adv", "online", "replan_adv")
 
 
 def rate(snr_db):
@@ -175,6 +181,28 @@ def plan_snr(means, snr, t, offset=0.0, corr=0.0):
 FILL = "admit"
 
 
+def replan_target(belief, imgs, hist, plan, rest, ok, left, P):
+    """replan_adv, every slot: the users whose remaining need (phases at their planned SNR,
+    from what they hold) fits in the slots left are admitted shortest first; the slots
+    still spare go, like fill's "admit", to left-out users one at a time, each planned for
+    the longest run that fits, the one with the best predicted quality at it first.
+    Returns the users planned to receive more phases."""
+    K = len(hist)
+    e = np.zeros(K, dtype=int)
+    for k in np.argsort(rest, kind="stable"):
+        if ok[k] and rest[k] <= left:
+            e[k], left = int(rest[k]), left - int(rest[k])
+    while left > 0:
+        out = [k for k in range(K) if ok[k] and e[k] == 0 and len(hist[k]) < P]
+        if not out:
+            break
+        k = max(out, key=lambda j: belief.psnr(imgs[j], hist[j] + [float(plan[j])]
+                                                * min(P - len(hist[j]), left)))
+        e[k] = min(P - len(hist[k]), left)
+        left -= e[k]
+    return e > 0
+
+
 def fill(belief, imgs, plan, goal, tgt, spare, P, rule="admit", delta=1.0):
     """Fixed-length codes: spend the slots that shortest-first admission left over before
     the frame, since a fixed code cannot be extended later. "margin": one more phase at a
@@ -235,17 +263,17 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     elif policy == "pf_len":                                  # content-blind link adaptation
         tgt = np.array([need(avg, 0, [], p, goal) for p in plan], dtype=float)
         tgt = np.where(np.isfinite(tgt), tgt, P).astype(int)
-    elif policy in ("padc", "padc_adv"):                      # per image at the mean SNR
+    elif policy in ("padc", "padc_adv", "plan", "plan_adv"):  # per image at the mean SNR
         L = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
         tgt = np.zeros(K, dtype=int)
         left = T_plan
         for k in np.argsort(L, kind="stable"):                # shortest first, while it fits
             if np.isfinite(L[k]) and L[k] <= left:
                 tgt[k], left = int(L[k]), left - int(L[k])
-        if fixed_codes and left > 0:                          # a fixed code cannot take
-            tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # leftovers: plan them
+        if (fixed_codes or policy.startswith("plan")) and left > 0:   # plan the spare slots
+            tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
     rest = None                                               # online: phases still needed
-    if policy in ("stop", "stop_adv", "online_pf", "online"):
+    if policy in ("stop", "stop_adv", "online_pf", "online", "replan_adv"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
     last = -1
     for t in range(T):
@@ -272,6 +300,11 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                         adm[k], left = True, left - int(rest[k])
                 if adm.any() and left < 1:
                     ok = adm
+            elif policy == "replan_adv":  # padc + fill re-planned on what each user holds
+                planned = replan_target(belief, imgs, hist, plan, rest, ok,
+                                        int(round((T - t) * p_avail)), P)
+                if planned.any():
+                    ok = planned
         g = snr[:, t]
         if policy == "adaptive_slope":
             below = ok & (np.array([len(h) for h in hist])
