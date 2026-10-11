@@ -432,6 +432,11 @@ def check_snr_profiles(x):
     model3.train()
     loss = model3(x, s[:2], want_metrics=False)[1]
     ok(bool(torch.isfinite(loss)), "a training step on piecewise-SNR profiles")
+    _, cfg4 = build("vit", "--snr-chunks", "4", "--fixed-cbr", "1/48")
+    span = cfg4.units_for_cbr(cfg4.fixed_cbr)
+    s4 = sample_snr(cfg4, 64, torch.device("cpu"))
+    ok(all(len(set(r[:span].tolist())) > 1 for r in s4),
+       f"--snr-chunks with --fixed-cbr: every profile changes within the {span} tokens sent")
     raises(["--backbone", "swin", "--snr-chunks", "2"], "--snr-chunks is refused for swin")
     raises(["--backbone", "vit", "--cascade", "--snr-chunks", "2"],
            "--snr-chunks is refused with --cascade")
@@ -561,6 +566,23 @@ def check_schedule():
     lag = np.mean([np.corrcoef(r[:-1], r[1:])[0, 1] for r in g])
     ok(abs(g.mean() - 1) < 0.05 and abs(lag - 0.81) < 0.05,
        f"correlated fading: unit mean gain, lag-1 power correlation {lag:.2f} (corr^2 = 0.81)")
+    from tools.schedule_sim import plan_snr
+    sn = np.array([[13.0, 0.0, 0.0], [-7.0, 0.0, 0.0]])
+    p0, p9 = plan_snr([3.0, 3.0], sn, 0), plan_snr([3.0, 3.0], sn, 0, corr=0.99)
+    ok(np.allclose(p0, 3.0) and p9[0] > 9.0 and p9[1] < 0.0,
+       f"--plan conditional: a user in a peak / fade is planned above / below its mean "
+       f"({p9[0]:.1f} / {p9[1]:.1f} dB around 3)")
+    sh = u.shifted([0.5] * P)
+    ok(all(abs(sh.psnr(i, [s] * L) - u.psnr(i, [s] * L) - 0.5) < 1e-9
+           for i in range(N) for s in (1.0, 13.0) for L in (1, 4)),
+       "--length-bonus: every prefix length +0.5 dB at any constant SNR")
+    free, _, _ = simulate(u, 4, 10, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["padc"], seed=1,
+                          target=30.0)
+    fix, _, _ = simulate(u, 4, 10, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["padc"], seed=1,
+                         target=30.0, fixed_codes=True)
+    ok(fix["padc"]["phases_per_user"] < free["padc"]["phases_per_user"]
+       and fix["padc"]["satisfied"] <= free["padc"]["satisfied"],
+       "--fixed-codes: a fixed-length code takes no leftover slots")
 
 
 def check_eval_seed(x):

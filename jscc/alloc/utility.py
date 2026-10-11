@@ -72,6 +72,16 @@ class Utility:
         return Utility(self.kappa, self.rho, self.dsrc * fd, self.csens * fc, self.names,
                        self.d_empty, self.meta)
 
+    def shifted(self, bonus_db):
+        """The same model with every prefix length L better by bonus_db[L - 1] dB at any
+        constant SNR (Dsrc and C scaled together): one model per length (CBR) without the
+        nesting penalty, if it decoded mixed-SNR slots like this one."""
+        f = 10.0 ** (-np.asarray(bonus_db, dtype=np.float64).reshape(1, -1) / 10.0)
+        if f.shape[1] != self.P:
+            raise ValueError(f"{f.shape[1]} bonus values for {self.P} prefix lengths")
+        return Utility(self.kappa, self.rho, self.dsrc * f, self.csens * f, self.names,
+                       self.d_empty, self.meta)
+
     def average(self):
         """The content-blind transmitter's curve: geometric means over the images (its PSNR
         is about the pool's mean PSNR)."""

@@ -66,7 +66,10 @@ dB, phases per user, the "lift" (served slot SNR minus the user's mean SNR, dB),
 difference to pf (and to padc with a target) with a 95% bootstrap interval over frames.
 Ablations: --same-image (no content diversity: only the channel part), --fading none (no
 fading: only the content and mean-SNR part), --fade-corr r (slot gains correlated in time,
-Gauss-Markov), --pred-noise (the transmitter's curves are off: log-normal errors on each
+Gauss-Markov; --plan conditional predicts future phases from the current slot instead of
+the mean), --length-bonus with --fixed-codes (one model per CBR: every length better by
+the nesting penalty, and a fixed-length policy cannot send more than the code; the
+baseline of DeepJSCC-MIMO / SwinJSCC-style per-rate models), --pred-noise (the transmitter's curves are off: log-normal errors on each
 image's noise-free MSE and sensitivity), --belief FILE (the transmitter decides on its own
 calibrated curves, tools/utility_fit.py --calib; users are scored on --utility).
 --utility may also be a digital baseline (tools/digital_rd.py, alloc/digital.py: an image
@@ -152,8 +155,21 @@ def need(belief, i, hist, snr_plan, goal):
     return np.inf
 
 
+def plan_snr(means, snr, t, offset=0.0, corr=0.0):
+    """The SNR (dB) a policy assumes for a user's future phases at slot t: its mean, or
+    with Gauss-Markov fading of field correlation corr (--plan conditional) the mean of
+    E[|h|^2 | the current slot] over the slots left: corr^(2 tau) g_t + 1 - corr^(2 tau)."""
+    base = np.asarray(means, dtype=np.float64) + offset
+    T = snr.shape[1]
+    if corr <= 0 or t >= T - 1:
+        return base
+    g = 10.0 ** ((snr[:, t] - np.asarray(means)) / 10.0)
+    w = corr ** (2.0 * np.arange(1, T - t))
+    return base + 10.0 * np.log10((w[None, :] * g[:, None] + (1.0 - w)[None, :]).mean(1))
+
+
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
-              offset=0.0, avg=None):
+              offset=0.0, avg=None, corr=0.0, fixed_codes=False):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame)."""
@@ -161,7 +177,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     P = util.P
     hist = [[] for _ in range(K)]
     served = np.zeros(K)                                      # PF: served-rate average
-    plan = np.asarray(means, dtype=np.float64) + offset      # SNR assumed for future phases
+    plan = plan_snr(means, snr, 0, offset, corr)             # SNR assumed for future phases
     goal = None if target is None else target + margin
     tgt = None                                                # phases per user, fixed upfront
     if policy in ("fixed_uni", "fixed_eq", "fixed_slope", "slope_adv"):
@@ -184,6 +200,11 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
         has = np.array([len(h) < P for h in hist])
         if not has.any():
             break
+        if corr > 0 and t > 0:                                # the channel state moved
+            plan = plan_snr(means, snr, t, offset, corr)
+            if rest is not None:
+                rest = np.array([need(belief, imgs[k], hist[k], plan[k], goal) for k in range(K)],
+                                dtype=float)
         ok = has.copy()
         if tgt is not None:
             ok &= np.array([len(h) < g for h, g in zip(hist, tgt)])
@@ -203,8 +224,8 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             if below.any():
                 ok = below
         if not ok.any():
-            if target is None:
-                break
+            if target is None or (fixed_codes and tgt is not None):
+                break                                         # a fixed-length code is complete
             ok = has                                          # leftover slot
         if policy == "rr":
             order = [(last + 1 + j) % K for j in range(K)]
@@ -261,7 +282,7 @@ def fades(rng, users, slots, fading, corr=0.0):
 
 def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=0,
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
-             offset=0.0, belief_util=None, fade_corr=0.0):
+             offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False):
     """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
     on it, users are scored on `util`."""
     if users > len(util.names) and not same_image:
@@ -279,7 +300,8 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
         belief = (belief_util or util).perturbed(pred_noise, rng)
         avg = belief.average() if target is not None else None
         for p in policies:
-            hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg)
+            hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg,
+                             fade_corr if plan == "conditional" else 0.0, fixed_codes)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -332,6 +354,15 @@ def main():
     ap.add_argument("--fading", default="rayleigh", choices=["rayleigh", "none"])
     ap.add_argument("--fade-corr", type=float, default=0.0,
                     help="slot-to-slot correlation of the Rayleigh gain (0: i.i.d. block fading)")
+    ap.add_argument("--plan", default="mean", choices=["mean", "conditional"],
+                    help="future phases at the mean SNR, or (with --fade-corr) at the mean "
+                         "expected given the current slot")
+    ap.add_argument("--length-bonus", nargs="+", type=float, default=None,
+                    help="dB per prefix length 1..P added to the curves (truth and belief): "
+                         "one model per CBR without the nesting penalty; one value = all")
+    ap.add_argument("--fixed-codes", action="store_true",
+                    help="one model per CBR: a policy with lengths fixed before the frame "
+                         "cannot send a user more phases than its code (no leftover slots)")
     ap.add_argument("--belief", default=None,
                     help="the transmitter's curves (tools/utility_fit.py --calib); default: the truth")
     ap.add_argument("--link", default=None, choices=["cqi", "shannon"],
@@ -372,13 +403,22 @@ def main():
         ap.error("--belief must describe the same images, in the same order, as --utility")
     if not 0.0 <= a.fade_corr < 1.0:
         ap.error("--fade-corr is in [0, 1)")
+    if a.length_bonus:
+        if getattr(util, "kind", "") == "digital":
+            ap.error("--length-bonus is for the token-prefix utility")
+        bonus = a.length_bonus * util.P if len(a.length_bonus) == 1 else a.length_bonus
+        util = util.shifted(bonus)
+        belief = belief.shifted(bonus) if belief is not None else None
     summary, base, dumped = simulate(util, a.users, a.slots, a.frames, a.mean_snr, a.fading,
                                      a.snr_clip, a.policies, a.seed, a.same_image,
                                      a.pred_noise, a.alpha, a.dump, a.target, a.margin,
-                                     a.plan_offset, belief, a.fade_corr)
+                                     a.plan_offset, belief, a.fade_corr, a.plan,
+                                     a.fixed_codes)
     print(f"{a.users} users, {a.slots} slots ({a.slots / a.users:.2f} phases per user, at most "
           f"{util.P}), {a.frames} frames, mean SNR U{a.mean_snr} dB, fading {a.fading}"
-          f"{f' (slot correlation {a.fade_corr:g})' if a.fade_corr else ''}"
+          f"{f' (slot correlation {a.fade_corr:g}, plan {a.plan})' if a.fade_corr else ''}"
+          f"{f', length bonus {a.length_bonus} dB' if a.length_bonus else ''}"
+          f"{', fixed-length codes' if a.fixed_codes else ''}"
           f"{', same image' if a.same_image else ''}"
           f"{f', transmitter curves {a.belief}' if a.belief else ''}"
           f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if getattr(util, 'kind', '') == 'digital' else ''}"
