@@ -1,7 +1,7 @@
 """Rate-distortion points of a standard image codec on a test set, for the separation
 baseline of tools/schedule_sim.py (alloc/digital.py). CPU; BPG takes ~1-2 min on Kodak.
 
-    python tools/digital_rd.py --codec bpg --images $JSCC_DATA_ROOT/Kodak --out results/rd_bpg.json
+    python tools/digital_rd.py --codec heic --testset Kodak --out results/rd_heic.json
 
 Codecs:
     bpg      bpgenc / bpgdec on PATH (libbpg; HEVC intra; the usual DeepJSCC baseline),
@@ -12,9 +12,13 @@ Codecs:
     webp     Pillow
     jpeg     Pillow
 
-PSNR is over the whole RGB image at 8 bits, as tools/mixed_snr.py and the trainer score
-the codec (MSE over pixels and channels, peak 1). bpp = 8 x file bytes / pixels. Image
-names are the file names, so they match the utility files of tools/utility_fit.py.
+The images are found like the trainer finds them (<--data-root>/datasets/<test set>,
+--data-root defaulting to $JSCC_DATA_ROOT or ~) and centre-cropped to the model's size
+multiple (--multiple 256, the tile), so the codec sees exactly the pixels the JSCC model
+was scored on; --images DIR overrides the folder. PSNR is over the whole RGB image at 8
+bits (MSE over pixels and channels, peak 1), bpp = 8 x file bytes / pixels. Image names
+are the file names, as in the utility files of tools/utility_fit.py (--check-utility
+verifies that they match).
 """
 
 import argparse
@@ -31,8 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-EXT = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".ppm")
-
+from data.datasets import TEST, gather_paths  # noqa: E402
 
 def psnr(a, b):
     mse = np.mean((a.astype(np.float64) / 255.0 - b.astype(np.float64) / 255.0) ** 2)
@@ -75,7 +78,14 @@ def qualities(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--codec", required=True, choices=["bpg", "heic", "jpeg2000", "webp", "jpeg"])
-    ap.add_argument("--images", required=True, help="folder of test images (e.g. Kodak)")
+    ap.add_argument("--testset", default="Kodak", choices=sorted(TEST))
+    ap.add_argument("--data-root", default=os.environ.get("JSCC_DATA_ROOT", os.path.expanduser("~")),
+                    help="contains datasets/ (as for main.py)")
+    ap.add_argument("--images", default=None, help="a folder of images instead of --testset")
+    ap.add_argument("--multiple", type=int, default=256,
+                    help="centre-crop to this multiple, as the JSCC test protocol does")
+    ap.add_argument("--check-utility", default=None,
+                    help="a utility file whose image names this run must reproduce")
     ap.add_argument("--out", required=True)
     ap.add_argument("--bpg-q", nargs="+", type=int, default=list(range(51, 9, -2)))
     ap.add_argument("--bpg-args", default="", help="extra bpgenc flags, e.g. '-f 444'")
@@ -93,22 +103,33 @@ def main():
         except ImportError:
             raise SystemExit("pip install pillow-heif")
         register_heif_opener()
-    paths = sorted(os.path.join(a.images, f) for f in os.listdir(a.images)
-                   if f.lower().endswith(EXT))
-    if not paths:
-        raise SystemExit(f"no images in {a.images}")
+    folder = a.images or os.path.join(a.data_root, "datasets", TEST[a.testset])
+    try:
+        paths = gather_paths(folder)
+    except FileNotFoundError as e:
+        raise SystemExit(f"{e} (set --data-root or JSCC_DATA_ROOT to the folder that contains "
+                         f"datasets/, or pass --images)")
     fmt = {"heic": "HEIF", "jpeg2000": "JPEG2000", "webp": "WEBP", "jpeg": "JPEG"}.get(a.codec)
     names, curves = [], []
     with tempfile.TemporaryDirectory() as tmp:
         for k, p in enumerate(paths):
             with Image.open(p) as im:
                 img = im.convert("RGB")
+            w, h = img.size
+            nw, nh = w - w % a.multiple, h - h % a.multiple
+            if (nw, nh) != (w, h):
+                left, top = (w - nw) // 2, (h - nh) // 2
+                img = img.crop((left, top, left + nw, top + nh))
             ref = np.asarray(img)
             pix = ref.shape[0] * ref.shape[1]
             pts = []
             for q in qualities(a):
-                n, rec = (run_bpg(p, q, a.bpg_args.split(), tmp) if a.codec == "bpg"
-                          else run_pillow(img, fmt, q))
+                if a.codec == "bpg":
+                    src = os.path.join(tmp, "src.png")
+                    img.save(src)
+                    n, rec = run_bpg(src, q, a.bpg_args.split(), tmp)
+                else:
+                    n, rec = run_pillow(img, fmt, q)
                 pts.append([8.0 * n / pix, psnr(ref, rec)])
             names.append(os.path.basename(p))
             curves.append(sorted(pts))
@@ -116,12 +137,19 @@ def main():
                 print(f"  {k + 1}/{len(paths)} images", flush=True)
     c = np.array([[np.interp(b, np.array(cv)[:, 0], np.array(cv)[:, 1]) for b in (0.1, 0.25, 0.5, 1.0)]
                   for cv in curves])
+    if a.check_utility:
+        with open(a.check_utility) as f:
+            want = json.load(f)["images"]
+        if want != names:
+            raise SystemExit(f"image names differ from {a.check_utility}: {names[:3]} vs {want[:3]}")
+        print(f"image names match {a.check_utility}")
     print(f"{a.codec}: {len(names)} images, {len(curves[0])} points each; mean PSNR at 0.1 / 0.25 / "
           f"0.5 / 1.0 bpp: " + " / ".join(f"{v:.2f}" for v in c.mean(0)))
     out = {"kind": "digital", "codec": a.codec, "images": names, "curves": curves,
            "sym_per_pixel": a.sym_per_pixel, "link": a.link, "gap_db": 0.0, "P": a.max_phases,
            "mode": "step", "d_empty": 0.1,
-           "meta": {"images_dir": a.images, "bpg_args": a.bpg_args if a.codec == "bpg" else None}}
+           "meta": {"images_dir": folder, "multiple": a.multiple,
+                    "bpg_args": a.bpg_args if a.codec == "bpg" else None}}
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(out, f, indent=1)

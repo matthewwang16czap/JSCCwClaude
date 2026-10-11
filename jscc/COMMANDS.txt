@@ -3,18 +3,19 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 10, at the end. It holds every command not yet run, in order.
-Sections 0-9 above it are the record: nothing in them needs to be run again.
+WHAT TO RUN: SECTION 11, at the end. It holds every command not yet run, in order.
+Sections 0-10 above it are the record: nothing in them needs to be run again.
 
   section                                     status
-  0  environment                              valid; section 10 repeats what it needs
-  1  CPU gates                                run again after every pull (10.0 does)
+  0  environment                              valid; section 11 repeats what it needs
+  1  CPU gates                                run again after every pull (11.0 does)
   2-4  wave c2                                RETIRED, not to be run (why: below)
   5-8  problem P1, steps 1-4                  done (docs/NOTES.md, "Problem P1 ...")
-  7e  more training data                      not run: in section 10
-  8d  digital baseline                        did not run (no bpgenc): in section 10
-  9  digital, conditional plan, per-CBR       not run: folded into section 10 (its per-CBR
-                                              part replaced by real per-CBR models)
+  9  digital, conditional plan, per-CBR       folded into section 10
+  10 per-CBR specialists, slow fading         done (docs/NOTES.md "P1, step 5"), except:
+       10.1b data run                         skipped (no Flickr2K)
+       10.2a-b digital baseline               failed (Kodak path): in section 11
+       10.4 targets                           baseline too weak (unused slots): in section 11
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -374,10 +375,10 @@ cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_di
 #   P-D   JSCC (s7 / 8b) against BPG + CQI (8d) on the same frames: mean PSNR of the best
 #         policy each, and users at 28 / 30 / 32 dB; the shannon lines are the capacity bound
 
-================================================================================
- 10. TO RUN NOW -- every command not yet run, in order
-     (docs/PROBLEM.md gates P-D and P-E; docs/PAPER.md claims C5 and C6)
-================================================================================
+--------------------------------------------------------------------------------
+ 10. PER-CBR SPECIALISTS, DIGITAL, SLOW FADING -- DONE (except 10.1b, 10.2a-b, 10.4's
+     targets: see the top of this file; section 11 has what is left)
+--------------------------------------------------------------------------------
 # Left for the paper: (a) one model per CBR as the baseline, done right: six piecewise-
 # trained specialists, measured and scheduled like the prefix model (GPUs 2-5, ~8 h);
 # (b) separation: HEVC intra and JPEG 2000 with ideal link adaptation through the same
@@ -546,3 +547,159 @@ cat results/s10_data.txt results/s10_c2_leftovers.txt            # if they ran
 #        the specialists' slope_adv as its strongest form
 #   10.2c  the conditional plan recovers the advantage index at slot correlation 0.98 or not
 #   10.3c  the specialists obey the additive model (held-out errors like the prefix model's)
+
+================================================================================
+ 11. TO RUN NOW -- every command not yet run, in order
+     (docs/NOTES.md "P1, step 5"; docs/PROBLEM.md gates P-D, P-E, P-F)
+================================================================================
+# Section 10: one model per CBR costs the prefix code 0.17-0.47 dB (the nesting penalty)
+# and, with our abstraction and index, wins mean PSNR by 0.15 dB. Left: (a) can per-length
+# DECODER heads on the unchanged encode-once code recover that penalty (GPUs 2-5, ~4 h)?
+# (b) the per-CBR target runs again with the spare slots planned (the old baseline left ~10
+# of 24 slots unused), (c) slots taken by other traffic, unknown when encoding, where a
+# fixed code cut short decodes nothing, (d) the digital baseline with the Kodak path fixed.
+# Run 11.0, start 11.1, do 11.2-11.3 (CPU) while it trains, then 11.4.
+
+# 11.0 -- setup, ~5 min CPU ---------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s11
+nvidia-smi -i 2,3,4,5                          # 2-5 free?
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+SIM="--utility $U --frames 2000"
+PC="--utility results/utility_percbr.json --belief results/belief_percbr.json --frames 2000 --fixed-codes"
+# decoder-only fine-tunes of snrc4_s1: its ENCODER frozen (the transmitted code unchanged),
+# the snrc4 recipe otherwise (400 epochs, lr 5e-5, piecewise SNR)
+FTH="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag h1 --snr-chunks 4 --backbone vit --pretrained $SNRC4 --freeze encoder"
+MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --design full --chunks phase --random-profiles 10 --backbone vit"
+ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
+
+# 11.1 -- GPUs 2-5, ~3-4 h each (decoder-only is faster than a full fine-tune) ----------
+#   H48 / H8: a decoder specialised to 1/48 / 1/8 on the frozen encoder: how much of the
+#             specialists' +0.45 / +0.47 dB a decoder alone recovers
+#   HC:       the control: the same decoder-only fine-tune at all rates (more training alone)
+#   HL:       LoRA budget heads (AdaTok's MH-LoRA, continuous over the rate) on the decoder,
+#             frozen encoder: the deployable form -- one code, a head per received length
+#   each queue then measures its model per phase (like 6b) for the utility and schedules
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=2 python main.py $FTH --fixed-cbr 1/48 > logs_s11/gpu2_H48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_frz-enc_h1/models/last.pt --out results/p4_full_h48.json > results/p4_full_h48.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=3 python main.py $FTH --fixed-cbr 1/8 > logs_s11/gpu3_H8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_frz-enc_h1/models/last.pt --out results/p4_full_h8.json > results/p4_full_h8.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python main.py $FTH > logs_s11/gpu4_HC.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained ${VT}_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hc.json > results/p4_full_hc.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python main.py $FTH --rate-mod both --mod-lr-mult 4 > logs_s11/gpu5_HL.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH $ALL6 --rate-mod both --pretrained ${VT}_both_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hl.json > results/p4_full_hl.txt 2>&1
+" > /dev/null 2>&1 &
+# after a minute: "froze the encoder" in every log, only new LoRA tensors missing in HL
+sleep 60; grep -h "froze the\|loaded\|parameters, effective batch" logs_s11/*.out; tail -n 2 logs_s11/*.out
+
+# 11.2 -- CPU, now, ~30 min: the digital baseline (Kodak found like the trainer finds it;
+#   --check-utility makes sure the images are the utility file's, in the same order)
+pip install pillow-heif
+python tools/digital_rd.py --codec heic --testset Kodak --check-utility $U --out results/rd_heic.json \
+  2>&1 | tee results/s11_digital.txt
+python tools/digital_rd.py --codec jpeg2000 --testset Kodak --check-utility $U --out results/rd_j2k.json \
+  2>&1 | tee -a results/s11_digital.txt
+command -v bpgenc && python tools/digital_rd.py --codec bpg --testset Kodak --check-utility $U \
+  --out results/rd_bpg.json 2>&1 | tee -a results/s11_digital.txt
+DH="--utility results/rd_heic.json --frames 2000"
+TP="--policies pf pf_len padc stop online_pf"
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --digital-mode interp 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --link shannon 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --link shannon --gap-db 3 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP --link shannon 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP --link shannon --gap-db 3 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 28 $TP 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 32 $TP 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py $DH --target 30 --slots 16 $TP 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --policies rr pf fixed_uni greedy \
+  --digital-mode interp 2>&1 | tee -a results/s11_digital.txt
+python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --target 30 $TP \
+  --digital-mode interp 2>&1 | tee -a results/s11_digital.txt
+
+# 11.3 -- CPU, now, ~25 min: per-CBR codes done fairly, and unknown slot availability
+# 11.3a  per-CBR targets again: the slots shortest-first admission leaves are planned
+#        before the frame (left-out users first, at the longest code that fits). Compare
+#        with the prefix code's online in s8_belief.txt / s10_percbr.txt (K 16)
+python tools/schedule_sim.py $PC --target 30 --policies padc padc_adv 2>&1 | tee results/s11_percbr.txt
+python tools/schedule_sim.py $PC --target 28 --policies padc padc_adv 2>&1 | tee -a results/s11_percbr.txt
+python tools/schedule_sim.py $PC --target 32 --policies padc padc_adv 2>&1 | tee -a results/s11_percbr.txt
+python tools/schedule_sim.py $PC --target 30 --slots 16 --policies padc padc_adv 2>&1 | tee -a results/s11_percbr.txt
+python tools/schedule_sim.py $PC --target 30 --users 16 --slots 48 --policies padc padc_adv 2>&1 | tee -a results/s11_percbr.txt
+# 11.3b  10% / 25% of the slots taken by other traffic, known only when each slot starts.
+#        Prefix: plans with the expected share and uses whatever arrives. Per-CBR: plans its
+#        fixed lengths for the expected share (0.5) or hedged (0.1 for the mean, 0.25 for the
+#        target: the best hedges on the stand-in); a code cut short decodes to nothing
+python tools/schedule_sim.py $SIM $B --preempt 0.1 --policies pf fixed_uni slope_adv 2>&1 | tee results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.1 --preempt-quantile 0.5 --policies fixed_uni slope_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.1 --preempt-quantile 0.1 --policies fixed_uni slope_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $SIM $B --preempt 0.25 --policies pf fixed_uni slope_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.25 --preempt-quantile 0.5 --policies fixed_uni slope_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.25 --preempt-quantile 0.1 --policies fixed_uni slope_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $SIM $B --preempt 0.1 --target 30 --policies padc padc_adv online_pf online 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.1 --preempt-quantile 0.5 --target 30 --policies padc padc_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.1 --preempt-quantile 0.25 --target 30 --policies padc padc_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $SIM $B --preempt 0.25 --target 30 --policies padc padc_adv online_pf online 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.25 --preempt-quantile 0.5 --target 30 --policies padc padc_adv 2>&1 | tee -a results/s11_preempt.txt
+python tools/schedule_sim.py $PC --preempt 0.25 --preempt-quantile 0.25 --target 30 --policies padc padc_adv 2>&1 | tee -a results/s11_preempt.txt
+
+# 11.4 -- CPU, when ALL of 11.1 is done (ls results/p4_full_h*.json: four files) -------
+# 11.4a  what a decoder recovers, paired per image (control = snrc4_s1; HC = more training
+#        alone; the full specialists of section 10 for reference)
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_fix1-48_frz-enc_h1 \
+  ${VT}_both_snrc4_frz-enc_h1 ${VT}_snrc4_fix1-48_s1 --cbrs 1/48 2>&1 | tee results/s11_heads.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_fix1-8_frz-enc_h1 \
+  ${VT}_both_snrc4_frz-enc_h1 ${VT}_snrc4_fix1-8_s1 --cbrs 1/8 2>&1 | tee -a results/s11_heads.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_both_snrc4_frz-enc_h1 2>&1 | tee -a results/s11_heads.txt
+grep -h -B1 "constant SNR" results/p4_full_h48.txt results/p4_full_h8.txt 2>&1 | tee -a results/s11_heads.txt
+# 11.4b  the utility of the LoRA-head model and of its control, then their schedules
+python tools/utility_fit.py --mixed results/p4_full_hl.json --out results/utility_hl.json --calib 1 13 \
+  --belief-out results/belief_hl.json 2>&1 | tee results/s11_hl_fit.txt
+python tools/utility_fit.py --mixed results/p4_full_hc.json --out results/utility_hc.json --calib 1 13 \
+  --belief-out results/belief_hc.json 2>&1 | tee -a results/s11_hl_fit.txt
+HL="--utility results/utility_hl.json --belief results/belief_hl.json --frames 2000"
+HC="--utility results/utility_hc.json --belief results/belief_hc.json --frames 2000"
+python tools/schedule_sim.py $HL --policies pf fixed_uni slope_adv 2>&1 | tee results/s11_hl_sched.txt
+python tools/schedule_sim.py $HC --policies pf fixed_uni slope_adv 2>&1 | tee -a results/s11_hl_sched.txt
+python tools/schedule_sim.py $HL --target 30 --policies padc padc_adv online_pf online 2>&1 | tee -a results/s11_hl_sched.txt
+python tools/schedule_sim.py $HC --target 30 --policies padc padc_adv online_pf online 2>&1 | tee -a results/s11_hl_sched.txt
+python tools/schedule_sim.py $HL --target 30 --slots 16 --policies padc padc_adv online_pf online 2>&1 | tee -a results/s11_hl_sched.txt
+python tools/schedule_sim.py $HL --preempt 0.25 --policies pf fixed_uni slope_adv 2>&1 | tee -a results/s11_hl_sched.txt
+
+# --- reading section 11 (send back everything it prints) ----------------------------
+cat results/s11_digital.txt results/s11_percbr.txt results/s11_preempt.txt   # after 11.2-11.3
+cat results/s11_heads.txt results/s11_hl_fit.txt results/s11_hl_sched.txt    # after 11.4
+
+# Decision (docs/PROBLEM.md, section 5; docs/PAPER.md C5 / C6):
+#   P-D  JSCC (s8_belief) against HEIC + CQI (11.2, best policy each): ahead -> the
+#        separation claim holds for practical link adaptation; Shannon = the bound to state
+#   P-E  per-CBR padc_adv with planned slots (11.3a) against the prefix code's online:
+#        if per-CBR wins with known slots too, the prefix code's case is 11.3b (unknown
+#        slots) and one model instead of six; the scheduling claims stand on either code
+#   P-F  H48 / H8 - HC at their own CBR: the decoder's share of the specialists' gap. HL -
+#        HC over all CBRs, and HL's schedules (11.4b) against per-CBR's: if the heads close
+#        most of the gap, the prefix code + heads is the system to recommend (one encode,
+#        any length, no penalty); if only a decoder specialised to ONE length helps, the
+#        penalty is a decoder-capacity question, else it lives in the shared encoder

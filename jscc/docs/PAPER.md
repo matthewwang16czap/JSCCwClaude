@@ -20,7 +20,7 @@ Scheduling Encode-Once Deep JSCC Prefixes over Fading Multi-User Downlinks
 | C3 | Mean quality: PF on rate leaves ~0.5 dB on the table; the ADVANTAGE index (this slot's predicted PSNR gain minus a typical slot's) gains +0.46 dB decoded, +0.46 dB at the 5th-percentile user, robust over K, T, curve errors and slot correlation; content-aware lengths add only +0.05 | P1 steps 2-4 | done (theory owed) |
 | C4 | Quality target (QoS): online admission by remaining need + stopping on the realised slot SNRs + advantage timing raises the share of users reaching 30 dB by +11 points decoded over PADC's per-image rule (given shortest-first admission and PF timing), +14 over PF; decomposition: sizing +5, stopping +4, timing +3, admission +2 (+11 in tight frames) | P1 steps 3-4 | done |
 | C5 | Against separation: HEVC-intra (BPG / HEIC) with ideal CQI link adaptation through the same schedulers | `tools/digital_rd.py`, section 9 | **owed (P-D)** |
-| C6 | Against one model per CBR (DeepJSCC-MIMO / SwinJSCC style): fixed-length codes without the nesting penalty, the same timing | `--fixed-codes --length-bonus`, section 9; the penalty from section 4 (G-C) | **owed (P-E)** |
+| C6 | Against one model per CBR (DeepJSCC-MIMO / SwinJSCC style), measured with six piecewise-trained specialists: their nesting penalty is 0.17-0.47 dB; with the same abstraction and the advantage index they win mean PSNR by 0.15 dB (so C3 is stated as codec-agnostic); the prefix code is required when the slots are not known at encoding (preemption) and for online stopping | P1 step 5; section 11 (fair slot planning, preemption, decoder heads) | **partly done** |
 
 ## Outline
 
