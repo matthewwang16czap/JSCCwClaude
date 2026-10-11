@@ -98,6 +98,7 @@ docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gate
 docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token communication,
                         adaptive tokenizers, allocation; the novelty matrix
 docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
+docs/PAPER.md           the paper plan: claims and their evidence, outline, figures, what is owed
 ```
 
 ## Defaults and the knobs worth knowing

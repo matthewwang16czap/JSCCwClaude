@@ -474,3 +474,43 @@ timing, admission), which only the encode-once prefix with a mixed-SNR utility a
 content side adds ~2.5 points on Kodak. The one weak case: curves known only to ~10% in log
 MSE (pred noise 0.1) halve the lead to +4.2 -- the transmitter's knowledge is the next
 question (section 8: calibrating each image from 2P of its own constant-SNR decodes).
+
+## Problem P1, step 4: a realistic transmitter, correlated fading (2026-10-11)
+
+COMMANDS.txt section 8 on the server. The digital baseline (8d) did not run: `bpgenc` was not
+on PATH and the sheet's `| tee` hid the error (fixed in section 9: HEIC through pip, errors
+kept in the files).
+
+**What a transmitter can know** (`utility_fit.py --calib`): kappa and rho cross-fitted on the
+other half of the images, each image's Dsrc and C from its own constant-SNR decodes only.
+
+| errors on the profiles it did not use, MAE / p95 (dB) | 1/24 | 1/16 | 1/12 | 5/48 | 1/8 |
+|---|---|---|---|---|---|
+| calibrated at 1 + 13 dB (12 decodes per image) | 0.051 / 0.15 | 0.064 / 0.17 | 0.047 / 0.13 | 0.042 / 0.13 | 0.030 / 0.10 |
+| calibrated at 4 + 10 dB (12 decodes) | 0.044 / 0.14 | 0.054 / 0.17 | 0.037 / 0.11 | 0.037 / 0.12 | 0.029 / 0.10 |
+| calibrated at all 5 SNRs (30 decodes) | 0.048 / 0.17 | 0.058 / 0.19 | 0.038 / 0.11 | 0.039 / 0.14 | 0.027 / 0.09 |
+| full fit (every profile of the image), held-out random | 0.050 / 0.19 | 0.069 / 0.19 | 0.034 / 0.10 | 0.056 / 0.23 | 0.044 / 0.12 |
+
+Twelve decodes per image are as good as the full mixed-SNR measurement of that image: the
+codec-level constants (kappa, rho) transfer across images, and the per-image part is two
+numbers per prefix length. **Schedulers deciding on that belief** (users scored on the fit):
+slope_adv - pf +0.477 dB (with exact curves +0.476); online - padc at 30 dB +8.4 points [7.9,
+8.9] (exact +9.4), +8.9 aiming 0.3 dB above, +8.1 at T 16, +9.5 at 32 dB, +7.0 at 28 dB.
+**Decoded** (60 frames): slope_adv - pf **+0.464 dB [0.392, 0.529]**; online - padc **+11.0
+points [8.3, 13.8]** (online - pf +14.0), no user predicted to make it decoded below (margin
+0.3); the model's error on these schedules MAE 0.065-0.089 dB. **Gate P-C3 passes.**
+
+**Correlated fading** (Gauss-Markov slot gains, belief, plan at the mean SNR):
+
+| slot correlation | 0 | 0.5 | 0.9 | 0.98 |
+|---|---|---|---|---|
+| pf - rr, dB | +1.12 | +1.02 | +0.53 | +0.13 |
+| slope_adv - pf, dB | +0.48 | +0.52 | +0.58 | +0.34 |
+| online - padc at 30 dB, points | +8.4 | +8.5 | +8.9 | +5.6 (online_pf +7.8) |
+
+The multi-user diversity gain fades with the correlation (24 slots at 0.98 is nearly one
+channel state per frame), the advantage index keeps most of its lead, and the QoS lead stays
+>= 5.6 points. At 0.98 advantage timing starts to hurt (padc_adv < padc, online < online_pf):
+the index compares the slot with the MEAN SNR, but a user in a long fade will not see its
+mean again within the frame. `--plan conditional` (section 9) compares with the SNR expected
+for the rest of the frame given the current slot.

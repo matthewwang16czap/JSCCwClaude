@@ -4,11 +4,12 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-NEW on 2026-10-10 (third sheet of the day): section 8, after your section-7 results (both
-gates passed, decoded). All CPU (~25 min) except 8e (~10 min on GPU 5); 8d needs an image
-codec (BPG, or HEIC as a fallback). Sections 5-7 are done; sections 0-4 are unchanged --
-please send 4b-4d (the nesting penalty of G-C prices the fixed-length baseline) and 7e if
-you ran it. Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull
+NEW on 2026-10-11: section 9, after your section-8 results (the realistic transmitter
+passed, decoded). CPU only, ~30 min; no GPU this time (7e is still open if GPU 4 is idle).
+8d did not run (no bpgenc, and the sheet hid the error): section 9 uses HEIC from pip
+instead and keeps every error in the result files. Sections 5-8 are done; sections 0-4 are
+unchanged -- please send 4b-4d (G-C's specialist gaps price the per-CBR baseline of 9d) and
+7e if you ran it. Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull
 origin claude/gifted-newton-cfldb8` (main stops at section 5).
 
 This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
@@ -476,7 +477,8 @@ cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
 #   the s1 decode of the mean schedules: what piecewise training is worth under slope_adv
 
 --------------------------------------------------------------------------------
- 8. PROBLEM P1, STEP 4: a realistic transmitter, correlated fading, the digital baseline
+ 8. PROBLEM P1, STEP 4: a realistic transmitter, correlated fading, the digital baseline -- DONE
+    (except 8d: superseded by 9a-9b)
     (docs/NOTES.md "P1, step 3"; docs/PROBLEM.md gates P-C3 and P-D)
 --------------------------------------------------------------------------------
 # Section 7: the advantage index +0.465 dB over PF and online +10.0 points over PADC's rule,
@@ -567,3 +569,91 @@ cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_di
 #   fading: the leads under --fade-corr 0.9 / 0.98 (8c) -- report whatever they are
 #   P-D   JSCC (s7 / 8b) against BPG + CQI (8d) on the same frames: mean PSNR of the best
 #         policy each, and users at 28 / 30 / 32 dB; the shannon lines are the capacity bound
+
+--------------------------------------------------------------------------------
+ 9. PROBLEM P1, STEP 5: the two missing baselines, conditional planning
+    (docs/NOTES.md "P1, step 4"; docs/PROBLEM.md gates P-D and P-E; docs/PAPER.md)
+--------------------------------------------------------------------------------
+# Section 8: with what a base station can measure itself (12 decodes per image), +0.464 dB and
+# +11.0 points, decoded. Left for the paper: separation (HEVC-intra + ideal link adaptation
+# through the same schedulers), one model per CBR (fixed lengths, no nesting penalty), and
+# slow fading, where the advantage index should compare with the SNR the user can still
+# expect in this frame rather than its mean. All CPU. Every line keeps its errors (2>&1).
+
+export JSCC_DATA_ROOT=$HOME
+U=results/utility_snrc4.json
+SIM="--utility $U --frames 2000"
+B="--belief results/belief_snrc4.json"
+TP="--policies pf pf_len padc stop online_pf"
+
+# 9a. CPU, ~3 min: R-D points of HEVC intra (HEIC through libheif / x265, the codec inside BPG)
+#     and of JPEG 2000 (a scalable codec) on Kodak; BPG too if you have bpgenc
+pip install pillow-heif
+python tools/digital_rd.py --codec heic --images $JSCC_DATA_ROOT/Kodak --out results/rd_heic.json \
+  2>&1 | tee results/s9_digital.txt
+python tools/digital_rd.py --codec jpeg2000 --images $JSCC_DATA_ROOT/Kodak --out results/rd_j2k.json \
+  2>&1 | tee -a results/s9_digital.txt
+command -v bpgenc && python tools/digital_rd.py --codec bpg --images $JSCC_DATA_ROOT/Kodak \
+  --out results/rd_bpg.json 2>&1 | tee -a results/s9_digital.txt
+
+# 9b. CPU, ~1 min each: the digital schemes through the same schedulers, on the same frames,
+#     means and fades as the JSCC runs (compare with s7_mean.txt / s8_belief.txt). LTE CQI
+#     link adaptation without errors (the practical case), Shannon (the capacity bound),
+#     Shannon with a 3 dB gap; "interp" = an ideal scalable codec at HEVC's efficiency
+D="--utility results/rd_heic.json --frames 2000"
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --link shannon 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --link shannon --gap-db 3 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 30 $TP 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 30 $TP --link shannon 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 30 $TP --link shannon --gap-db 3 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 28 $TP 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 32 $TP 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py $D --target 30 --slots 16 $TP 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --policies rr pf fixed_uni greedy \
+  --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
+python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --target 30 $TP \
+  --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
+
+# 9c. CPU, ~1-2 min each: slow fading with --plan conditional (the index and the needs use the
+#     SNR expected for the rest of the frame given the current slot); compare s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --plan conditional --policies rr pf fixed_uni slope_adv \
+  2>&1 | tee results/s9_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --plan conditional --policies rr pf fixed_uni slope_adv \
+  2>&1 | tee -a results/s9_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --plan conditional --target 30 2>&1 | tee -a results/s9_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --plan conditional --target 30 2>&1 | tee -a results/s9_corr.txt
+
+# 9d. CPU, ~1 min each: one model per CBR. Fixed lengths (no leftover phases), every length
+#     better by the nesting penalty (0.3 / 0.6 dB bracket the 0.29-0.71 dB of the c1 tail
+#     probes until section 4's numbers arrive), the SAME schedulers that need only fixed
+#     lengths (slope_adv's lengths are fixed; padc_adv = PADC's lengths + our timing).
+#     Compare with the prefix code's slope_adv / online in s8_belief.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --policies pf fixed_uni fixed_slope slope_adv \
+  2>&1 | tee results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.6 --policies pf fixed_uni fixed_slope slope_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0 --target 30 --policies pf padc padc_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 30 --policies pf padc padc_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.6 --target 30 --policies pf padc padc_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 30 --slots 16 --policies pf padc padc_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 32 --policies pf padc padc_adv \
+  2>&1 | tee -a results/s9_percbr.txt
+
+# --- reading section 9 (send back everything it prints) ---------------------------
+cat results/s9_digital.txt results/s9_corr.txt results/s9_percbr.txt
+# and, if you have them: section 4b-4d's output, 7e's compare_runs table
+
+# Decision (docs/PROBLEM.md, section 5; docs/PAPER.md C5 / C6):
+#   P-D   JSCC (s8_belief: slope_adv mean PSNR; online's share at 28 / 30 / 32 dB, T 16)
+#         against HEIC + CQI (9b, the best policy each): ahead -> the separation claim holds
+#         for practical link adaptation; the Shannon lines are the bound to be honest about
+#   P-E   the prefix code's online (s8_belief) against padc_adv with --fixed-codes at the
+#         measured penalty: ahead -> the prefix code is required for the QoS claim; the mean
+#         claim (slope_adv) is codec-agnostic either way and is stated so
+#   9c    the conditional plan recovers the advantage index at slot correlation 0.98 or not
