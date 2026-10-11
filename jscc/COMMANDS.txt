@@ -4,11 +4,12 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-NEW on 2026-10-10 (second sheet of the day): section 7, after your section-6 results.
-About 12 CPU minutes and 20 min on GPU 5; an optional ~5 h data run for GPU 4 (7e).
-Sections 5 and 6 are done; sections 0-4 are unchanged (send 4b-4d when you have them).
-Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull origin
-claude/gifted-newton-cfldb8` (main stops at section 5).
+NEW on 2026-10-10 (third sheet of the day): section 8, after your section-7 results (both
+gates passed, decoded). All CPU (~25 min) except 8e (~10 min on GPU 5); 8d needs an image
+codec (BPG, or HEIC as a fallback). Sections 5-7 are done; sections 0-4 are unchanged --
+please send 4b-4d (the nesting penalty of G-C prices the fixed-length baseline) and 7e if
+you ran it. Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull
+origin claude/gifted-newton-cfldb8` (main stops at section 5).
 
 This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
 are kept under the same names; its encoder-only runs are dropped; the matched-compute
@@ -371,7 +372,7 @@ cat results/sched.txt results/replay.txt
 #        histories = what piecewise training is worth under scheduling
 
 --------------------------------------------------------------------------------
- 7. PROBLEM P1, STEP 3: the advantage index and the quality target, on the real utility
+ 7. PROBLEM P1, STEP 3: the advantage index and the quality target, on the real utility -- DONE
     (docs/NOTES.md "P1, step 2"; docs/PROBLEM.md gates P-C1 and P-C2)
 --------------------------------------------------------------------------------
 # Section 6: P-B passes (the model predicts the codec on real schedules within 0.08 dB), but
@@ -473,3 +474,96 @@ cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
 #   both fail                                      -> the scheduling paper is off; I re-plan
 #         around the codec-side results (docs/ASSESSMENT.md)
 #   the s1 decode of the mean schedules: what piecewise training is worth under slope_adv
+
+--------------------------------------------------------------------------------
+ 8. PROBLEM P1, STEP 4: a realistic transmitter, correlated fading, the digital baseline
+    (docs/NOTES.md "P1, step 3"; docs/PROBLEM.md gates P-C3 and P-D)
+--------------------------------------------------------------------------------
+# Section 7: the advantage index +0.465 dB over PF and online +10.0 points over PADC's rule,
+# both decoded. But the schedulers knew each image's fitted curves exactly, and 10% curve
+# errors halved the target lead. Here the transmitter knows only what it can measure itself:
+# kappa and rho from OTHER images, each image from 12 constant-SNR decodes of its own. Then
+# slowly varying fading, and BPG with ideal link adaptation through the same schedulers.
+
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+SIM="--utility $U --frames 2000"
+B="--belief results/belief_snrc4.json"
+REP="--img-size 256 --channel-type awgn --amp --testset Kodak --design file"
+
+# 8a. CPU, ~1 min each: the transmitter's belief. Errors on every profile it did not use,
+#     next to the full fit's; 1 + 13 dB is the file the schedulers use, the others compare
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --calib 1 13 \
+  --belief-out results/belief_snrc4.json | tee results/s8_calib.txt
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --calib 4 10 | tail -8 \
+  | tee -a results/s8_calib.txt
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --calib 1 4 7 10 13 | tail -8 \
+  | tee -a results/s8_calib.txt
+
+# 8b. CPU, ~1 min each: the schedulers deciding on that belief (users scored on the fit)
+python tools/schedule_sim.py $SIM $B --policies rr pf fixed_uni slope_adv | tee results/s8_belief.txt
+python tools/schedule_sim.py $SIM $B --target 30 | tee -a results/s8_belief.txt
+python tools/schedule_sim.py $SIM $B --target 30 --margin 0.3 | tee -a results/s8_belief.txt
+python tools/schedule_sim.py $SIM $B --target 30 --slots 16 | tee -a results/s8_belief.txt
+python tools/schedule_sim.py $SIM $B --target 32 | tee -a results/s8_belief.txt
+
+# 8c. CPU, ~1 min each: slot gains correlated in time (0.5 / 0.9 / 0.98: from fast to slow
+#     fading), with the belief
+python tools/schedule_sim.py $SIM $B --fade-corr 0.5 --policies rr pf fixed_uni slope_adv | tee results/s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --policies rr pf fixed_uni slope_adv | tee -a results/s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --policies rr pf fixed_uni slope_adv | tee -a results/s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.5 --target 30 | tee -a results/s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --target 30 | tee -a results/s8_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --target 30 | tee -a results/s8_corr.txt
+
+# 8d. CPU, ~2 min for the codec + ~1 min per line: the separation baseline. BPG (the usual
+#     DeepJSCC reference) needs libbpg, built once:
+#       sudo apt-get install -y cmake yasm libpng-dev libjpeg-dev
+#       cd ~ && wget https://bellard.org/bpg/libbpg-0.9.8.tar.gz && tar xzf libbpg-0.9.8.tar.gz
+#       cd libbpg-0.9.8 && make -j8 USE_BPGVIEW= && cd -
+#       export PATH=$HOME/libbpg-0.9.8:$PATH && which bpgenc bpgdec
+#     If that build fails: pip install pillow-heif, and use --codec heic (HEVC intra too).
+#     Same frames, means and fades as the JSCC runs (same seed); one slot = the same 1/16
+#     channel uses per pixel as one prefix phase; ideal CQI link adaptation (LTE table), no
+#     errors, free switching between files: every assumption favours digital
+python tools/digital_rd.py --codec bpg --images $JSCC_DATA_ROOT/Kodak --out results/rd_bpg.json \
+  | tee results/s8_digital.txt
+D="--utility results/rd_bpg.json --frames 2000"
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --link shannon | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --digital-mode interp | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 30 --policies pf pf_len padc stop online_pf | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 30 --policies pf pf_len padc stop online_pf --link shannon | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 30 --policies pf pf_len padc stop online_pf --link shannon --gap-db 3 | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 30 --slots 16 --policies pf padc stop online_pf | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 32 --policies pf padc stop online_pf | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $D --target 28 --policies pf padc stop online_pf | tee -a results/s8_digital.txt
+python tools/schedule_sim.py $SIM $B --target 28 | tee -a results/s8_digital.txt
+
+# 8e. CPU seconds + GPU 5, ~5 min each: schedules decided on the belief, decoded by the codec
+python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 \
+  --policies rr pf fixed_uni slope_adv --out results/s8_rep_mean.json
+python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --target 30 --margin 0.3 \
+  --policies pf padc padc_adv stop_adv online --out results/s8_rep_tgt.json
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --profiles-json results/s8_rep_mean_histories.json --out results/s8_dec_mean.json \
+  | tee results/s8_dec.txt
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+  --profiles-json results/s8_rep_tgt_histories.json --out results/s8_dec_tgt.json \
+  | tee -a results/s8_dec.txt
+
+# --- reading section 8 (send back everything it prints) ---------------------------
+cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_digital.txt results/s8_dec.txt
+# and, if you have them: section 4b-4d's output, 7e's compare_runs table
+
+# Decision (docs/PROBLEM.md, section 5):
+#   P-C3  with the belief: slope_adv - pf >= +0.3 dB and online - padc >= +5 points, in the
+#         simulator (8b) and decoded (8e)  -> the schedulers need only what a base station
+#         can measure; else the paper needs a better transmitter-side estimate
+#   fading: the leads under --fade-corr 0.9 / 0.98 (8c) -- report whatever they are
+#   P-D   JSCC (s7 / 8b) against BPG + CQI (8d) on the same frames: mean PSNR of the best
+#         policy each, and users at 28 / 30 / 32 dB; the shannon lines are the capacity bound

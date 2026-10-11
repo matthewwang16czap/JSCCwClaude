@@ -35,15 +35,16 @@ class Utility:
     """Per-image MSE / PSNR of a delivery history (one SNR per phase, in prefix order)."""
 
     def __init__(self, kappa, rho, dsrc, csens, names, d_empty=0.1, meta=None):
-        self.kappa = float(kappa)
-        self.rho = [np.asarray(r, dtype=np.float64) for r in rho]     # rho[L - 1] has L entries
+        k = np.asarray(kappa, dtype=np.float64)
+        self.kappa = float(k) if k.ndim == 0 else k                   # pooled, or one per image
+        self.rho = [np.asarray(r, dtype=np.float64) for r in rho]     # rho[L - 1]: (L,) or (N, L)
         self.dsrc = np.asarray(dsrc, dtype=np.float64)                # (N images, P phases)
         self.csens = np.asarray(csens, dtype=np.float64)              # (N, P)
         self.names = list(names)
         self.d_empty = float(d_empty)                                 # nothing received
         self.meta = dict(meta or {})
         self.P = self.dsrc.shape[1]
-        if len(self.rho) != self.P or any(len(r) != L + 1 for L, r in enumerate(self.rho)):
+        if len(self.rho) != self.P or any(r.shape[-1] != L + 1 for L, r in enumerate(self.rho)):
             raise ValueError("rho must hold one share vector per prefix length 1..P")
 
     def mse(self, i, snrs_db):
@@ -52,7 +53,9 @@ class Utility:
             return self.d_empty
         if L > self.P:
             raise ValueError(f"{L} phases, the model covers {self.P}")
-        x = float(np.dot(self.rho[L - 1], phi(noise(snrs_db), self.kappa)))
+        kappa = self.kappa if np.ndim(self.kappa) == 0 else self.kappa[i]
+        rho = self.rho[L - 1] if self.rho[L - 1].ndim == 1 else self.rho[L - 1][i]
+        x = float(np.dot(rho, phi(noise(snrs_db), kappa)))
         return float(self.dsrc[i, L - 1] + self.csens[i, L - 1] * x)
 
     def psnr(self, i, snrs_db):
@@ -69,8 +72,15 @@ class Utility:
         return Utility(self.kappa, self.rho, self.dsrc * fd, self.csens * fc, self.names,
                        self.d_empty, self.meta)
 
+    def average(self):
+        """The content-blind transmitter's curve: geometric means over the images (its PSNR
+        is about the pool's mean PSNR)."""
+        g = lambda a: np.exp(np.log(np.maximum(a, 1e-12)).mean(0, keepdims=True))  # noqa: E731
+        return Utility(np.mean(self.kappa), [r if r.ndim == 1 else r.mean(0) for r in self.rho],
+                       g(self.dsrc), g(self.csens), ["average"], self.d_empty)
+
     def to_dict(self):
-        return {"kappa": self.kappa, "rho": [r.tolist() for r in self.rho],
+        return {"kappa": np.asarray(self.kappa).tolist(), "rho": [r.tolist() for r in self.rho],
                 "dsrc": self.dsrc.tolist(), "csens": self.csens.tolist(), "images": self.names,
                 "d_empty": self.d_empty, "meta": self.meta}
 
@@ -79,11 +89,25 @@ class Utility:
             json.dump(self.to_dict(), f, indent=1)
 
     @classmethod
-    def load(cls, path):
-        with open(path) as f:
-            d = json.load(f)
+    def from_dict(cls, d):
         return cls(d["kappa"], d["rho"], d["dsrc"], d["csens"], d["images"],
                    d.get("d_empty", 0.1), d.get("meta"))
+
+    @classmethod
+    def load(cls, path):
+        with open(path) as f:
+            return cls.from_dict(json.load(f))
+
+
+def load_utility(path, **digital):
+    """A utility file of either kind: this model (tools/utility_fit.py) or a digital
+    baseline (tools/digital_rd.py, alloc/digital.py; `digital` overrides its link)."""
+    with open(path) as f:
+        d = json.load(f)
+    if d.get("kind") == "digital":
+        from alloc.digital import DigitalUtility
+        return DigitalUtility.from_dict(d, **{k: v for k, v in digital.items() if v is not None})
+    return Utility.from_dict(d)
 
 
 # -- fitting --------------------------------------------------------------------------

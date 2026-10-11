@@ -85,11 +85,13 @@ net/backbones/          swin_linear.py  hybrid.py  vit.py
 net/modules/            swin.py  transformer.py  rate_mod.py  common.py
 alloc/                  per-image budget policy: core.py (allocation, statistics),
                         sweep.py (curves), predictor.py (the policy), io.py,
-                        utility.py (additive noise-sensitivity model of a prefix, for scheduling)
+                        utility.py (additive noise-sensitivity model of a prefix, for scheduling),
+                        digital.py (separation baseline: codec R-D points + link adaptation)
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
                         mixed_snr.py (prefixes whose chunks arrived at different SNRs)
                         utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
+                        digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -145,6 +147,11 @@ lengths, the advantage index `slope_adv`, greedy) or, with `--target Q`, for the
 users reaching Q dB (PADC's per-image lengths, online stopping, `online`: admission by
 remaining need + advantage timing), and `--dump`s histories that `mixed_snr.py --design
 file` replays through the codec (decoded differences between policies, paired by frame).
+`utility_fit.py --calib 1 13 --belief-out` builds what a transmitter can know (each image
+from 2P constant decodes, kappa and rho cross-fitted on other images) for `schedule_sim.py
+--belief`; `tools/digital_rd.py` measures a codec's R-D points (BPG, HEIC, JPEG 2000, WebP)
+for the separation baseline (`alloc/digital.py`), which `schedule_sim.py` schedules like
+any utility.
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`

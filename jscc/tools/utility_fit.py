@@ -13,6 +13,18 @@ noise rule on each image's own constant-SNR curve), for comparison.
 With --chunks phase runs covering 1/48 ... 1/8 (one level per number of phases) it also
 writes the utility file of tools/schedule_sim.py. Older 2-chunk grid runs fit too (no
 held-out profiles, no utility file).
+
+--calib S1 S2 ... --belief-out FILE: what a transmitter can know without the mixed-SNR
+measurements of the image it sends. The pooled kappa and rho come from OTHER images
+(--folds cross-fitting: images split by index, each fold calibrated with the parameters
+fitted on the rest), and each image's own Dsrc and C per prefix length from its
+constant-SNR decodes at the --calib SNRs only (2 SNRs x P lengths = 2P decodes at the
+transmitter, which has the image and the codec). Printed: that belief's errors on every
+profile it did not use, next to the full fit's held-out errors. FILE is a --belief for
+tools/schedule_sim.py.
+
+    python tools/utility_fit.py --mixed results/p2_full_snrc4.json --calib 1 13 \\
+        --belief-out results/belief_snrc4.json
 """
 
 import argparse
@@ -25,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402
 
-from alloc.utility import Utility, fit  # noqa: E402
+from alloc.utility import Utility, fit, noise, phi  # noqa: E402
 
 
 def load_levels(path):
@@ -68,12 +80,79 @@ def symmetric_rule_errors(lv, grid):
             "p95": float(np.percentile(np.abs(e), 95))}
 
 
+def phase_levels(meta, levels):
+    """{L: level} for --chunks phase runs with one level per number of phases 1..P."""
+    per = meta.get("per_phase")
+    if meta.get("chunking") != "phase" or not per:
+        raise SystemExit("needs --chunks phase runs (one chunk per phase)")
+    by_L = {lv["units"] // per: lv for lv in levels if lv["units"] % per == 0}
+    P = max(by_L)
+    if sorted(by_L) != list(range(1, P + 1)) or any(by_L[L]["chunks"] != L for L in by_L):
+        raise SystemExit(f"needs one level per number of phases 1..{P}, chunked by phase; "
+                         f"have {sorted(by_L)}")
+    return by_L, P
+
+
+def calibrate(by_L, P, images, calib, folds=2):
+    """Cross-fitted transmitter belief (see the module doc). Returns (Utility, report)."""
+    N = len(images)
+    fold = np.arange(N) % folds
+    kappa = np.zeros(N)
+    rho = [np.zeros((N, L)) for L in range(1, P + 1)]
+    dsrc, csens = np.zeros((N, P)), np.zeros((N, P))
+    for f in range(folds):
+        rest, mine = fold != f, np.flatnonzero(fold == f)
+        sub = [dict(by_L[L], key=str(L), psnr=np.asarray(by_L[L]["psnr"])[rest].tolist())
+               for L in range(1, P + 1)]
+        k_f, params, _ = fit(sub)
+        kappa[mine] = k_f
+        for L in range(1, P + 1):
+            lv = by_L[L]
+            rho[L - 1][mine] = params[str(L)][2]
+            prof = np.asarray(lv["profiles"], dtype=np.float64)
+            kinds = np.array(lv["kinds"])
+            cols = [j for j in range(len(prof)) if kinds[j] == "constant"
+                    and any(abs(prof[j, 0] - c) < 1e-9 for c in calib)]
+            if len(cols) < 2:
+                raise SystemExit(f"--calib needs >= 2 constant SNRs that the run measured; "
+                                 f"{len(cols)} at {L} phases")
+            x = phi(noise(prof[cols, 0]), k_f)
+            A = np.stack([np.ones_like(x), x], 1)
+            for i in mine:
+                D = 10.0 ** (-np.asarray(lv["psnr"][i], dtype=np.float64)[cols] / 10.0)
+                sol = np.linalg.lstsq(A / D[:, None], np.ones_like(D), rcond=None)[0]
+                dsrc[i, L - 1], csens[i, L - 1] = max(sol[0], 1e-6), max(sol[1], 0.0)
+    belief = Utility(kappa, rho, dsrc, csens, images)
+    report = {}
+    for L in range(1, P + 1):
+        lv = by_L[L]
+        prof = np.asarray(lv["profiles"], dtype=np.float64)
+        kinds = np.array(lv["kinds"])
+        used = np.array([kinds[j] == "constant" and any(abs(prof[j, 0] - c) < 1e-9 for c in calib)
+                         for j in range(len(prof))])
+        Y = np.asarray(lv["psnr"], dtype=np.float64)
+        rep = {}
+        for name, m in (("constant", (kinds == "constant") & ~used), ("one_at_a_time", kinds == "oat"),
+                        ("random", kinds == "random"), ("all_unused", ~used)):
+            if m.any():
+                e = np.array([[belief.psnr(i, prof[j].tolist()) - Y[i, j] for j in np.flatnonzero(m)]
+                              for i in range(N)])
+                rep[name] = {"bias": float(e.mean()), "mae": float(np.abs(e).mean()),
+                             "p95": float(np.percentile(np.abs(e), 95)), "n": int(e.size)}
+        report[str(lv["cbr"])] = rep
+    return belief, report
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--mixed", nargs="+", required=True, help="tools/mixed_snr.py JSON file(s)")
     ap.add_argument("--out", default=None, help="the utility file (needs --chunks phase runs)")
     ap.add_argument("--d-empty", type=float, default=0.1,
                     help="MSE of an image of which nothing arrived (0.1 = 10 dB)")
+    ap.add_argument("--calib", nargs="+", type=float, default=None,
+                    help="SNRs (dB) of the constant decodes a transmitter calibrates from")
+    ap.add_argument("--folds", type=int, default=2, help="--calib: cross-fitting folds")
+    ap.add_argument("--belief-out", default=None, help="--calib: the belief file to write")
     a = ap.parse_args()
     meta, levels, images = None, [], None
     for path in a.mixed:
@@ -99,15 +178,31 @@ def main():
         print(f"{lv['cbr']:>6s} {lv['chunks']:6d}  {rho:48s} {fit_s:>13s} {ho_s:>17s} {rule_s:>19s}")
         if ho and rule:
             rep["noise_rule_held_out"] = rule
+    if a.calib:
+        by_L, P = phase_levels(meta, levels)
+        belief, crep = calibrate(by_L, P, images, a.calib, a.folds)
+        print(f"transmitter belief: kappa and rho cross-fitted over {a.folds} folds of images, "
+              f"each image's Dsrc and C from its constant decodes at {a.calib} dB "
+              f"({2 * P if len(a.calib) == 2 else len(a.calib) * P} decodes); errors (belief - "
+              f"actual PSNR, MAE/p95) on the profiles it did not use")
+        print(f"{'CBR':>6s} {'other constants':>16s} {'one at a time':>14s} {'random':>12s} "
+              f"{'all unused':>12s} {'full fit, held-out':>19s}")
+        for lv in levels:
+            r = crep.get(str(lv["cbr"]), {})
+            cell = lambda k: f"{r[k]['mae']:.3f}/{r[k]['p95']:.3f}" if k in r else "-"  # noqa: E731
+            ho = report["levels"][lv["key"]].get("held_out")
+            ho_s = f"{ho['mae']:.3f}/{ho['p95']:.3f}" if ho else "-"
+            print(f"{lv['cbr']:>6s} {cell('constant'):>16s} {cell('one_at_a_time'):>14s} "
+                  f"{cell('random'):>12s} {cell('all_unused'):>12s} {ho_s:>19s}")
+        if a.belief_out:
+            belief.d_empty = a.d_empty
+            belief.meta = {"sources": a.mixed, "calib_snrs": a.calib, "folds": a.folds,
+                           "run_name": meta.get("run_name"), "report": crep}
+            os.makedirs(os.path.dirname(os.path.abspath(a.belief_out)), exist_ok=True)
+            belief.save(a.belief_out)
+            print(f"wrote {a.belief_out}")
     if a.out:
-        per = meta.get("per_phase")
-        if meta.get("chunking") != "phase" or not per:
-            raise SystemExit("--out needs --chunks phase runs (one chunk per phase)")
-        by_L = {lv["units"] // per: lv for lv in levels if lv["units"] % per == 0}
-        P = max(by_L)
-        if sorted(by_L) != list(range(1, P + 1)) or any(by_L[L]["chunks"] != L for L in by_L):
-            raise SystemExit(f"--out needs one level per number of phases 1..{P}, chunked by "
-                             f"phase; have {sorted(by_L)}")
+        by_L, P = phase_levels(meta, levels)
         dsrc = np.stack([params[by_L[L]["key"]][0] for L in range(1, P + 1)], 1)
         csens = np.stack([params[by_L[L]["key"]][1] for L in range(1, P + 1)], 1)
         rho = [params[by_L[L]["key"]][2] for L in range(1, P + 1)]

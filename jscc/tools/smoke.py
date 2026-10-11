@@ -530,6 +530,38 @@ def check_schedule():
        f"{100 * summ['pf']['satisfied']:.0f}%, padc {100 * summ['padc']['satisfied']:.0f}%); "
        f"without fading padc's sizing alone beats pf")
 
+    from alloc.digital import DigitalUtility, efficiency
+    from alloc.utility import load_utility
+    from tools.schedule_sim import fades
+    from tools.utility_fit import calibrate
+    by_L = {L: dict(levels[L - 1], cbr=str(L)) for L in range(1, P + 1)}
+    belief, crep = calibrate(by_L, P, u.names, [1.0, 13.0], folds=2)
+    worst = max(r["all_unused"]["mae"] for r in crep.values())
+    with tempfile.TemporaryDirectory() as tmp:
+        belief.save(os.path.join(tmp, "b.json"))
+        b2 = load_utility(os.path.join(tmp, "b.json"))
+    ok(worst < 0.01 and abs(b2.psnr(2, [3.0, 11.0]) - u.psnr(2, [3.0, 11.0])) < 0.01,
+       f"calibration from 2 constant decodes per length, kappa / rho cross-fitted: recovers the "
+       f"model (worst MAE {worst:.4f} dB on the unused profiles); per-image kappa / rho load")
+    summ, _, _ = simulate(u, 4, 10, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "online"],
+                          seed=1, target=30.0, belief_util=belief)
+    ok(summ["online"]["satisfied"] >= summ["pf"]["satisfied"],
+       "--belief: the transmitter decides on its calibrated curves, users are scored on the truth")
+    d = DigitalUtility([[[0.3, 30.0], [0.1, 25.0], [0.6, 33.0]]] * 2, ["a", "b"], 1.0 / 16, "cqi")
+    e = efficiency([-10.0, 0.2, 30.0])
+    ok(e.tolist() == [0.0, 0.6016, 5.5547] and d.psnr(0, []) == 10.0 and d.psnr(0, [7.0]) == 10.0
+       and d.psnr(0, [7.0, 7.0]) == 25.0 and d.psnr(1, [22.7, 22.7]) == 33.0
+       and abs(DigitalUtility(d.curves, d.names, mode="interp").psnr(0, [7.0] * 3) - 29.42) < 0.01,
+       "digital: CQI table, nothing below the smallest file, best complete file / interpolated")
+    summ, _, _ = simulate(d, 2, 6, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                          ["pf", "padc", "online_pf"], seed=1, target=30.0)
+    ok(summ["online_pf"]["satisfied"] >= summ["pf"]["satisfied"],
+       "digital utilities run through the same schedulers")
+    g = 10 ** (fades(np.random.default_rng(3), 64, 2000, "rayleigh", 0.9) / 10)
+    lag = np.mean([np.corrcoef(r[:-1], r[1:])[0, 1] for r in g])
+    ok(abs(g.mean() - 1) < 0.05 and abs(lag - 0.81) < 0.05,
+       f"correlated fading: unit mean gain, lag-1 power correlation {lag:.2f} (corr^2 = 0.81)")
+
 
 def check_eval_seed(x):
     """Validation and test draw their channel noise from --eval-seed, not --seed, so runs

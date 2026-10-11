@@ -421,3 +421,56 @@ runs them on the real utility and decodes them.
 So the scheduler's value is not where docs/PROBLEM.md first put it (content-aware lengths for
 mean quality): it is quality- and position-aware TIMING (any objective) and, for a quality
 target, per-image sizing with online stopping. Section 7 decides both on the real utility.
+
+## Problem P1, step 3: the advantage index and the quality target, real utility (2026-10-10)
+
+COMMANDS.txt section 7 on the server: `tools/schedule_sim.py` on `results/utility_snrc4.json`
+(2000 frames per case), then 60 frames of schedules per objective decoded by the snrc4 codec
+(and the mean ones by s1), with decoded differences paired by frame.
+
+**Mean PSNR, vs pf (dB, simulator; 95% CIs within +-0.012):**
+
+| | main (K 8, T 24) | same image | T 16 | T 36 | K 16, T 48 | equal means 5 dB | pred noise 0.1 |
+|---|---|---|---|---|---|---|---|
+| fixed_uni | +0.050 | +0.051 | -0.021 | -0.002 | +0.046 | +0.040 | +0.053 |
+| fixed_slope | +0.050 | +0.051 | -0.017 | +0.049 | +0.045 | +0.040 | +0.053 |
+| slope_adv | **+0.476** | +0.489 | +0.343 | +0.464 | +0.384 | +0.452 | +0.477 |
+
+slope_adv also lifts the 5th-percentile user by +0.46 dB and the worst user of a frame by
++0.69 dB, and sends 1.1% of its phases below 0 dB (pf 3.3%). **Decoded** (snrc4, 60 frames x 8
+users): slope_adv - pf **+0.465 dB [0.393, 0.533]**, fixed_uni +0.057, fixed_slope +0.061; the
+model's error on these schedules: bias -0.002, MAE 0.087, p95 0.27 dB. With the constant-SNR
+decoder s1 on the same schedules slope_adv still gains +0.461 [0.371, 0.544] (s1 is predicted
+worse: bias +0.12, MAE 0.22), and piecewise training is worth +0.04 dB under slope_adv, +0.03
+under pf, +0.33 under round robin: the advantage index avoids the fades a mis-trained decoder
+handles worst. **Gate P-C1 passes** (>= 0.3 dB decoded).
+
+**Quality target, share of users at the target (simulator; online - padc with 95% CI):**
+
+| | pf | pf_len | padc | padc_adv | stop | stop_adv | online | online - padc |
+|---|---|---|---|---|---|---|---|---|
+| 30 dB, K 8, T 24 | 63.5% | 60.7% | 65.7% | 68.9% | 69.6% | 73.0% | **75.0%** | **+9.4 [8.9, 9.8]** |
+| 28 dB | 81.3 | 80.3 | 83.6 | 86.5 | 87.9 | 90.8 | 90.9 | +7.3 |
+| 32 dB | 41.9 | 42.1 | 44.6 | 50.1 | 45.2 | 49.5 | 55.0 | +10.4 |
+| T 16 | 48.5 | 48.8 | 58.8 | 65.0 | 54.1 | 56.3 | 67.4 | +8.6 |
+| T 36 | 71.0 | 69.7 | 69.0 | 73.1 | 72.7 | 76.1 | 76.2 | +7.2 |
+| K 16, T 48 | 66.1 | 62.7 | 69.2 | 71.4 | 73.9 | 77.2 | 78.1 | +8.9 |
+| same image | 64.1 | 61.0 | 66.2 | 69.5 | 66.3 | 67.9 | 73.2 | +6.9 |
+| pred noise 0.1 | 63.5 | 60.5 | 65.4 | 68.3 | 65.5 | 68.3 | 69.5 | +4.2 |
+| plan at mean + 2 dB | 63.5 | 61.4 | 64.5 | 70.3 | 69.6 | 72.8 | 74.7 | +10.2 |
+
+**Decoded** (30 dB, 60 frames): online 76.0% (predicted 76.9%), padc 66.0% (66.2%);
+online - padc **+10.0 points [7.3, 12.9]**, online - pf +13.5; aiming 0.2 dB above the target:
++9.6 [7.1, 12.1] with 0.2% of users predicted to make it but decoding below (0.8% without
+the margin). The model's error on these schedules: bias -0.011, MAE 0.064, p95 0.18 dB. **Gate
+P-C2 passes** (>= 5 points decoded, missed <= 3%).
+
+Reading the target table (main case): per-image sizing is worth +5.0 points (padc - pf_len),
+advantage timing +3.2 on padc's lengths and +3.4 on online stopping, stopping on the realised
+SNRs +3.9 (stop - padc; +4.1 with advantage timing on both), admission +2.0 (online -
+stop_adv; +11.1 at T 16, where stopping alone loses to padc's shortest-first). With every user
+on the same image online still leads by +6.9: most of the gain is the channel side (stopping,
+timing, admission), which only the encode-once prefix with a mixed-SNR utility allows; the
+content side adds ~2.5 points on Kodak. The one weak case: curves known only to ~10% in log
+MSE (pred noise 0.1) halve the lead to +4.2 -- the transmitter's knowledge is the next
+question (section 8: calibrating each image from 2P of its own constant-SNR decodes).
