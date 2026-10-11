@@ -348,9 +348,13 @@ def main():
             with autocast(cfg, cfg.device):
                 enc = model.encode(x)
                 for ci, lv in enumerate(levels):
+                    # phase designs seed a level by its number of phases (= its position in
+                    # the full 1/48 ... 1/8 list), so a one-CBR run of a specialist draws the
+                    # same noise as the prefix model at that length
+                    li = lv["units"] // cfg.grid_tokens - 1 if args.chunks == "phase" else ci
                     scores[ci][k] = score_profiles(model, cfg, enc, x, k, lv["units"], lv["cuts"],
                                                    lv["profiles"], suite,
-                                                   cfg.eval_seed + 100_003 * k + 1000 * ci)
+                                                   cfg.eval_seed + 100_003 * k + 1000 * li)
             if (k + 1) % 6 == 0 or k + 1 == len(ds):
                 print(f"  {k + 1}/{len(ds)} images", flush=True)
     summary = {}

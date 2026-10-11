@@ -57,7 +57,8 @@ Scheduling Encode-Once Deep JSCC Prefixes over Fading Multi-User Downlinks
 
 ## Still owed, in order
 
-1. P-D and P-E (section 9; P-E needs section 4's specialist numbers).
+1. P-D and P-E (COMMANDS.txt section 10: HEIC / JPEG 2000 baselines; six piecewise-trained
+   specialists replace the retired wave c2).
 2. The codec gap: about 0.8-0.9 dB below JSCCformer-f's codec after discounting feedback;
    more training data (7e) is the cheap first step. Relative claims do not depend on it, but a
    reviewer will ask.

@@ -432,6 +432,11 @@ def check_snr_profiles(x):
     model3.train()
     loss = model3(x, s[:2], want_metrics=False)[1]
     ok(bool(torch.isfinite(loss)), "a training step on piecewise-SNR profiles")
+    _, cfg4 = build("vit", "--snr-chunks", "4", "--fixed-cbr", "1/48")
+    span = cfg4.units_for_cbr(cfg4.fixed_cbr)
+    s4 = sample_snr(cfg4, 64, torch.device("cpu"))
+    ok(all(len(set(r[:span].tolist())) > 1 for r in s4),
+       f"--snr-chunks with --fixed-cbr: every profile changes within the {span} tokens sent")
     raises(["--backbone", "swin", "--snr-chunks", "2"], "--snr-chunks is refused for swin")
     raises(["--backbone", "vit", "--cascade", "--snr-chunks", "2"],
            "--snr-chunks is refused with --cascade")

@@ -26,7 +26,9 @@ def sample_snr(cfg, batch, device):
     """One SNR per image, uniform over --snr-range. With --snr-chunks K > 1 a
     per-token profile (batch, n_tokens) instead: K chunks at independent SNRs, cut
     at K - 1 random token positions (tokens sent in slots of a block-fading
-    channel); a prefix shorter than a cut sees only the chunks before it."""
+    channel); a prefix shorter than a cut sees only the chunks before it. A
+    --fixed-cbr specialist cuts within the tokens it sends, so every one of its
+    samples is piecewise (at least the exposure the prefix model gets there)."""
     lo, hi = cfg.train_snr_range
 
     def draw(*shape):
@@ -36,7 +38,8 @@ def sample_snr(cfg, batch, device):
 
     if cfg.snr_chunks <= 1:
         return draw(batch)
-    cuts = torch.randint(1, cfg.n_tokens, (batch, cfg.snr_chunks - 1), device=device)
+    span = cfg.n_tokens if cfg.fixed_cbr is None else cfg.units_for_cbr(cfg.fixed_cbr)
+    cuts = torch.randint(1, max(span, 2), (batch, cfg.snr_chunks - 1), device=device)
     return piecewise_snr(draw(batch, cfg.snr_chunks), cuts.sort(1).values, cfg.n_tokens)
 
 

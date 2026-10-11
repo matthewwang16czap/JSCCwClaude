@@ -1,242 +1,62 @@
 ================================================================================
- COMMANDS.txt — wave c2, revised: the gates of the TWC plan (docs/ASSESSMENT.md v2)
- rev 2026-10-09. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-11. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-NEW on 2026-10-11: section 9, after your section-8 results (the realistic transmitter
-passed, decoded). CPU only, ~30 min; no GPU this time (7e is still open if GPU 4 is idle).
-8d did not run (no bpgenc, and the sheet hid the error): section 9 uses HEIC from pip
-instead and keeps every error in the result files. Sections 5-8 are done; sections 0-4 are
-unchanged -- please send 4b-4d (G-C's specialist gaps price the per-CBR baseline of 9d) and
-7e if you ran it. Work on the branch: `git checkout claude/gifted-newton-cfldb8 && git pull
-origin claude/gifted-newton-cfldb8` (main stops at section 5).
+WHAT TO RUN: SECTION 10, at the end. It holds every command not yet run, in order.
+Sections 0-9 above it are the record: nothing in them needs to be run again.
 
-This sheet REPLACES the c2 sheet of the previous turn (commit 0af2e1f). Its specialists
-are kept under the same names; its encoder-only runs are dropped; the matched-compute
-pair, the allocation oracle, the LoRA budget heads and a second seed are added.
+  section                                     status
+  0  environment                              valid; section 10 repeats what it needs
+  1  CPU gates                                run again after every pull (10.0 does)
+  2-4  wave c2                                RETIRED, not to be run (why: below)
+  5-8  problem P1, steps 1-4                  done (docs/NOTES.md, "Problem P1 ...")
+  7e  more training data                      not run: in section 10
+  8d  digital baseline                        did not run (no bpgenc): in section 10
+  9  digital, conditional plan, per-CBR       not run: folded into section 10 (its per-CBR
+                                              part replaced by real per-CBR models)
 
-WHY THIS WAVE (docs/ASSESSMENT.md). Three questions decide what the paper can claim:
-
-  G-A  matched compute. The wave-1 ViT that beats Swin uses 27x its parameters and
-       16x its FLOPs. Does a ViT with token transmission still win at the SAME
-       compute? ViT p8 384x6 (21.6 M, 43.9 GFLOPs) against Swin large (12.7 M,
-       41.8 GFLOPs, the published SwinJSCC size class), both from scratch, wave-1
-       protocol.
-  G-B  per-image allocation (the "adaptive" half of AdaTok's flow). At a fixed mean
-       rate, how much does giving each image its own token budget gain? The
-       cross-fitted oracle on Kodak, for the wave-1 ViT and Swin (prefix models).
-  G-C  budget-specialised decoding. How big is the multi-rate penalty under the c1
-       protocol (1/8 and 1/48 specialists), how much of it a specialised DECODER
-       alone can recover (1/8 with the encoder frozen: the ceiling for any
-       decoder-side head), and how much AdaTok's per-budget LoRA heads recover, alone
-       and stacked with the linear exits; plus a second seed of the c1 control and of
-       the c1 linear exits.
-
-  id   run                                            protocol              answers
-  M1   vit p8 384x6 s4, from scratch                   2000 epochs, uniform  G-A
-  M2   swin large, from scratch                        2000 epochs, uniform  G-A
-  A1   allocation sweep + oracle, wave-1 vit           Kodak, no training    G-B
-  A2   allocation sweep + oracle, wave-1 swin          Kodak, no training    G-B
-  V1   vit 1/8 specialist                              c1 fine-tune          G-C: the gap at 1/8
-  V2   vit 1/8, encoder frozen at w1 (decoder trains)  c1 fine-tune          G-C: the decoder's share
-  V4   vit 1/48 specialist                             c1 fine-tune          G-C: the gap at 1/48
-  W1   swin 1/8 specialist                             c1 fine-tune          G-C (swin)
-  W2   swin 1/48 specialist                            c1 fine-tune          G-C (swin)
-  L1   vit + LoRA budget heads (FiLM + LoRA, rank 16)  c1 fine-tune, grid    G-C: AdaTok's heads
-  L2   vit + LoRA budget heads + linear exits          c1 fine-tune, grid    G-C: the stack
-  R1   vit c1 control, seed 43                         c1 fine-tune, grid    seed noise
-  R2   vit linear exits, seed 43                       c1 fine-tune, grid    does c1 replicate?
-
-  card   queue (in order)                                           about
-  GPU 2  M1                                                         the probe says (section 2)
-  GPU 3  M2                                                         the probe says (section 2)
-  GPU 4  A1 -> A2 -> V1 -> V2 -> V4 -> W1 -> W2                     ~17 h
-  GPU 5  L1 -> L2 -> R1 -> R2                                       ~16 h
-  (a c1 fine-tune is ~3.8 h for vit and ~2.7 h for swin by your logs; a run with a
-   frozen half is faster; a sweep ~20-40 min)
-
-GOTCHA: if you already ran part of the OLD c2 sheet: its V1, V2, V4, W1, W2 are exactly
-the runs here, under the same names. Leave them out of the GPU 4 queue (a rerun would
-overwrite the directory with the same run). If its V3, W3 or W4 (encoder or decoder
-frozen) finished, add `${VT}_fix1-8_frz-dec_c2` (V3) to the first line of 4c and
-`${SWH}_fix1-8_frz-enc_c2 ${SWH}_fix1-8_frz-dec_c2` to the swin 1/8 line. Move its .out
-files away first (mkdir -p old_c2 && mv c2_gpu*.out old_c2/) so the greps below stay clean.
-GOTCHA: if you already have Kodak curve files of the wave-1 ViT and Swin from the earlier
-allocation wave, skip A1 / A2 and run section 4b on those files: the same question.
-GOTCHA: the specialists are evaluated at all five CBRs on purpose: the evaluation seeds
-each (SNR, CBR) cell by its position in the CBR list, so only a run scored on the same
-five CBRs gets the same channel draws as the c1 control. Read a specialist at its OWN
-CBR only (--cbrs in section 4); its other rows are meaningless.
-GOTCHA: NEW --eval-seed (default 42): the channel draws of validation and test no
-longer follow --seed, so R1 / R2 (seed 43) are scored on the same draws as every c1 run
-and pair with them. Runs of seed 42 are scored exactly as before.
-GOTCHA: L1 / L2 load the w1 FiLM weights and add LoRA heads that start as the identity
-(their B factors are zero), so they start exactly at the w1 model; --mod-lr-mult 4
-trains the heads (and the exits) faster, as in c1.
-GOTCHA: M1 / M2 are from scratch, like wave 1. Compare them with each other (same code,
-same protocol); the wave-1 runs are context only (older channel backend).
+WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
+that day, before the paper moved to scheduling, and four things are wrong with it now:
+  1. Most of it answers questions the paper no longer asks: ViT vs Swin at matched compute
+     from scratch (M1, M2: 2000 epochs each, days of two cards), the per-image allocation
+     oracle (A1, A2; the scheduling runs measured the content part directly: +0.05 dB),
+     AdaTok-style LoRA budget heads and a second seed of the cascade (L1, L2, R1, R2).
+  2. Its specialists (V1 1/8, V4 1/48, W1, W2) were to be compared with the c1 control,
+     a constant-SNR model. Every scheduling result uses the PIECEWISE-trained model
+     (snrc4_s1), and constant-SNR decoders do not decode slot-split codes properly (P-A:
+     2-4x worse model errors). The gap c2 measures does not price the per-CBR baseline.
+  3. It trains two lengths (1/8, 1/48); the schedulers mostly send 2-4 phases (1/24-1/12),
+     and 5/48 was nowhere.
+  4. The sheet kept asking for its results ("send 4b-4d") while sections 5-8 used GPU 5,
+     which section 3 had queued for c2.
+Its replacement is 10.1: one specialist per phase length (1/48 ... 1/8), each trained
+exactly like snrc4_s1 (from w1, 400 epochs, --snr-chunks 4) plus --fixed-cbr, then
+measured like it (tools/mixed_snr.py --design full) and scheduled like it. If c2 jobs are
+still running, 10.0 stops them. If some finished, nothing is lost: see 10.6 (optional).
+The old sections 2-4 are in git (commit e322808) if you ever want them.
 
 --------------------------------------------------------------------------------
- 0. GET THE CODE, ENVIRONMENT
+ 0. ENVIRONMENT (the record; section 10 repeats it)
 --------------------------------------------------------------------------------
 
-cd ~/projects/JSCCwClaude-main     # the clone you used for c1
-git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull && cd jscc
-#   (or, once this branch is merged:  git checkout main && git pull && cd jscc)
-
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc        # main stops at section 5: stay on the branch
 export JSCC_DATA_ROOT=$HOME
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export CUDA_DEVICE_ORDER=PCI_BUS_ID    # CUDA index N = nvidia-smi index N (keep it set)
-
-W1S=history/swin_base_awgn_DIV2K_256_w1/models/last.pt
-W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
-ls -l $W1S $W1V                                           # both must exist
-ls -d history/*_grid_c1 history/*casc-mmmm-d0000_c1       # c1 controls + linear exits (4 dirs)
-mkdir -p curves results
-
-# from scratch, the wave-1 protocol (2000 epochs, uniform budgets)
-SCR="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
-  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
-  --valid-freq 40 --amp --training --tag m1"
-# fine-tunes, the c1 protocol
-FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
-  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
-  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
-  --tag c2"
-SW="--backbone swin --pretrained $W1S"
-VI="--backbone vit --pretrained $W1V"
-SWEEP="--img-size 256 --channel-type awgn --amp --split test --testset Kodak \
-  --snrs 1 4 7 10 13 --draws 4"
 
 --------------------------------------------------------------------------------
  1. CPU GATES — a few minutes. All must pass.
 --------------------------------------------------------------------------------
 
 python -m pyflakes main.py engine.py configs data net utils tools alloc
-python tools/smoke.py            # ends with "all checks passed"; [budget heads] is new
+python tools/smoke.py            # ends with "all checks passed"
 
 --------------------------------------------------------------------------------
- 2. GPU PROBE — a minute per line: memory and speed of M1, M2 and the LoRA fine-tunes
+ 2-4. WAVE C2 -- RETIRED 2026-10-11 (see the top of this file; nothing to run)
 --------------------------------------------------------------------------------
-
-CUDA_VISIBLE_DEVICES=2 python tools/probe.py --backbone vit --token-dim 384 --depth 6 \
-  --heads 6 --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=3 python tools/probe.py --backbone swin --model-size large \
-  --batch-size 16 --amp
-CUDA_VISIBLE_DEVICES=5 python tools/probe.py --backbone vit --rate-mod both --cascade \
-  --batch-size 16 --amp
-# "h per 100k steps" is the time of a 2000-epoch run. Keep "reserved" <= ~22 GiB; if
-# swin large is above, add --batch-size 8 to M2; if the LoRA probe (the third line: the
-# big vit with LoRA heads and exits, as in L2) is above, add --batch-size 8 to L1 and L2
-# (accumulation keeps the effective batch at 16). Send the three lines.
-
---------------------------------------------------------------------------------
- 3. THE WAVE — queued on cards 2-5 (jobs on one card run in order)
---------------------------------------------------------------------------------
-
-# GPU 2 — M1: vit p8 384x6, from scratch (G-A)
-CUDA_VISIBLE_DEVICES=2 nohup python main.py $SCR --backbone vit --token-dim 384 --depth 6 \
-  --heads 6 > c2_gpu2_M1_vit384.out 2>&1 &
-
-# GPU 3 — M2: swin large, from scratch (G-A)
-CUDA_VISIBLE_DEVICES=3 nohup python main.py $SCR --backbone swin --model-size large \
-  > c2_gpu3_M2_swinL.out 2>&1 &
-
-# GPU 4 — A1, A2: allocation sweeps (G-B); then V1, V2, V4, W1, W2: specialists (G-C)
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python tools/alloc_sweep.py $SWEEP --backbone vit --pretrained $W1V --out curves/vit_w1_kodak.npz > c2_gpu4_A1_sweep_vit.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/alloc_sweep.py $SWEEP --backbone swin --pretrained $W1S --out curves/swin_w1_kodak.npz > c2_gpu4_A2_sweep_swin.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/8 > c2_gpu4_V1_vit_spec8.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/8 --freeze encoder > c2_gpu4_V2_vit_dec8.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $VI --fixed-cbr 1/48 > c2_gpu4_V4_vit_spec48.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW --fixed-cbr 1/8 > c2_gpu4_W1_swin_spec8.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python main.py $FT $SW --fixed-cbr 1/48 > c2_gpu4_W2_swin_spec48.out 2>&1
-" > /dev/null 2>&1 &
-
-# GPU 5 — L1, L2: AdaTok-style LoRA budget heads, alone and with the linear exits;
-#         R1, R2: a second seed of the c1 control and of the c1 linear exits (G-C)
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-mod both --rate-sampling grid --mod-lr-mult 4 > c2_gpu5_L1_vit_lora.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-mod both --cascade --mod-lr-mult 4 > c2_gpu5_L2_vit_lora_exits.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --rate-sampling grid --seed 43 > c2_gpu5_R1_vit_control_s43.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT $VI --cascade --mod-lr-mult 4 --seed 43 > c2_gpu5_R2_vit_exits_s43.out 2>&1
-" > /dev/null 2>&1 &
-
-# --- right after launch -----------------------------------------------------------
-grep -h "parameters, effective batch" c2_gpu*.out   # M1 ~21.6 M, M2 ~12.7 M, L1 / L2 slightly above 142.4 M
-grep -h "loaded" c2_gpu*.out          # fine-tunes: 0 unexpected; L1 / L2 / R2: only new tensors missing
-tail -n 2 c2_gpu*.out                 # img/s, loss, the diag check
-nvidia-smi -i 2,3,4,5                 # <= ~22 GiB per card
-
-# --- while it runs ----------------------------------------------------------------
-grep -h "froze the" c2_gpu4_V2_vit_dec8.out   # once V2 starts: "froze the encoder"
-grep -h "non-finite" c2_gpu*.out      # skipped optimiser steps: expect none
-ls history/ | grep -E "_m1$|_c2$"     # run directories (names in section 4)
-# M1 vs M2 at matched epochs, as they go (validation crops, last 5 validations so far):
-python tools/compare_runs.py history/swin_large_awgn_DIV2K_256_m1 \
-  history/vit_p8d384x6s4_awgn_DIV2K_256_m1 --window 5
-
---------------------------------------------------------------------------------
- 4. READING THE WAVE (send back everything this section prints)
---------------------------------------------------------------------------------
-
-VT=history/vit_p8d768x10s4_awgn_DIV2K_256
-SWH=history/swin_base_awgn_DIV2K_256
-
-# 4a. G-A: matched compute, Kodak paired over images (control = Swin large)
-python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1
-python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1 \
-  --metric msssim
-python tools/paired.py history/swin_large_awgn_DIV2K_256_m1 history/vit_p8d384x6s4_awgn_DIV2K_256_m1 \
-  --metric lpips_vgg
-#     context, the four sizes on one table (wave-1 runs used the older channel backend)
-python tools/compare_runs.py ${SWH}_w1 history/swin_large_awgn_DIV2K_256_m1 \
-  history/vit_p8d384x6s4_awgn_DIV2K_256_m1 ${VT}_w1 --test
-
-# 4b. G-B: per-image allocation at a fixed mean rate, the cross-fitted oracle
-#     (--gate / --gate-saving set to the G-B bar: +0.2 dB or a 10% bandwidth saving).
-#     The table also prints `equal_q`: PADC's per-image rule (IEEE TWC 2023: each image the
-#     least budget reaching a common quality) on the same curves. G-B needs oracle > equal_q.
-python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective psnr \
-  --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_vit_psnr.txt
-python tools/alloc_policy.py oracle --curves curves/swin_w1_kodak.npz --objective psnr \
-  --gate 0.2 --gate-saving 0.1 | tee results/c2_oracle_swin_psnr.txt
-python tools/alloc_policy.py oracle --curves curves/vit_w1_kodak.npz --objective lpips \
-  | tee results/c2_oracle_vit_lpips.txt
-
-# 4c. G-C: the gap, the decoder's share, and what closes it, paired against the c1 control
-python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-8_c2 ${VT}_fix1-8_frz-enc_c2 \
-  ${VT}_casc-mmmm-d0000_c1 ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2 --cbrs 1/8
-python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-48_c2 ${VT}_casc-mmmm-d0000_c1 \
-  ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2 --cbrs 1/48
-python tools/paired.py ${VT}_grid_c1 ${VT}_both_grid_c2 ${VT}_both_casc-mmmm-d0000_c2
-python tools/paired.py ${VT}_grid_c1 ${VT}_both_grid_c2 --metric lpips_vgg
-python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-8_c2 ${SWH}_casc-mmmm-d0000_c1 --cbrs 1/8
-python tools/paired.py ${SWH}_grid_c1 ${SWH}_fix1-48_c2 ${SWH}_casc-mmmm-d0000_c1 --cbrs 1/48
-
-# 4d. seeds: does the c1 exit effect replicate, and how far apart are two controls?
-python tools/paired.py ${VT}_grid_s43_c2 ${VT}_casc-mmmm-d0000_s43_c2
-python tools/paired.py ${VT}_grid_c1 ${VT}_grid_s43_c2
-python tools/paired.py ${VT}_casc-mmmm-d0000_c1 ${VT}_casc-mmmm-d0000_s43_c2
-
-# Decision (docs/ASSESSMENT.md, section 3):
-#   G-A  vit384 - swinL >= +0.3 dB mean over CBRs   -> the token/ViT claim holds at matched
-#                                                      compute; next: the same-backbone
-#                                                      interface ablation
-#        within +-0.1 dB or below                    -> no backbone claim; the paper rests on
-#                                                      allocation + nesting analysis
-#   G-B  oracle >= +0.2 dB (or >= 10% saving) at 1/24-1/12 with CI clear of 0, and above equal_q
-#                                                    -> allocation is a contribution: next turn
-#                                                      trains the predictor (alloc_policy train)
-#        smaller                                     -> allocation is a section, not the story
-#   G-C  (exits or LoRA) - control at 1/8 >= 30% of (specialist - control), no loss at 1/48,
-#        and the seed-43 pair shows the same sign    -> budget-specialised decoding is a
-#                                                      contribution
-#        V2 (decoder only) far below V1 (specialist) -> the penalty is in the shared ENCODER:
-#                                                      no decoder head can close it; next turn
-#                                                      conditions the encoder on the budget
-#                                                      (the transmitter knows it)
 
 --------------------------------------------------------------------------------
  5. THE NEW PROBLEM: FIRST MEASUREMENTS (docs/PROBLEM.md, gates P-A and P-B) -- DONE
@@ -445,26 +265,10 @@ CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SN
   --profiles-json results/s7_rep_tgt_m02_histories.json --out results/s7_dec_tgt_m02_snrc4.json \
   | tee -a results/s7_dec.txt
 
-# 7e. OPTIONAL, GPU 4 if it is idle (nvidia-smi -i 4), ~4-5 h: does more training data close
-#     part of the codec's gap to JSCCformer-f (docs/PROBLEM.md, risks)? E2b's recipe (from w1,
-#     --snr-chunks 4) on DIV2K + Flickr2K for the same number of image samples (400 epochs x
-#     800 images = 93 epochs x 3450). Needs $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR (2650 PNGs,
-#     https://cv.snu.ac.kr/research/EDSR/Flickr2K.tar); skip it if the folder is missing.
-ls $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR | wc -l       # expect 2650
-W1V=history/vit_p8d768x10s4_awgn_DIV2K_256_w1/models/last.pt
-FTD="--trainset DIV2K Flickr2K --validset DIV2K --testset Kodak --img-size 256 \
-  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
-  --amp --training --max-epoch 93 --valid-freq 31 --lr 5e-5 --warmup-steps 200 \
-  --tag d1 --snr-chunks 4"
-CUDA_VISIBLE_DEVICES=4 nohup python main.py $FTD --backbone vit --pretrained $W1V \
-  > s7_gpu4_D1_snrc4_flickr.out 2>&1 &
-# when it has finished (tail s7_gpu4_D1_snrc4_flickr.out):
-python tools/compare_runs.py ${VT}_snrc4_s1 history/vit_p8d768x10s4_awgn_DIV2K+Flickr2K_256_snrc4_d1 \
-  --test --per-snr
+# 7e. (not run yet: moved to section 10)
 
 # --- reading section 7 (send back everything it prints) ---------------------------
 cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
-# and 7e's compare_runs table if you ran it
 
 # Decision (docs/PROBLEM.md, section 5):
 #   P-C1  s7_mean, main case: slope_adv - pf >= +0.3 dB, AND decoded (s7_dec, first file,
@@ -478,7 +282,7 @@ cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
 
 --------------------------------------------------------------------------------
  8. PROBLEM P1, STEP 4: a realistic transmitter, correlated fading, the digital baseline -- DONE
-    (except 8d: superseded by 9a-9b)
+    (except 8d, which did not run: replaced in section 10)
     (docs/NOTES.md "P1, step 3"; docs/PROBLEM.md gates P-C3 and P-D)
 --------------------------------------------------------------------------------
 # Section 7: the advantage index +0.465 dB over PF and online +10.0 points over PADC's rule,
@@ -570,90 +374,175 @@ cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_di
 #   P-D   JSCC (s7 / 8b) against BPG + CQI (8d) on the same frames: mean PSNR of the best
 #         policy each, and users at 28 / 30 / 32 dB; the shannon lines are the capacity bound
 
---------------------------------------------------------------------------------
- 9. PROBLEM P1, STEP 5: the two missing baselines, conditional planning
-    (docs/NOTES.md "P1, step 4"; docs/PROBLEM.md gates P-D and P-E; docs/PAPER.md)
---------------------------------------------------------------------------------
-# Section 8: with what a base station can measure itself (12 decodes per image), +0.464 dB and
-# +11.0 points, decoded. Left for the paper: separation (HEVC-intra + ideal link adaptation
-# through the same schedulers), one model per CBR (fixed lengths, no nesting penalty), and
-# slow fading, where the advantage index should compare with the SNR the user can still
-# expect in this frame rather than its mean. All CPU. Every line keeps its errors (2>&1).
+================================================================================
+ 10. TO RUN NOW -- every command not yet run, in order
+     (docs/PROBLEM.md gates P-D and P-E; docs/PAPER.md claims C5 and C6)
+================================================================================
+# Left for the paper: (a) one model per CBR as the baseline, done right: six piecewise-
+# trained specialists, measured and scheduled like the prefix model (GPUs 2-5, ~8 h);
+# (b) separation: HEVC intra and JPEG 2000 with ideal link adaptation through the same
+# schedulers (CPU); (c) slow fading with --plan conditional (CPU); (d) more training data for
+# the codec (queued on GPU 5 after its specialist; skipped if Flickr2K is missing). Run 10.0, start 10.1, do the
+# CPU parts (10.2) while it trains, then 10.3-10.4 when it is done (10.5: ~5 h later).
 
+# 10.0 -- setup, ~5 min CPU ---------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
 export JSCC_DATA_ROOT=$HOME
-U=results/utility_snrc4.json
-SIM="--utility $U --frames 2000"
-B="--belief results/belief_snrc4.json"
-TP="--policies pf pf_len padc stop online_pf"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s10
+# Are retired c2 jobs still running? This lists them (the queue wrappers and the jobs):
+pgrep -af "c2_gpu|--tag c2|--tag m1"
+nvidia-smi -i 2,3,4,5
+# If it listed any: stop them (wrappers first, so no queued job starts) -- they are not
+# needed, and 10.1 needs the cards. Their finished runs stay in history/.
+pkill -f "c2_gpu" ; pkill -f -- "--tag c2" ; pkill -f -- "--tag m1"
 
-# 9a. CPU, ~3 min: R-D points of HEVC intra (HEIC through libheif / x265, the codec inside BPG)
-#     and of JPEG 2000 (a scalable codec) on Kodak; BPG too if you have bpgenc
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+W1V=${VT}_w1/models/last.pt
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+SIM="--utility $U --frames 2000"
+# the recipe of snrc4_s1 (section 5c) exactly, plus --snr-chunks 4
+FTSP="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag s1 --snr-chunks 4 --backbone vit --pretrained $W1V"
+# the per-phase measurement of section 6b, one CBR at a time (noise draws are matched to
+# the prefix model's at the same length)
+MIXF="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --design full --chunks phase --random-profiles 10 --backbone vit"
+
+# the optional data run (the old 7e), queued on GPU 5 after its specialist: the snrc4
+# recipe on DIV2K + Flickr2K for the same number of image samples (400 x 800 = 93 x 3450).
+# Needs $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR (2650 PNGs, https://cv.snu.ac.kr/research/EDSR/
+# Flickr2K.tar); the queue skips it by itself if that folder is missing.
+ls $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR | wc -l       # 2650, or "No such file": then it is skipped
+FTD="--trainset DIV2K Flickr2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 93 --valid-freq 31 --lr 5e-5 --warmup-steps 200 \
+  --tag d1 --snr-chunks 4 --backbone vit --pretrained $W1V"
+
+# 10.1 -- GPUs 2-5, ~4 h per specialist (like snrc4_s1), ~10 min per measurement --------
+#   run names: ${VT}_snrc4_fix1-24_s1 etc. Each queue trains, then measures what it trained.
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 1/24 > logs_s10/gpu2_F2_spec24.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 1/24 --pretrained ${VT}_snrc4_fix1-24_s1/models/last.pt --out results/p3_full_fix2.json > results/p3_full_fix2.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 1/8 > logs_s10/gpu2_F6_spec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_s1/models/last.pt --out results/p3_full_fix6.json > results/p3_full_fix6.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=3 python main.py $FTSP --fixed-cbr 1/16 > logs_s10/gpu3_F3_spec16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXF --cbrs 1/16 --pretrained ${VT}_snrc4_fix1-16_s1/models/last.pt --out results/p3_full_fix3.json > results/p3_full_fix3.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FTSP --fixed-cbr 5/48 > logs_s10/gpu3_F5_spec5-48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXF --cbrs 5/48 --pretrained ${VT}_snrc4_fix5-48_s1/models/last.pt --out results/p3_full_fix5.json > results/p3_full_fix5.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python main.py $FTSP --fixed-cbr 1/12 > logs_s10/gpu4_F4_spec12.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXF --cbrs 1/12 --pretrained ${VT}_snrc4_fix1-12_s1/models/last.pt --out results/p3_full_fix4.json > results/p3_full_fix4.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python main.py $FTSP --fixed-cbr 1/48 > logs_s10/gpu5_F1_spec48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXF --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_s1/models/last.pt --out results/p3_full_fix1.json > results/p3_full_fix1.txt 2>&1 ;
+[ -d $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR ] && CUDA_VISIBLE_DEVICES=5 python main.py $FTD > logs_s10/gpu5_D1_snrc4_flickr.out 2>&1
+" > /dev/null 2>&1 &
+# check after a minute: every log has a parameter line, 0 unexpected keys, no error
+sleep 60; grep -h "parameters, effective batch\|loaded" logs_s10/*.out; tail -n 2 logs_s10/*.out
+nvidia-smi -i 2,3,4,5
+
+# 10.2 -- CPU, now, ~30 min (while 10.1 trains). Every line keeps its errors (2>&1).
+# 10.2a  R-D points: HEVC intra (HEIC via libheif / x265, the encoder inside BPG) and
+#        JPEG 2000 (a scalable codec) on Kodak; BPG as well if bpgenc happens to exist
 pip install pillow-heif
 python tools/digital_rd.py --codec heic --images $JSCC_DATA_ROOT/Kodak --out results/rd_heic.json \
-  2>&1 | tee results/s9_digital.txt
+  2>&1 | tee results/s10_digital.txt
 python tools/digital_rd.py --codec jpeg2000 --images $JSCC_DATA_ROOT/Kodak --out results/rd_j2k.json \
-  2>&1 | tee -a results/s9_digital.txt
+  2>&1 | tee -a results/s10_digital.txt
 command -v bpgenc && python tools/digital_rd.py --codec bpg --images $JSCC_DATA_ROOT/Kodak \
-  --out results/rd_bpg.json 2>&1 | tee -a results/s9_digital.txt
-
-# 9b. CPU, ~1 min each: the digital schemes through the same schedulers, on the same frames,
-#     means and fades as the JSCC runs (compare with s7_mean.txt / s8_belief.txt). LTE CQI
-#     link adaptation without errors (the practical case), Shannon (the capacity bound),
-#     Shannon with a 3 dB gap; "interp" = an ideal scalable codec at HEVC's efficiency
-D="--utility results/rd_heic.json --frames 2000"
-python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --link shannon 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --policies rr pf fixed_uni greedy --link shannon --gap-db 3 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 30 $TP 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 30 $TP --link shannon 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 30 $TP --link shannon --gap-db 3 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 28 $TP 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 32 $TP 2>&1 | tee -a results/s9_digital.txt
-python tools/schedule_sim.py $D --target 30 --slots 16 $TP 2>&1 | tee -a results/s9_digital.txt
+  --out results/rd_bpg.json 2>&1 | tee -a results/s10_digital.txt
+# 10.2b  the digital schemes through the same schedulers, on the same frames, means and
+#        fades as the JSCC runs (compare s7_mean.txt / s8_belief.txt). LTE CQI link
+#        adaptation without errors (the practical case), Shannon (the capacity bound),
+#        Shannon with a 3 dB gap; "interp" = an ideal scalable codec at HEVC's efficiency
+DH="--utility results/rd_heic.json --frames 2000"
+TP="--policies pf pf_len padc stop online_pf"
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --digital-mode interp 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --link shannon 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --policies rr pf fixed_uni greedy --link shannon --gap-db 3 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP --link shannon 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 30 $TP --link shannon --gap-db 3 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 28 $TP 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 32 $TP 2>&1 | tee -a results/s10_digital.txt
+python tools/schedule_sim.py $DH --target 30 --slots 16 $TP 2>&1 | tee -a results/s10_digital.txt
 python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --policies rr pf fixed_uni greedy \
-  --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
+  --digital-mode interp 2>&1 | tee -a results/s10_digital.txt
 python tools/schedule_sim.py --utility results/rd_j2k.json --frames 2000 --target 30 $TP \
-  --digital-mode interp 2>&1 | tee -a results/s9_digital.txt
-
-# 9c. CPU, ~1-2 min each: slow fading with --plan conditional (the index and the needs use the
-#     SNR expected for the rest of the frame given the current slot); compare s8_corr.txt
+  --digital-mode interp 2>&1 | tee -a results/s10_digital.txt
+# 10.2c  slow fading with --plan conditional (compare s8_corr.txt, plan at the mean)
 python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --plan conditional --policies rr pf fixed_uni slope_adv \
-  2>&1 | tee results/s9_corr.txt
+  2>&1 | tee results/s10_corr.txt
 python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --plan conditional --policies rr pf fixed_uni slope_adv \
-  2>&1 | tee -a results/s9_corr.txt
-python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --plan conditional --target 30 2>&1 | tee -a results/s9_corr.txt
-python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --plan conditional --target 30 2>&1 | tee -a results/s9_corr.txt
+  2>&1 | tee -a results/s10_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.9 --plan conditional --target 30 2>&1 | tee -a results/s10_corr.txt
+python tools/schedule_sim.py $SIM $B --fade-corr 0.98 --plan conditional --target 30 2>&1 | tee -a results/s10_corr.txt
 
-# 9d. CPU, ~1 min each: one model per CBR. Fixed lengths (no leftover phases), every length
-#     better by the nesting penalty (0.3 / 0.6 dB bracket the 0.29-0.71 dB of the c1 tail
-#     probes until section 4's numbers arrive), the SAME schedulers that need only fixed
-#     lengths (slope_adv's lengths are fixed; padc_adv = PADC's lengths + our timing).
-#     Compare with the prefix code's slope_adv / online in s8_belief.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --policies pf fixed_uni fixed_slope slope_adv \
-  2>&1 | tee results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.6 --policies pf fixed_uni fixed_slope slope_adv \
-  2>&1 | tee -a results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0 --target 30 --policies pf padc padc_adv \
-  2>&1 | tee -a results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 30 --policies pf padc padc_adv \
-  2>&1 | tee -a results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.6 --target 30 --policies pf padc padc_adv \
-  2>&1 | tee -a results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 30 --slots 16 --policies pf padc padc_adv \
-  2>&1 | tee -a results/s9_percbr.txt
-python tools/schedule_sim.py $SIM $B --fixed-codes --length-bonus 0.3 --target 32 --policies pf padc padc_adv \
-  2>&1 | tee -a results/s9_percbr.txt
+# 10.3 -- CPU, when ALL of 10.1 is done (ls results/p3_full_fix*.json: six files) ------
+# 10.3a  the specialists' gap to the prefix model at their own CBR, per image, Kodak test
+#        (paired, same channel draws; 5/48 is not in the test list -- 10.3b covers it)
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_fix1-48_s1 --cbrs 1/48 2>&1 | tee results/s10_gap.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_fix1-24_s1 --cbrs 1/24 2>&1 | tee -a results/s10_gap.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_fix1-16_s1 --cbrs 1/16 2>&1 | tee -a results/s10_gap.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_fix1-12_s1 --cbrs 1/12 2>&1 | tee -a results/s10_gap.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_fix1-8_s1 --cbrs 1/8 2>&1 | tee -a results/s10_gap.txt
+# 10.3b  their constant-SNR curves next to the prefix model's (mixed_snr, matched noise)
+grep -h -B1 "constant SNR" results/p2_full_snrc4.txt results/p3_full_fix*.txt 2>&1 | tee -a results/s10_gap.txt
+# 10.3c  the per-CBR utility (one specialist per length) and its transmitter belief
+python tools/utility_fit.py --mixed results/p3_full_fix1.json results/p3_full_fix2.json \
+  results/p3_full_fix3.json results/p3_full_fix4.json results/p3_full_fix5.json \
+  results/p3_full_fix6.json --out results/utility_percbr.json --calib 1 13 \
+  --belief-out results/belief_percbr.json 2>&1 | tee results/s10_percbr_fit.txt
 
-# --- reading section 9 (send back everything it prints) ---------------------------
-cat results/s9_digital.txt results/s9_corr.txt results/s9_percbr.txt
-# and, if you have them: section 4b-4d's output, 7e's compare_runs table
+# 10.4 -- CPU, ~1 min each: one model per CBR through the same schedulers, real curves.
+#   Fixed lengths only (no leftover phases), the policies that need nothing else; the same
+#   frames as the prefix runs of s8_belief.txt (slope_adv 31.426 dB; online 74.0% at 30 dB)
+PC="--utility results/utility_percbr.json --belief results/belief_percbr.json --frames 2000 --fixed-codes"
+python tools/schedule_sim.py $PC --policies fixed_uni fixed_slope slope_adv 2>&1 | tee results/s10_percbr.txt
+python tools/schedule_sim.py $PC --target 30 --policies padc padc_adv 2>&1 | tee -a results/s10_percbr.txt
+python tools/schedule_sim.py $PC --target 28 --policies padc padc_adv 2>&1 | tee -a results/s10_percbr.txt
+python tools/schedule_sim.py $PC --target 32 --policies padc padc_adv 2>&1 | tee -a results/s10_percbr.txt
+python tools/schedule_sim.py $PC --target 30 --slots 16 --policies padc padc_adv 2>&1 | tee -a results/s10_percbr.txt
+python tools/schedule_sim.py $PC --target 30 --users 16 --slots 48 --policies padc padc_adv 2>&1 | tee -a results/s10_percbr.txt
+#   the prefix model's runs that s8 did not have (same scenarios), for the comparison
+python tools/schedule_sim.py $SIM $B --target 30 --users 16 --slots 48 2>&1 | tee -a results/s10_percbr.txt
+
+# 10.5 -- CPU, when GPU 5's data run is done (if it ran, ~9 h after 10.1): more data
+python tools/compare_runs.py ${VT}_snrc4_s1 history/vit_p8d768x10s4_awgn_DIV2K+Flickr2K_256_snrc4_d1 \
+  --test --per-snr 2>&1 | tee results/s10_data.txt
+
+# 10.6 -- OPTIONAL: if retired c2 runs finished before 10.0 stopped them, their constant-SNR
+#   specialist gap is still useful context (missing runs only print an error)
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-8_c2 --cbrs 1/8 2>&1 | tee results/s10_c2_leftovers.txt
+python tools/paired.py ${VT}_grid_c1 ${VT}_fix1-48_c2 --cbrs 1/48 2>&1 | tee -a results/s10_c2_leftovers.txt
+
+# --- reading section 10 (send back everything it prints) ----------------------------
+cat results/s10_digital.txt results/s10_corr.txt                 # after 10.2
+cat results/s10_gap.txt results/s10_percbr_fit.txt results/s10_percbr.txt   # after 10.3-10.4
+cat results/s10_data.txt results/s10_c2_leftovers.txt            # if they ran
 
 # Decision (docs/PROBLEM.md, section 5; docs/PAPER.md C5 / C6):
-#   P-D   JSCC (s8_belief: slope_adv mean PSNR; online's share at 28 / 30 / 32 dB, T 16)
-#         against HEIC + CQI (9b, the best policy each): ahead -> the separation claim holds
-#         for practical link adaptation; the Shannon lines are the bound to be honest about
-#   P-E   the prefix code's online (s8_belief) against padc_adv with --fixed-codes at the
-#         measured penalty: ahead -> the prefix code is required for the QoS claim; the mean
-#         claim (slope_adv) is codec-agnostic either way and is stated so
-#   9c    the conditional plan recovers the advantage index at slot correlation 0.98 or not
+#   P-D  JSCC (s8_belief: slope_adv's mean PSNR; online's share at 28 / 30 / 32 dB, T 16)
+#        against HEIC + CQI (10.2b, the best policy each): ahead -> the separation claim
+#        holds for practical link adaptation; the Shannon lines are the bound to state
+#   P-E  the prefix code's online (s8_belief, 10.4's last line) against the specialists'
+#        padc_adv (10.4): ahead -> the prefix code is required for the QoS claim. The mean
+#        claim (slope_adv) runs on fixed lengths, so it is codec-agnostic: stated so, with
+#        the specialists' slope_adv as its strongest form
+#   10.2c  the conditional plan recovers the advantage index at slot correlation 0.98 or not
+#   10.3c  the specialists obey the additive model (held-out errors like the prefix model's)
