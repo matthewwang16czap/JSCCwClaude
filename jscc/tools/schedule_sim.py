@@ -69,7 +69,11 @@ fading: only the content and mean-SNR part), --fade-corr r (slot gains correlate
 Gauss-Markov; --plan conditional predicts future phases from the current slot instead of
 the mean), --length-bonus with --fixed-codes (one model per CBR: every length better by
 the nesting penalty, and a fixed-length policy cannot send more than the code; the
-baseline of DeepJSCC-MIMO / SwinJSCC-style per-rate models), --pred-noise (the transmitter's curves are off: log-normal errors on each
+baseline of DeepJSCC-MIMO / SwinJSCC-style per-rate models: the slots that shortest-first
+admission leaves are planned before the frame, left-out users first; a code not fully
+received decodes to nothing), --preempt p (each slot taken by other traffic with
+probability p, unknown in advance: the case for codes whose length is not fixed when
+encoded), --pred-noise (the transmitter's curves are off: log-normal errors on each
 image's noise-free MSE and sensitivity), --belief FILE (the transmitter decides on its own
 calibrated curves, tools/utility_fit.py --calib; users are scored on --utility).
 --utility may also be a digital baseline (tools/digital_rd.py, alloc/digital.py: an image
@@ -168,8 +172,52 @@ def plan_snr(means, snr, t, offset=0.0, corr=0.0):
     return base + 10.0 * np.log10((w[None, :] * g[:, None] + (1.0 - w)[None, :]).mean(1))
 
 
+FILL = "admit"
+
+
+def fill(belief, imgs, plan, goal, tgt, spare, P, rule="admit", delta=1.0):
+    """Fixed-length codes: spend the slots that shortest-first admission left over before
+    the frame, since a fixed code cannot be extended later. "margin": one more phase at a
+    time to the admitted user with the smallest predicted margin over the goal (at its
+    planned SNR), then the users left out, each at the longest code that fits; "admit":
+    the users left out first (the default: the strongest on the stand-in); "delta":
+    margins up to delta dB first, then the users left out, then margins again."""
+    tgt = tgt.copy()
+    K = len(tgt)
+    q = lambda k, n: belief.psnr(imgs[k], [float(plan[k])] * n)  # noqa: E731
+
+    def lengthen(cap):
+        nonlocal spare
+        while spare > 0:
+            m = [(q(k, tgt[k]) - goal, k) for k in range(K) if 0 < tgt[k] < P]
+            m = [x for x in m if x[0] < cap]
+            if not m:
+                return
+            tgt[min(m)[1]] += 1
+            spare -= 1
+
+    def admit():
+        nonlocal spare
+        while spare > 0:
+            out = [k for k in range(K) if tgt[k] == 0]
+            if not out:
+                return
+            n = min(P, spare)
+            k = max(out, key=lambda j: q(j, n))
+            tgt[k], spare = n, spare - n
+
+    if rule == "admit":
+        admit(); lengthen(np.inf)
+    elif rule == "delta":
+        lengthen(delta); admit(); lengthen(np.inf)
+    else:
+        lengthen(np.inf); admit()
+    return tgt
+
+
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
-              offset=0.0, avg=None, corr=0.0, fixed_codes=False):
+              offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
+              t_plan=None):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame)."""
@@ -178,25 +226,31 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     hist = [[] for _ in range(K)]
     served = np.zeros(K)                                      # PF: served-rate average
     plan = plan_snr(means, snr, 0, offset, corr)             # SNR assumed for future phases
+    T_plan = int(round(T * p_avail)) if t_plan is None else int(t_plan)  # slots planned for
     goal = None if target is None else target + margin
     tgt = None                                                # phases per user, fixed upfront
     if policy in ("fixed_uni", "fixed_eq", "fixed_slope", "slope_adv"):
-        tgt = targets(belief, imgs, means, T, {"fixed_uni": "uni", "fixed_eq": "eq"}.get(policy, "slope"))
+        tgt = targets(belief, imgs, means, T_plan,
+                      {"fixed_uni": "uni", "fixed_eq": "eq"}.get(policy, "slope"))
     elif policy == "pf_len":                                  # content-blind link adaptation
         tgt = np.array([need(avg, 0, [], p, goal) for p in plan], dtype=float)
         tgt = np.where(np.isfinite(tgt), tgt, P).astype(int)
     elif policy in ("padc", "padc_adv"):                      # per image at the mean SNR
         L = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
         tgt = np.zeros(K, dtype=int)
-        left = T
+        left = T_plan
         for k in np.argsort(L, kind="stable"):                # shortest first, while it fits
             if np.isfinite(L[k]) and L[k] <= left:
                 tgt[k], left = int(L[k]), left - int(L[k])
+        if fixed_codes and left > 0:                          # a fixed code cannot take
+            tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # leftovers: plan them
     rest = None                                               # online: phases still needed
     if policy in ("stop", "stop_adv", "online_pf", "online"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
     last = -1
     for t in range(T):
+        if avail is not None and not avail[t]:                # taken by other traffic
+            continue
         has = np.array([len(h) < P for h in hist])
         if not has.any():
             break
@@ -212,7 +266,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             ok &= rest > 0                                    # not there yet
             if policy.startswith("online"):  # admit the smallest needs that fit in the slots left;
                 adm = np.zeros(K, dtype=bool)                 # spare slots open to the others
-                left = T - t
+                left = int(round((T - t) * p_avail))
                 for k in np.argsort(rest, kind="stable"):
                     if ok[k] and rest[k] <= left:
                         adm[k], left = True, left - int(rest[k])
@@ -220,13 +274,16 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                     ok = adm
         g = snr[:, t]
         if policy == "adaptive_slope":
-            below = ok & (np.array([len(h) for h in hist]) < replan(belief, imgs, means, hist, T - t))
+            below = ok & (np.array([len(h) for h in hist])
+                          < replan(belief, imgs, means, hist, int(round((T - t) * p_avail))))
             if below.any():
                 ok = below
         if not ok.any():
-            if target is None or (fixed_codes and tgt is not None):
+            if fixed_codes and tgt is not None:
                 break                                         # a fixed-length code is complete
-            ok = has                                          # leftover slot
+            if target is None and avail is None:
+                break
+            ok = has                                          # leftover slot (a prefix grows)
         if policy == "rr":
             order = [(last + 1 + j) % K for j in range(K)]
             k = next(j for j in order if ok[j])
@@ -255,6 +312,8 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
         served = (1 - 1.0 / T) * served
         served[k] += rate(g[k]) / T
         last = k
+    if fixed_codes and tgt is not None:                       # an incomplete fixed-length
+        hist = [h if len(h) >= n else [] for h, n in zip(hist, tgt)]   # code cannot be decoded
     return hist
 
 
@@ -282,12 +341,22 @@ def fades(rng, users, slots, fading, corr=0.0):
 
 def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=0,
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
-             offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False):
+             offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
+             preempt=0.0, preempt_quantile=None):
     """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
     on it, users are scored on `util`."""
     if users > len(util.names) and not same_image:
         raise ValueError(f"{users} users but only {len(util.names)} images in the pool")
     rng = np.random.default_rng(seed)
+    t_plan = None
+    if preempt > 0 and preempt_quantile is not None:     # plan for a quantile of the slots
+        from math import comb
+        cdf, t_plan = 0.0, slots
+        for n in range(slots + 1):
+            cdf += comb(slots, n) * (1 - preempt) ** n * preempt ** (slots - n)
+            if cdf >= preempt_quantile:
+                t_plan = n
+                break
     res = {p: {"psnr": [], "frame_mean": [], "frame_min": [], "deep": [], "served": [],
                "lift": [], "sat": [], "frame_sat": []} for p in policies}
     dumped = []
@@ -298,10 +367,12 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
         fade = fades(rng, users, slots, fading, fade_corr)
         snr = np.clip(means[:, None] + fade, clip[0], clip[1])
         belief = (belief_util or util).perturbed(pred_noise, rng)
+        avail = rng.random(slots) >= preempt if preempt > 0 else None
         avg = belief.average() if target is not None else None
         for p in policies:
             hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg,
-                             fade_corr if plan == "conditional" else 0.0, fixed_codes)
+                             fade_corr if plan == "conditional" else 0.0, fixed_codes,
+                             avail, 1.0 - preempt, t_plan)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -363,6 +434,12 @@ def main():
     ap.add_argument("--fixed-codes", action="store_true",
                     help="one model per CBR: a policy with lengths fixed before the frame "
                          "cannot send a user more phases than its code (no leftover slots)")
+    ap.add_argument("--preempt", type=float, default=0.0,
+                    help="each slot is taken by other traffic with this probability, known "
+                         "only when it starts; policies plan with the expected share")
+    ap.add_argument("--preempt-quantile", type=float, default=None,
+                    help="--preempt: plan lengths for this quantile of the slots left "
+                         "(e.g. 0.1: hedged), instead of their expected number")
     ap.add_argument("--belief", default=None,
                     help="the transmitter's curves (tools/utility_fit.py --calib); default: the truth")
     ap.add_argument("--link", default=None, choices=["cqi", "shannon"],
@@ -401,6 +478,8 @@ def main():
     belief = load_utility(a.belief, **dig) if a.belief else None
     if belief is not None and belief.names != util.names:
         ap.error("--belief must describe the same images, in the same order, as --utility")
+    if not 0.0 <= a.preempt < 1.0:
+        ap.error("--preempt is in [0, 1)")
     if not 0.0 <= a.fade_corr < 1.0:
         ap.error("--fade-corr is in [0, 1)")
     if a.length_bonus:
@@ -413,12 +492,14 @@ def main():
                                      a.snr_clip, a.policies, a.seed, a.same_image,
                                      a.pred_noise, a.alpha, a.dump, a.target, a.margin,
                                      a.plan_offset, belief, a.fade_corr, a.plan,
-                                     a.fixed_codes)
+                                     a.fixed_codes, a.preempt, a.preempt_quantile)
     print(f"{a.users} users, {a.slots} slots ({a.slots / a.users:.2f} phases per user, at most "
           f"{util.P}), {a.frames} frames, mean SNR U{a.mean_snr} dB, fading {a.fading}"
           f"{f' (slot correlation {a.fade_corr:g}, plan {a.plan})' if a.fade_corr else ''}"
           f"{f', length bonus {a.length_bonus} dB' if a.length_bonus else ''}"
           f"{', fixed-length codes' if a.fixed_codes else ''}"
+          f"{f', {100 * a.preempt:g}% of slots preempted' if a.preempt else ''}"
+          f"{f' (planned at their {a.preempt_quantile:g} quantile)' if a.preempt and a.preempt_quantile is not None else ''}"
           f"{', same image' if a.same_image else ''}"
           f"{f', transmitter curves {a.belief}' if a.belief else ''}"
           f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if getattr(util, 'kind', '') == 'digital' else ''}"

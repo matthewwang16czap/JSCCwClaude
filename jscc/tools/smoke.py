@@ -580,9 +580,20 @@ def check_schedule():
                           target=30.0)
     fix, _, _ = simulate(u, 4, 10, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["padc"], seed=1,
                          target=30.0, fixed_codes=True)
-    ok(fix["padc"]["phases_per_user"] < free["padc"]["phases_per_user"]
-       and fix["padc"]["satisfied"] <= free["padc"]["satisfied"],
+    from tools.schedule_sim import fill
+    f = fill(u, [0, 1, 2, 3], [7.0] * 4, 30.0, np.array([2, 0, 3, 0]), 5, P)
+    ok(f[0] == 2 and f[2] == 3 and f.sum() == 10 and sorted(f[[1, 3]].tolist()) == [0, 5],
+       f"--fixed-codes: spare slots planned before the frame: a left-out user gets the longest "
+       f"code that fits {f.tolist()}")
+    ok(fix["padc"]["phases_per_user"] <= free["padc"]["phases_per_user"] + 1e-9,
        "--fixed-codes: a fixed-length code takes no leftover slots")
+    pre, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["fixed_uni"],
+                         seed=1, fixed_codes=True, preempt=0.4)
+    pre_p, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["fixed_uni"],
+                           seed=1, preempt=0.4)
+    ok(pre["fixed_uni"]["p5_psnr"] == 10.0 and pre_p["fixed_uni"]["p5_psnr"] > 10.0
+       and pre_p["fixed_uni"]["mean_psnr"] > pre["fixed_uni"]["mean_psnr"],
+       "--preempt: a fixed code cut short decodes to nothing, a prefix decodes what arrived")
 
 
 def check_eval_seed(x):

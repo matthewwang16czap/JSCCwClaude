@@ -514,3 +514,57 @@ channel state per frame), the advantage index keeps most of its lead, and the Qo
 the index compares the slot with the MEAN SNR, but a user in a long fade will not see its
 mean again within the frame. `--plan conditional` (section 9) compares with the SNR expected
 for the rest of the frame given the current slot.
+
+## Problem P1, step 5: one model per CBR, slow fading (2026-10-11)
+
+COMMANDS.txt section 10 on the server. The digital baseline did not run again: the sheet
+pointed `digital_rd.py` at `$JSCC_DATA_ROOT/Kodak`, the data is under `datasets/Kodak`
+(fixed: the tool now resolves test sets like the trainer). No Flickr2K, so no data run.
+
+**The nesting penalty, measured right** (six specialists, each trained like snrc4_s1 plus
+`--fixed-cbr`, from w1, 400 epochs, piecewise SNR; Kodak test, paired over the 24 images,
+mean over SNRs 1-13; 5/48 from the matched-noise constant profiles of `mixed_snr.py`):
+
+| CBR (phases) | 1/48 (1) | 1/24 (2) | 1/16 (3) | 1/12 (4) | 5/48 (5) | 1/8 (6) |
+|---|---|---|---|---|---|---|
+| specialist - prefix, dB | +0.446 [0.41, 0.49] | +0.179 | +0.166 | +0.253 | ~+0.37 | +0.470 [0.44, 0.51] |
+| at 1 dB / 13 dB SNR | +0.32 / +0.59 | +0.15 / +0.22 | +0.10 / +0.19 | +0.16 / +0.30 | +0.22 / +0.47 | +0.27 / +0.62 |
+
+Every specialist wins on all 24 images. The penalty is U-shaped in the length (largest at
+the two ends, 0.17-0.25 dB at 2-4 phases, where schedules mostly are) and grows with SNR.
+
+**The specialists obey the additive model too** (one per-CBR utility from the six runs):
+held-out MAE 0.077-0.089 dB (prefix 0.034-0.069), calibration from 12 decodes 0.061-0.085.
+Their noise sensitivity is much flatter along the code (1/8: rho 0.34 0.26 0.20 0.13 0.05
+0.03, prefix 0.51 0.25 0.17 0.05 0.01 0.01): the prefix model's ordering comes from nesting.
+
+**Per-CBR codes through the same schedulers** (`--fixed-codes`, belief, same frames):
+
+| | prefix code (s8, 10.4) | one model per CBR |
+|---|---|---|
+| mean PSNR, fixed_uni / slope_adv | 30.999 / **31.426** | 31.203 / **31.576** (+0.15) |
+| at 30 dB: padc / padc_adv / online | 65.6 / 68.9 / **74.0** | 62.6 / **69.8** / - |
+| 28 / 32 dB, T 16, K 16 (best each) | 90.5 / 54.0 / 66.8 / 76.9 | 85.1 / 51.2 / 66.1 / 73.8 |
+
+1. **Mean PSNR: one model per CBR wins, +0.15 dB**, with the advantage index (+0.37 dB over
+   its own fixed_uni; +0.43 for the prefix code, whose ordered sensitivities give the index
+   more to work with). The mean claim is about the scheduler and the abstraction, not the
+   prefix code: it is stated as codec-agnostic.
+2. **Quality target: the prefix code's online leads by +0.7 to +5.4 points -- against a
+   baseline that was too weak.** The per-CBR padc planned only the shortest lengths and
+   dropped the rest: 1.74 phases per user, ~10 of 24 slots never used. A real per-CBR
+   system plans those slots before the frame. Fixed (`fill`, default "admit": left-out
+   users first, each at the longest code that fits; on the stand-in it beats lengthening
+   the admitted users and even the prefix code's padc_adv with leftovers). To rerun.
+3. Where a prefix code is REQUIRED: when the slots a user will get are not known when the
+   image is encoded (`--preempt p`: other traffic takes each slot with probability p). A
+   fixed code cut short decodes to nothing; a prefix decodes what arrived. Stand-in, 20%
+   preempted, mean PSNR: prefix slope_adv 30.11 dB against per-CBR slope_adv 29.39 at its
+   best hedge (lengths planned for the 10% quantile of the slots; 28.76 planned at the
+   expectation, with users decoding nothing); for the target the two stay within ~1 point.
+
+**Slow fading with `--plan conditional`** (belief): the mean leads are unchanged (+0.584 at
+0.9, +0.349 at 0.98); at 30 dB the conditional plan helps padc (+2.0 points at 0.98) and
+online (+1.5) alike, online - padc +8.9 / +5.2. It does not bring the advantage index back
+at 0.98: online_pf (PF timing) stays best there (+6.4 over padc). When a frame is shorter
+than the coherence time there are no peaks to wait for; PF timing is the right choice then.
