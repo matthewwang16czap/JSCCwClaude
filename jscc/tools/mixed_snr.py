@@ -138,6 +138,9 @@ def add_args(parser):
     g.add_argument("--random-profiles", type=int, default=10,
                    help="full: random profiles per CBR (validation)")
     g.add_argument("--profiles-json", default=None, help="file: the profiles to decode")
+    g.add_argument("--length-checkpoints", nargs="+", default=None,
+                   help="file: one checkpoint per prefix length 1..P (one model per CBR): "
+                        "each entry is encoded AND decoded by the model of its length")
     g.add_argument("--profile-seed", type=int, default=0)
     g.add_argument("--max-images", type=int, default=None)
     g.add_argument("--out", default=None, help="JSON: every profile's per-image PSNR + summary")
@@ -238,7 +241,8 @@ def paired_report(entries, target=None):
                   f"({len(common)} frames)")
 
 
-def run_file(model, cfg, args, ds, loader, suite):
+def run_file(models, cfg, args, ds, loader, suite):
+    """`models`: one model for every entry, or a list with one per prefix length."""
     with open(args.profiles_json) as f:
         spec = json.load(f)
     entries = spec["entries"]
@@ -257,7 +261,8 @@ def run_file(model, cfg, args, ds, loader, suite):
                 continue
             x = x.to(cfg.device, non_blocking=True)
             with autocast(cfg, cfg.device):
-                enc = model.encode(x)
+                per_length = isinstance(models, list)
+                encs = {}
                 for e_i in todo:
                     snrs = [float(v) for v in entries[e_i]["snrs"]]
                     if not snrs:
@@ -267,9 +272,13 @@ def run_file(model, cfg, args, ds, loader, suite):
                         raise SystemExit(f"entry {e_i}: {len(snrs)} phases, the model has "
                                          f"{cfg.phases}")
                     units = len(snrs) * per
+                    model = models[len(snrs) - 1] if per_length else models
+                    key = len(snrs) if per_length else 0
+                    if key not in encs:
+                        encs[key] = model.encode(x)
                     entries[e_i]["actual_psnr"] = score_profiles(
-                        model, cfg, enc, x, k, units, chunk_cuts(units, "phase", per), [snrs],
-                        suite, cfg.eval_seed + 7919 * e_i)[0]
+                        model, cfg, encs[key], x, k, units, chunk_cuts(units, "phase", per),
+                        [snrs], suite, cfg.eval_seed + 7919 * e_i)[0]
     rows = [e for e in entries if e.get("actual_psnr") is not None and "predicted_psnr" in e]
     if rows:
         err = np.array([e["predicted_psnr"] - e["actual_psnr"] for e in rows])
@@ -293,15 +302,20 @@ def run_file(model, cfg, args, ds, loader, suite):
                   f"extra {100 * (act & ~pre).mean():4.1f}%")
     paired_report(entries, tgt)
     spec["entries"] = entries
-    spec["decoded_by"] = {"checkpoint": cfg.pretrained, "run_name": cfg.run_name}
+    spec["decoded_by"] = {"checkpoint": args.length_checkpoints or cfg.pretrained,
+                          "run_name": cfg.run_name}
     return spec
 
 
 def main():
     args = add_args(create_parser()).parse_args()
     cfg = Config(args)
-    if not cfg.pretrained:
+    if not cfg.pretrained and not args.length_checkpoints:
         raise SystemExit("--pretrained is required: this scores a trained codec")
+    if args.length_checkpoints and args.design != "file":
+        raise SystemExit("--length-checkpoints is for --design file")
+    if args.length_checkpoints and len(args.length_checkpoints) != cfg.phases:
+        raise SystemExit(f"--length-checkpoints needs one checkpoint per prefix length 1..{cfg.phases}")
     if not cfg.token or cfg.cascade:
         raise SystemExit("mixed-SNR prefixes need a token model under the prefix scheme")
     if cfg.channel_type != "awgn":
@@ -312,10 +326,14 @@ def main():
     if args.design == "file" and not args.profiles_json:
         raise SystemExit("--design file needs --profiles-json")
     torch.manual_seed(cfg.seed)
-    model = JSCC(cfg).to(cfg.device).eval()
-    rep = load_weights(model, cfg.pretrained)
-    print(f"loaded {cfg.pretrained}: {len(rep.missing_keys)} missing, "
-          f"{len(rep.unexpected_keys)} unexpected")
+    paths = args.length_checkpoints or [cfg.pretrained]
+    loaded = []
+    for path in paths:
+        m = JSCC(cfg).to(cfg.device).eval()
+        rep = load_weights(m, path)
+        print(f"loaded {path}: {len(rep.missing_keys)} missing, {len(rep.unexpected_keys)} unexpected")
+        loaded.append(m)
+    model = loaded if args.length_checkpoints else loaded[0]
     ds = sweep_dataset(cfg, "test", max_images=args.max_images)
     loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
     suite = MetricSuite(["psnr"])

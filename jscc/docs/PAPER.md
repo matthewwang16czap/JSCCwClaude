@@ -4,12 +4,16 @@
 still owed. Numbers are Kodak (24 images), the snrc4 ViT (p8, 768 x 10, 4 symbols per
 token, 6 phases of CBR 1/48 at 256 px), 8 users, 24 slots, mean SNRs U[0, 15] dB, Rayleigh
 block fading, unless stated; "decoded" means the schedules were decoded by the codec
-itself (`docs/NOTES.md`, P1 steps 1-4).
+itself (`docs/NOTES.md`, P1 steps 1-6).
 
 ## Working title
 
-Scheduling Encode-Once Deep JSCC Prefixes over Fading Multi-User Downlinks
-(alt.: Quality-Aware Opportunistic Scheduling of Progressive Deep JSCC Streams)
+Quality-Aware Opportunistic Scheduling of Deep JSCC Images over Fading Multi-User Downlinks
+(the framing after P1 step 6: the abstraction and the schedulers are the contribution, shown
+on a prefix code and on one model per CBR; the prefix code is the choice when the slots a
+user will get are not known at encoding. The prefix-centred title "Scheduling Encode-Once
+Deep JSCC Prefixes ..." needed per-length decoder heads to close the nesting penalty, and the
+LoRA heads did not)
 
 ## Claims and their evidence
 
@@ -19,8 +23,8 @@ Scheduling Encode-Once Deep JSCC Prefixes over Fading Multi-User Downlinks
 | C2 | The model is a link-to-system abstraction: per image and phase it predicts held-out profiles within 0.03-0.07 dB and real schedules within 0.065-0.09 dB, unbiased; the transmitter can calibrate it from 2P constant-SNR decodes of its own image (kappa, rho transfer across images) | P1 step 2 (fit), step 4 (calibration 0.03-0.06 dB) | done |
 | C3 | Mean quality: PF on rate leaves ~0.5 dB on the table; the ADVANTAGE index (this slot's predicted PSNR gain minus a typical slot's) gains +0.46 dB decoded, +0.46 dB at the 5th-percentile user, robust over K, T, curve errors and slot correlation; content-aware lengths add only +0.05 | P1 steps 2-4 | done (theory owed) |
 | C4 | Quality target (QoS): online admission by remaining need + stopping on the realised slot SNRs + advantage timing raises the share of users reaching 30 dB by +11 points decoded over PADC's per-image rule (given shortest-first admission and PF timing), +14 over PF; decomposition: sizing +5, stopping +4, timing +3, admission +2 (+11 in tight frames) | P1 steps 3-4 | done |
-| C5 | Against separation: HEVC-intra (BPG / HEIC) with ideal CQI link adaptation through the same schedulers | `tools/digital_rd.py`, section 9 | **owed (P-D)** |
-| C6 | Against one model per CBR (DeepJSCC-MIMO / SwinJSCC style), measured with six piecewise-trained specialists: their nesting penalty is 0.17-0.47 dB; with the same abstraction and the advantage index they win mean PSNR by 0.15 dB (so C3 is stated as codec-agnostic); the prefix code is required when the slots are not known at encoding (preemption) and for online stopping | P1 step 5; section 11 (fair slot planning, preemption, decoder heads) | **partly done** |
+| C5 | Against separation (HEVC intra + error-free CQI link adaptation, the same schedulers): on par -- +0.13 dB mean PSNR (prefix) / +0.28 (per CBR), ahead in tight frames, behind at high targets; below a 3 dB-gap code (0.5-0.7 dB) and capacity. Stated as parity at the current codec, with the codec gap to the state of the art (~0.8-0.9 dB) as the lever | P1 step 6 | done (equal per-user cap owed) |
+| C6 | Against one model per CBR (six piecewise-trained specialists): nesting penalty 0.17-0.47 dB, ~60% of it in the shared encoder; with known slots per-CBR codes + our model and schedulers are the best system; with slots lost to other traffic the prefix code wins mean PSNR (+0.36 / +0.53 dB at 10% / 25%). The model and both schedulers work on both codes (codec-agnostic) | P1 steps 5-6; section 12 (the same planner on both codes, per-length decoders) | done, last checks owed |
 
 ## Outline
 

@@ -591,6 +591,15 @@ def check_schedule():
                          seed=1, fixed_codes=True, preempt=0.4)
     pre_p, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["fixed_uni"],
                            seed=1, preempt=0.4)
+    rp, _, _ = simulate(u, 4, 10, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                        ["plan_adv", "online", "replan_adv"], seed=1, target=30.0)
+    fx, _, _ = simulate(u, 4, 10, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["padc_adv"], seed=1,
+                        target=30.0, fixed_codes=True)
+    ok(abs(rp["plan_adv"]["satisfied"] - fx["padc_adv"]["satisfied"]) < 1e-9
+       and rp["replan_adv"]["satisfied"] >= rp["online"]["satisfied"],
+       f"plan_adv on a prefix code = per-CBR padc_adv on the same curves (the same planner); "
+       f"replan_adv {100 * rp['replan_adv']['satisfied']:.0f}% >= online "
+       f"{100 * rp['online']['satisfied']:.0f}%")
     ok(pre["fixed_uni"]["p5_psnr"] == 10.0 and pre_p["fixed_uni"]["p5_psnr"] > 10.0
        and pre_p["fixed_uni"]["mean_psnr"] > pre["fixed_uni"]["mean_psnr"],
        "--preempt: a fixed code cut short decodes to nothing, a prefix decodes what arrived")

@@ -568,3 +568,74 @@ Their noise sensitivity is much flatter along the code (1/8: rho 0.34 0.26 0.20 
 online (+1.5) alike, online - padc +8.9 / +5.2. It does not bring the advantage index back
 at 0.98: online_pf (PF timing) stays best there (+6.4 over padc). When a frame is shorter
 than the coherence time there are no peaks to wait for; PF timing is the right choice then.
+
+## Problem P1, step 6: digital, fair per-CBR, lost slots, decoder heads (2026-10-11)
+
+COMMANDS.txt section 11 on the server.
+
+**Separation baseline** (`tools/digital_rd.py`: HEVC intra through libheif / x265, 26 quality
+points per Kodak image, 0.1 / 0.25 / 0.5 / 1.0 bpp = 27.1 / 30.1 / 32.9 / 36.1 dB; JPEG 2000
+24.7 / 26.9 / 29.0 / 31.7). Error-free link adaptation, free switching between files, and up
+to 12 slots per user where JSCC is capped at 6 (CBR 1/8): optimistic for digital.
+
+| mean PSNR, K 8, T 24 (dB) | PF | best policy |
+|---|---|---|
+| JSCC prefix code (snrc4, calibrated transmitter) | 30.95 | 31.43 (slope_adv) |
+| JSCC, one model per CBR | 31.20 (fixed_uni) | 31.58 (slope_adv) |
+| HEIC + LTE CQI table, best complete file | 31.08 | 31.29 (greedy) |
+| HEIC as an ideal scalable code + CQI | 31.61 | 31.76 |
+| HEIC + Shannon with a 3 dB gap / capacity | 31.91 / 33.17 | 32.13 / 33.28 |
+| JPEG 2000 (scalable) + CQI | 28.03 | 28.13 |
+
+| share at the target, best policy each | 28 dB | 30 dB | 32 dB | 30 dB, T 16 |
+|---|---|---|---|---|
+| JSCC prefix code, online | 90.5% | 74.0% | 54.0% | 66.8% |
+| JSCC per CBR, padc_adv with planned slots | 92.5% | 78.1% | 60.0% | 69.8% |
+| HEIC + CQI (online_pf; padc at 32 dB) | 90.2% | 76.1% | 59.8% | 60.6% |
+| HEIC + 3 dB gap / capacity | - | 82.7% / 93.0% | - | - |
+
+Against HEVC intra with ideal practical link adaptation the JSCC codec is ON PAR, not ahead:
++0.13 dB mean PSNR (prefix code, both at their best policy; per-CBR +0.28), ahead at the
+target in tight frames (+6 to +9 points) and behind at 32 dB (-6 prefix, per-CBR +0.2). A
+3 dB-gap code (closer to practice than ideal CQI with no errors) is ahead of JSCC by 0.5-0.7
+dB; capacity by 1.7-1.9 dB. The codec gap to the state of the art (~0.8-0.9 dB, see P1) is about
+what separates on-par from clearly ahead. The schedulers transfer to digital too (online_pf
++3.7 points over padc with HEIC).
+
+**One model per CBR, fair slot planning** (`fill`): padc_adv 78.1% at 30 dB (padc 71.4%), 92.5%
+at 28, 60.0% at 32, 69.8% at T 16, 82.5% at K 16: ahead of the prefix code's online by 2.0-6.0
+points. Most of that is the planner, not the code: on the stand-in, the same planner on the
+prefix code (`plan_adv`) equals per-CBR's padc_adv on the same curves by construction, and
+re-planned every slot (`replan_adv`) it ties per-CBR with a 0.2 dB quality bonus and beats
+`online` (+3.2 at T 16, +4.0 at 32 dB). To run on the real curves (section 12).
+
+**Lost slots** (`--preempt`, per-CBR planned for the expected share or hedged):
+
+| | prefix code | per CBR, expected / best hedge |
+|---|---|---|
+| mean PSNR, 10% lost | 30.94 (slope_adv) | 29.52 / 30.59 |
+| mean PSNR, 25% lost | 30.16 (30.29 with the decoder fine-tune) | 28.76 / 29.62 |
+| at 30 dB, 10% lost | 71.4% (online) | 72.7% / 73.8% |
+| at 30 dB, 25% lost | 66.4% (online) | 68.4% / 68.9% |
+
+Mean PSNR: the prefix code wins by +0.36 dB (10%) and +0.53 dB (25%) against per-CBR's best
+hedge (+1.4 dB against planning for the expected slots, where users whose code is cut short
+decode nothing). The target: per-CBR still +2.4 / +2.5 points against `online`; `replan_adv`
+(stand-in: +3.9 / +3.1 over hedged per-CBR) is the open test.
+
+**Where the nesting penalty lives** (frozen snrc4 encoder, decoder fine-tuned 400 epochs;
+paired over Kodak, mean over SNRs):
+
+| | at 1/48 | at 1/8 | all CBRs |
+|---|---|---|---|
+| HC: decoder fine-tuned at all rates (more training alone) | +0.08 | +0.15 | +0.115 |
+| H48 / H8: decoder specialised to that length | +0.22 | +0.28 | - |
+| HL: LoRA budget heads (rank 16) on the decoder | +0.07 | +0.16 | +0.116 |
+| full specialist (encoder + decoder), section 10 | +0.45 | +0.47 | - |
+
+Beyond more training, a decoder of its own recovers ~40% of the penalty ((0.22-0.08) /
+(0.45-0.08) at 1/48, (0.28-0.15) / (0.47-0.15) at 1/8); ~60% lives in the shared ENCODER --
+the price of encoding before the length is known. The LoRA heads recover none of it (HL = HC
+within 0.01 dB everywhere): gate P-F fails for heads; framing A is off. HL / HC as utilities
+(model errors as snrc4's): slope_adv 31.58 / 31.57 dB (= per-CBR's 31.58, with twice the
+decoder training: not a fair codec comparison), online 75.5% at 30 dB, 68.0% at T 16.
