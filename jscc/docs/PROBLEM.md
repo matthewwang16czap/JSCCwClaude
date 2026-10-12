@@ -74,16 +74,40 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
   and identical images. Its parts: per-image sizing (+5.0 points; the curves), online stopping
   (+3.9; encode-once prefix + mixed-SNR utility, no feedback beyond CQI), advantage timing
   (+3.2 to +3.4; the utility), admission (+2.0, +11 in tight frames).
-* Clairvoyant bound: all slot SNRs known in advance; the greedy on marginal utilities over
-  (user, slot) pairs (the equal-slope rule of `alloc/core.py` generalised to slots).
-* Theory to state: (i) with the clairvoyant SNRs and concave utilities, the greedy is optimal
-  for the relaxed problem (equal slopes); (ii) for long frames and i.i.d. fading, the
-  marginal-utility rule is the gradient scheduler, asymptotically optimal for sums of concave
-  utilities (Stolyar; Agrawal and Subramanian) -- the advantage index is its finite-deadline,
-  fixed-quota form; (iii) for the target, shortest-remaining-need first is the classic rule
-  for the number of jobs meeting a deadline (Moore-Hodgson with known sizes); (iv) the price
-  of prefix coding is the nesting penalty (measured: 0.2-0.5 dB), which the scheduling gain
-  has to exceed.
+* Optimality, layer by layer (what is exact, what is not; `tools/headroom.py` measures each):
+  1. Slot COUNTS with a channel that does not change within the frame (every slot alike for
+     a user): max sum_k q_k(L_k) s.t. sum_k L_k = T, L_k <= P is a separable allocation, exact
+     by a dynamic program over users (O(K T P)); the greedy equal-slope rule (our quotas) is
+     exact when every q_k is concave (marginal analysis: Gross 1956, Fox 1966). For a target
+     with known needs, shortest-first admission maximises the number served (cardinality
+     knapsack; Moore-Hodgson with one deadline).
+  2. WHICH slots, with every SNR of the frame known (clairvoyant): a combinatorial
+     assignment (8^24 ~ 5e21 raw assignments at K 8, T 24) whose user values are non-linear in
+     the set of slots and their order. Our policies do not solve it. It is solved offline for
+     evaluation: column generation on the configuration LP (each user one set of up to P
+     slots, each slot to at most one user; every set is priced, so its value bounds every
+     schedule from above, causal or not) and an integer program over the generated columns;
+     equal to brute force on small frames, bound - optimum ~0.001 dB at K 8, T 24 on the
+     stand-in (certified).
+  3. ONLINE (the real problem: a slot's SNR is known when it starts): the optimal causal
+     policy solves a finite-horizon stochastic dynamic program over every user's history,
+     intractable. The advantage index is a one-step approximation that values a slot not
+     used now as a typical (mean-SNR) slot later; rollout is one policy-improvement step on
+     it; the gradient-scheduler connection (Stolyar; Agrawal and Subramanian: asymptotically
+     optimal for long horizons) is motivation, not a proof for a finite deadline. Gap to state:
+     base <= rollout <= best causal <= clairvoyant optimum <= LP bound, all measured. Stand-in,
+     mean PSNR: rollout +0.06 dB, clairvoyant optimum +0.19; 30 dB: +1.6 / +4.7 points.
+  4. PHASE ORDER: when a user's slot count is fixed before the frame (fixed quotas, no lost
+     slots) the phases need not go in prefix order. For a fixed set of slots the best mapping
+     puts the most sensitive phase in the best slot (rearrangement inequality); online, with
+     the user's remaining slots i.i.d., the optimal causal mapping for the expected
+     distortion is the threshold rule of the sequential stochastic assignment problem
+     (Derman, Lieberman and Ross 1972), which applies exactly because the distortion is
+     linear in the per-phase noise terms. Stand-in: +0.12 dB ex post on our rule's own slots,
+     +0.27 for the clairvoyant optimum with any order (prefix order +0.19). With online
+     lengths or lost slots the prefix order is what keeps a cut-short code decodable.
+  5. The price of prefix coding is the nesting penalty (0.17-0.47 dB, mostly recoverable at
+     2-4 phases by a decoder per length), which the scheduling gain has to exceed.
 
 ## 4. Baselines
 

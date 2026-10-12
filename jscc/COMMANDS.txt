@@ -976,12 +976,18 @@ python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backo
 python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 3 >> results/s13_cqi_backoff.txt 2>&1 ;
 python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 4 >> results/s13_cqi_backoff.txt 2>&1
 " > /dev/null 2>&1 &
-# 13.3d  headroom (tools/headroom.py), on the same frames as schedule_sim.py. rollout = one
-#        step of policy improvement on our rule, causal (it tries the top candidates each slot
-#        and plays out the rest of the frame with our rule over sampled futures): a lower bound
-#        on what a better causal policy, a trained RL one included, could add. oracle =
-#        clairvoyant local search (knows every future SNR): what even perfect foresight adds.
-#        ~1.5 s per frame and worker; 400 frames x 10 runs ~ 15-20 min with 8 workers
+# 13.3d  headroom and the exact optimum (tools/headroom.py), on the same frames as
+#        schedule_sim.py. rollout = one step of policy improvement on our rule, causal (it
+#        tries the top candidates each slot and plays out the rest of the frame with our rule
+#        over sampled futures): a lower bound on what a better causal policy, a trained RL one
+#        included, could add. optimum / bound = the frame's problem with EVERY SNR known
+#        (assign the 24 slots to the 8 users to maximise the predicted quality), solved by
+#        column generation + an integer program: bound = optimum certifies it, and no
+#        schedule, causal or not, beats the bound. Also: the same with phases in any order,
+#        our slots with the phases mapped by sensitivity, and greedy vs exact slot counts.
+#        Needs scipy (pip line below; lpips / sionna usually bring it). ~3-4 s per frame and
+#        worker; 400 frames x 10 runs ~ 30-40 min with 8 workers
+pip install scipy                      # usually "Requirement already satisfied"
 NW=8                                   # worker processes: at most half the server's cores
 HR="--utility $U $B --frames 400 --workers $NW"
 nohup bash -c "
@@ -1043,7 +1049,7 @@ python tools/schedule_sim.py $HF --preempt 0.25 --target 30 $TQ 2>&1 | tee -a re
 # --- reading section 13 (send back everything it prints) ----------------------------
 cat results/s13_replays.txt results/s13_hd_more.txt                           # after 13.4-13.5
 cat results/s13_cqi_jscc.txt results/s13_cqi_dig.txt results/s13_cqi_backoff.txt   # 13.3, ~1 h
-cat results/s13_headroom.txt                                                   # 13.3d, ~20 min
+cat results/s13_headroom.txt                                                   # 13.3d, ~40 min
 cat results/s13_budget.txt results/s13_hf.txt                                  # after 13.6
 
 # Decision (docs/PAPER.md C5-C7):
@@ -1058,6 +1064,10 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #       the best causal policy for this model: say so (and a small RL check is a footnote,
 #       not the method). >= ~0.3 dB or >= ~5 points somewhere (noisy CQI, slow fading, lost
 #       slots, tight frames are the likely places) -> build an RL scheduler for those settings,
-#       trained on this model, with our rules as its baselines. oracle - base is the ceiling
-#       with perfect foresight, which no causal policy reaches
+#       trained on this model, with our rules as its baselines. optimum - base is what even
+#       perfect foresight adds (no causal policy reaches it); "bound - optimum" near 0
+#       certifies that optimum. "base, phases mapped by sensitivity" - base >= ~0.1 dB -> an
+#       online phase-mapping rule (Derman-Lieberman-Ross thresholds) for fixed-quota frames
+#       is worth building; "slot counts ... equals the exact dynamic program in 100%" -> the
+#       greedy quotas are exact on our curves
 #   decoded: hd's and the lost-slot gains hold when the codecs decode the schedules

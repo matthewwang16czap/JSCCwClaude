@@ -1,5 +1,6 @@
-"""How much better than our schedulers any scheduler could do: the case for (or against) a
-learned, e.g. reinforcement-learning, policy. CPU; about 1-3 s per frame and worker.
+"""How much better than our schedulers any scheduler could do, and the exact optimum of the
+frame with perfect foresight: the case for (or against) a learned, e.g. reinforcement-
+learning, policy. CPU; about 3-4 s per frame and worker (scipy for the optimum).
 
     python tools/headroom.py --utility results/utility_snrc4.json \\
         --belief results/belief_snrc4.json --base slope_adv --frames 200 --workers 16
@@ -8,7 +9,7 @@ learned, e.g. reinforcement-learning, policy. CPU; about 1-3 s per frame and wor
 
 The frames are tools/schedule_sim.py's (the same --seed, --users, --slots, --mean-snr,
 --fading, --fade-corr, --preempt, --cqi-error give the same images, mean SNRs, fades, lost
-slots and SNR reports). Per frame, three schedules:
+slots and SNR reports). Per frame:
 
     base      the --base policy of tools/schedule_sim.py, as it is
     rollout   one step of policy improvement on the base, causal (it knows what the base
@@ -19,21 +20,35 @@ slots and SNR reports). Per frame, three schedules:
               conditioned on the current slot with --fade-corr; lost slots with --preempt;
               the same futures for every candidate), scored on the transmitter's curves; the
               candidate best in expectation is served, if its paired gain over the base's
-              choice exceeds --z standard errors (else the base's). In expectation never worse than the
-              base (rollout, Bertsekas): its gain is a lower bound on what a better causal
-              policy -- a trained reinforcement-learning one included -- can add with the
-              same information and the same quality model
+              choice exceeds --z standard errors (else the base's). In expectation never
+              worse than the base (rollout, Bertsekas): its gain is a lower bound on what a
+              better causal policy -- a trained reinforcement-learning one included -- can
+              add with the same information and the same quality model
     oracle    clairvoyant local search: knows every slot's true SNR (and which are lost) in
               advance; from the base's and the rollout's schedules it moves single slots to
               other users (or leaves them unused) and swaps slots between users while the
-              frame's objective improves, and keeps the better result. A lower bound on what
-              perfect foresight could add
+              frame's objective improves, and keeps the better result
+    optimum, bound
+              the frame's problem with every SNR known -- assign the T slots to the K users,
+              at most P each, to maximise the sum of the users' predicted quality -- solved
+              by column generation on its configuration LP (each user one set of slots, each
+              slot to at most one user; every set of up to P slots is priced, so the LP's
+              value is an upper bound on every schedule, causal or not) and an integer
+              program over the generated columns (the best schedule found). bound = optimum
+              certifies it. Prefix order (the phases go out in time order), and with any
+              phase order (each user's phases mapped to its slots by sensitivity)
+    base, phases mapped by sensitivity
+              the base's own slots with each user's most sensitive phase in its best slot:
+              what choosing the phase per slot could add when the slot count is known
+    slot counts
+              (slope_adv) how many slots each user is planned at its mean SNR: the greedy
+              equal-slope rule against the exact dynamic program over users
 
 The objective is the mean PSNR, or with --target the share of users at or above it (rollout
-and oracle break ties by the shortfall below the target). Scored on --utility. Reported per
-schedule, and rollout - base and oracle - base paired by frame with 95% bootstrap CIs over
-frames. If rollout - base is small, the base is close to the best causal policy for this
-model and a learned policy has little to gain; if it is large, there is room to learn.
+and oracle break ties by the shortfall below the target; the optimum maximises the count).
+Scored on --utility. Paired by frame against the base with 95% bootstrap CIs over frames.
+If rollout - base is small, the base is close to the best causal policy for this model and a
+learned policy has little to gain; optimum - base is what even perfect foresight would add.
 """
 
 import argparse
@@ -110,10 +125,10 @@ def rollout_frame(o, util, belief, imgs, means, snr, avail, seen, rng, log=None)
         left = [k for k in range(K) if len(hist[k]) < P]
         if not left:
             break
-        log = []
+        step = []
         run_frame(belief, belief, imgs, means, rep, o.base, avail=None, start=(t, hist, served),
-                  stop_after=1, log=log, **kw)
-        own = log[0][1] if log else None
+                  stop_after=1, log=step, **kw)
+        own = step[0][1] if step else None
         g = rep[:, t]
         adv = {k: belief.psnr(imgs[k], hist[k] + [float(g[k])])
                - belief.psnr(imgs[k], hist[k] + [float(means[k] + o.plan_offset)]) for k in left}
@@ -157,8 +172,22 @@ def rollout_frame(o, util, belief, imgs, means, snr, avail, seen, rng, log=None)
     return out
 
 
-def oracle_frame(o, util, imgs, snr, avail, log, max_passes=30):
-    """Clairvoyant local search from the base's schedule (`log`: its (slot, user) pairs)."""
+def by_sensitivity(util, i, snrs):
+    """The same slots with the phases re-mapped: the most noise-sensitive phase in the best
+    slot, and so on down (the best mapping for a fixed set of slots: rearrangement)."""
+    L = len(snrs)
+    if L < 2:
+        return [float(x) for x in snrs]
+    r = util.rho[L - 1] if util.rho[L - 1].ndim == 1 else util.rho[L - 1][i]
+    out = np.empty(L)
+    out[np.argsort(-r, kind="stable")] = np.sort(np.asarray(snrs, dtype=np.float64))[::-1]
+    return out.tolist()
+
+
+def oracle_frame(o, util, imgs, snr, avail, log, free=False, max_passes=30):
+    """Clairvoyant local search from a schedule (`log`: its (slot, user) pairs). free: the
+    phases of each user's slots mapped by sensitivity instead of sent in prefix order.
+    Returns the histories (in phase order) and the slot sets [(user, slots)]."""
     K, T = snr.shape
     P = util.P
     owner = np.full(T, -1)
@@ -167,7 +196,8 @@ def oracle_frame(o, util, imgs, snr, avail, log, max_passes=30):
     usable = [t for t in range(T) if avail is None or avail[t]]
 
     def hist_of(k):
-        return [float(snr[k, t]) for t in range(T) if owner[t] == k]
+        h = [float(snr[k, t]) for t in range(T) if owner[t] == k]
+        return by_sensitivity(util, imgs[k], h) if free else h
 
     def val(k):
         q = util.psnr(imgs[k], hist_of(k))
@@ -209,7 +239,169 @@ def oracle_frame(o, util, imgs, snr, avail, log, max_passes=30):
                     owner[t1], owner[t2] = a, b
         if not better:
             break
-    return [hist_of(k) for k in range(K)]
+    sets = [(k, tuple(int(t) for t in np.flatnonzero(owner == k))) for k in range(K)]
+    return [hist_of(k) for k in range(K)], sets
+
+
+_CB = {}
+
+
+def combos(T, L):
+    """Every set of L of T slots, as sorted index rows (C(T, L), L); cached."""
+    if (T, L) not in _CB:
+        from itertools import combinations
+        _CB[T, L] = np.array(list(combinations(range(T), L)), dtype=np.intp).reshape(-1, L)
+    return _CB[T, L]
+
+
+def n_sets(T, P):
+    from math import comb
+    return sum(comb(T, L) for L in range(1, P + 1))
+
+
+def subset_values(util, imgs, snr, avail, target, free):
+    """Every user's value of every set of up to P slots, with perfect foresight: its PSNR
+    (or 1 if it reaches the target) when its phases go out in those slots in time order,
+    or, with free=True, mapped by sensitivity. v0 (K,): nothing; V[L - 1] (K, C(T, L))."""
+    K, T = snr.shape
+    v0 = np.array([util.psnr(i, []) for i in imgs])
+    if target is not None:
+        v0 = (v0 >= target).astype(float)
+    V = []
+    for L in range(1, util.P + 1):
+        cb = combos(T, L)
+        out = np.empty((K, len(cb)))
+        for k, i in enumerate(imgs):
+            kappa = util.kappa if np.ndim(util.kappa) == 0 else util.kappa[i]
+            n = 10.0 ** (-np.asarray(snr[k], dtype=np.float64) / 10.0)
+            F = (n / (1.0 + n / kappa))[cb]                  # (C, L): time order = phase order
+            r = util.rho[L - 1] if util.rho[L - 1].ndim == 1 else util.rho[L - 1][i]
+            if free:                                         # the best slot to the most
+                F, r = np.sort(F, 1), np.sort(r)[::-1]       # sensitive phase
+            q = -10.0 * np.log10(np.maximum(util.dsrc[i, L - 1] + util.csens[i, L - 1] * (F @ r),
+                                            1e-12))
+            out[k] = q if target is None else (q >= target)
+        if avail is not None:
+            out[:, ~np.asarray(avail)[cb].all(1)] = -np.inf  # a lost slot carries nothing
+        V.append(out)
+    return v0, V
+
+
+def set_value(util, i, snrs, target, free):
+    q = util.psnr(i, by_sensitivity(util, i, snrs) if free else list(snrs))
+    return q if target is None else float(q >= target)
+
+
+def clairvoyant(util, imgs, snr, avail, target, free=False, start=(), max_iter=300,
+                ip_time=20.0, enrich=4):
+    """The best schedule with perfect foresight, bracketed. The configuration LP (each user
+    one set of slots, each slot to at most one user, relaxed to fractions) is solved by
+    column generation; its value, the Lagrangian dual of "one user per slot", bounds EVERY
+    schedule from above. The integer program over the generated columns gives the best
+    schedule found. Returns (lower, upper, histories) in the objective summed over users;
+    lower == upper certifies the optimum. start: (user, slots) sets that seed the columns
+    (heuristic schedules); enrich: each user's best sets per length added before the integer
+    program."""
+    from scipy.optimize import Bounds, LinearConstraint, linprog, milp
+    K, T = snr.shape
+    v0, V = subset_values(util, imgs, snr, avail, target, free)
+    cbs = [combos(T, L) for L in range(1, util.P + 1)]
+    cols, seen = [], set()
+
+    def add(k, S, v):
+        if (k, S) in seen or not np.isfinite(v):
+            return False
+        seen.add((k, S))
+        cols.append((k, S, float(v)))
+        return True
+
+    for k in range(K):
+        add(k, (), v0[k])
+    for k, S in start:
+        if S and (avail is None or all(avail[t] for t in S)):
+            add(k, tuple(S), set_value(util, imgs[k], [snr[k, t] for t in S], target, free))
+
+    def master():
+        n = len(cols)
+        A_eq, A_ub = np.zeros((K, n)), np.zeros((T, n))
+        for j, (k, S, _) in enumerate(cols):
+            A_eq[k, j] = 1.0
+            if S:
+                A_ub[list(S), j] = 1.0
+        return -np.array([v for _, _, v in cols]), A_eq, A_ub
+
+    upper = np.inf
+    for _ in range(max_iter):
+        c, A_eq, A_ub = master()
+        res = linprog(c, A_ub=A_ub, b_ub=np.ones(T), A_eq=A_eq, b_eq=np.ones(K),
+                      bounds=(0, None), method="highs")
+        if res.status != 0:
+            break
+        lam = np.maximum(-res.ineqlin.marginals, 0.0)      # the price of each slot
+        mu = -res.eqlin.marginals
+        best, arg = v0.copy(), [None] * K                  # pricing: each user's best set
+        for Li, cb in enumerate(cbs):
+            sc = V[Li] - lam[cb].sum(1)[None, :]
+            j = sc.argmax(1)
+            m = sc[np.arange(K), j]
+            for k in np.flatnonzero(m > best):
+                best[k], arg[k] = m[k], (Li, int(j[k]))
+        upper = min(upper, float(lam.sum() + best.sum()))  # weak duality: valid at any price
+        added = 0
+        for k in range(K):
+            if arg[k] is not None and best[k] - mu[k] > 1e-9:
+                Li, j = arg[k]
+                added += add(k, tuple(int(t) for t in cbs[Li][j]), V[Li][k, j])
+        if not added or upper + res.fun < 1e-7:
+            break
+    if res.status == 0:                  # more columns for the integer program: each user's
+        for Li, cb in enumerate(cbs):    # few best sets of every length at the final prices
+            sc = V[Li] - lam[cb].sum(1)[None, :]
+            m = min(enrich, sc.shape[1])
+            for k in range(K):
+                for j in np.argpartition(-sc[k], m - 1)[:m]:
+                    add(k, tuple(int(t) for t in cb[j]), V[Li][k, j])
+    if target is not None:               # a count: no schedule exceeds the bound's floor
+        upper = float(np.floor(upper + 1e-6))
+    c, A_eq, A_ub = master()
+    res = milp(c, constraints=[LinearConstraint(A_eq, 1, 1), LinearConstraint(A_ub, -np.inf, 1)],
+               integrality=np.ones(len(cols)), bounds=Bounds(0, 1),
+               options={"time_limit": ip_time})
+    hist = [[] for _ in range(K)]
+    if res.x is None:
+        return -np.inf, upper, hist
+    lower = 0.0
+    for j in np.flatnonzero(res.x > 0.5):
+        k, S, v = cols[j]
+        lower += v
+        h = [float(snr[k, t]) for t in S]
+        hist[k] = by_sensitivity(util, imgs[k], h) if free else h
+    return lower, upper, hist
+
+
+def exact_counts(util, imgs, means, T):
+    """How many slots each user gets, planned at the mean SNRs, solved exactly: a dynamic
+    program over users (the separable allocation max sum_k q_k(L_k), sum L_k = min(T, K P),
+    L_k <= P). Returns the lengths and the curves q (K, P + 1)."""
+    K, P = len(imgs), util.P
+    q = np.array([[util.psnr(i, [m] * L) for L in range(P + 1)] for i, m in zip(imgs, means)])
+    n = min(T, K * P)
+    best, choice = np.zeros(1), []
+    for k in range(K):                                     # best[m]: users 0..k with m slots
+        new = np.full(min(n, (k + 1) * P) + 1, -np.inf)
+        ch = np.zeros(len(new), dtype=int)
+        for m in range(len(new)):
+            for L in range(max(0, m - len(best) + 1), min(P, m) + 1):
+                v = best[m - L] + q[k, L]
+                if v > new[m]:
+                    new[m], ch[m] = v, L
+        best = new
+        choice.append(ch)
+    L, m = np.zeros(K, dtype=int), n
+    for k in reversed(range(K)):
+        L[k] = choice[k][m]
+        m -= L[k]
+    return L, q
 
 
 _G = {}
@@ -226,15 +418,32 @@ def _work(args):
                      avail, 1.0 - o.preempt, o.t_plan, seen, log=log)
     rlog = []
     roll = rollout_frame(o, util, belief, imgs, means, snr, avail, seen, rng, rlog)
-    orc = None
+    K = len(imgs)
+    res = {"base": score(util, imgs, base, o.target), "rollout": score(util, imgs, roll, o.target),
+           "phases": {"base": float(np.mean([len(h) for h in base])),
+                      "rollout": float(np.mean([len(h) for h in roll]))}}
+    res["base_remapped"] = score(util, imgs, [by_sensitivity(util, i, h) for i, h in
+                                              zip(imgs, base)], o.target)
+    sets = []
     if o.oracle:                         # local search from both schedules, the better one
-        orc = max((oracle_frame(o, util, imgs, snr, avail, lg) for lg in (log, rlog)),
-                  key=lambda h: objective(util, imgs, h, o.target))
-    res = {"base": score(util, imgs, base, o.target), "rollout": score(util, imgs, roll, o.target)}
-    if orc is not None:
+        found = [oracle_frame(o, util, imgs, snr, avail, lg) for lg in (log, rlog)]
+        orc, sets = max(found, key=lambda x: objective(util, imgs, x[0], o.target))
         res["oracle"] = score(util, imgs, orc, o.target)
-    res["phases"] = {"base": float(np.mean([len(h) for h in base])),
-                     "rollout": float(np.mean([len(h) for h in roll]))}
+        sets = [s for _, ss in found for s in ss]
+    for lg in (log, rlog):
+        sets += [(k, tuple(t for t, kk in lg if kk == k)) for k in range(K)]
+    if o.bound and f < o.bound_frames:
+        for tag, free in (("", False), ("_any", True))[:2 if o.any_order else 1]:
+            lo, up, h = clairvoyant(util, imgs, snr, avail, o.target, free, sets)
+            res["bound" + tag] = up / K
+            if np.isfinite(lo):
+                res["optimum" + tag] = lo / K
+    if o.target is None and o.base in ("fixed_slope", "slope_adv"):
+        from tools.schedule_sim import targets
+        g = targets(belief, imgs, means, o.slots if o.t_plan is None else o.t_plan, "slope")
+        L, q = exact_counts(belief, imgs, means, o.slots if o.t_plan is None else o.t_plan)
+        k = np.arange(K)
+        res["counts_loss"] = float((q[k, L].sum() - q[k, g].sum()) / K)
     return res
 
 
@@ -265,6 +474,12 @@ def main():
                     help="rollout: leave the base's choice only if the paired gain over the "
                          "sampled futures exceeds z standard errors (0: any gain)")
     ap.add_argument("--no-oracle", dest="oracle", action="store_false")
+    ap.add_argument("--no-bound", dest="bound", action="store_false",
+                    help="skip the clairvoyant optimum and its bound (needs scipy)")
+    ap.add_argument("--bound-frames", type=int, default=None,
+                    help="the optimum and bound on the first N frames only (default: all)")
+    ap.add_argument("--no-any-order", dest="any_order", action="store_false",
+                    help="skip the clairvoyant optimum with phases mapped by sensitivity")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     o = ap.parse_args()
@@ -277,6 +492,19 @@ def main():
         ap.error("the headroom study is for token-prefix utilities")
     belief = load_utility(o.belief) if o.belief else None
     o.t_plan = planned_slots(o.slots, o.preempt, o.preempt_quantile)
+    o.bound_frames = o.frames if o.bound_frames is None else o.bound_frames
+    if o.bound:
+        import importlib.util
+        if importlib.util.find_spec("scipy") is None:
+            print("scipy not found (pip install scipy): no clairvoyant optimum / bound")
+            o.bound = False
+    if o.bound and n_sets(o.slots, util.P) > 2_000_000:
+        print(f"{n_sets(o.slots, util.P):,} slot sets per user: too many to enumerate, no "
+              f"clairvoyant optimum / bound")
+        o.bound = False
+    if o.bound:
+        for L in range(1, util.P + 1):                    # built once, shared by the workers
+            combos(o.slots, L)
     frames = list(draw_frames(util, o.users, o.slots, o.frames, o.mean_snr, o.fading, o.snr_clip,
                               o.seed, False, 0.0, belief, o.fade_corr, o.preempt, o.cqi_error))
     _G.update(o=o, util=util)
@@ -296,18 +524,46 @@ def main():
     what = "mean PSNR (dB)" if o.target is None else f"share at {o.target:g} dB"
     print(f"base {o.base}{' (index timing)' if o.base in ADV_TIMING else ''}; rollout: "
           f"{o.futures} futures, {o.candidates or 'all'} candidates; {time.time() - t0:.0f} s")
-    keys = ["base", "rollout"] + (["oracle"] if o.oracle else [])
     scale = 1.0 if o.target is None else 100.0
     unit = " dB" if o.target is None else " pts"
-    for k in keys:
-        v = np.array([r[k] for r in res])
-        extra = f"   phases/user {np.mean([r['phases'][k] for r in res]):.2f}" if k in res[0]["phases"] else ""
-        print(f"  {k:8s} {what}: {scale * v.mean():8.3f}{'%' if o.target is not None else ''}{extra}")
-    for k in keys[1:]:
-        d = np.array([r[k] - r["base"] for r in res])
+    label = {"base": "base (our rule)", "rollout": "rollout (causal)",
+             "oracle": "oracle (clairvoyant local search)",
+             "optimum": "clairvoyant optimum found", "bound": "clairvoyant upper bound",
+             "base_remapped": "base, phases mapped by sensitivity",
+             "optimum_any": "clairvoyant optimum, any phase order",
+             "bound_any": "clairvoyant bound, any phase order"}
+    order = ["base", "rollout", "oracle", "optimum", "bound", "base_remapped", "optimum_any",
+             "bound_any"]
+    for k in order:
+        rows = [r for r in res if k in r]
+        if not rows:
+            continue
+        v = np.array([r[k] for r in rows])
+        ph = f"   phases/user {np.mean([r['phases'][k] for r in rows]):.2f}" if k in rows[0]["phases"] else ""
+        n = "" if len(rows) == len(res) else f"   ({len(rows)} frames)"
+        print(f"  {label[k]:38s} {what}: {scale * v.mean():8.3f}{'%' if o.target is not None else ''}{ph}{n}")
+    print("  paired by frame, minus the base (95% CI over frames; frames better / worse):")
+    for k in order[1:]:
+        rows = [r for r in res if k in r]
+        if not rows:
+            continue
+        d = np.array([r[k] - r["base"] for r in rows])
         lo, hi = bootstrap(d, seed=o.seed)
-        print(f"  {k} - base: {scale * d.mean():+.3f}{unit} [{scale * lo:+.3f}, {scale * hi:+.3f}]  "
-              f"(frames better / worse: {int(np.sum(d > 1e-9))} / {int(np.sum(d < -1e-9))})")
+        print(f"    {label[k]:38s} {scale * d.mean():+8.3f}{unit} [{scale * lo:+.3f}, {scale * hi:+.3f}]"
+              f"  ({int(np.sum(d > 1e-9))} / {int(np.sum(d < -1e-9))})")
+    rows = [r for r in res if "bound" in r and "optimum" in r]
+    if rows:
+        gap = np.array([r["bound"] - r["optimum"] for r in rows])
+        print(f"  clairvoyant problem certified: bound - optimum found {scale * gap.mean():.3f}{unit} "
+              f"on average (max {scale * gap.max():.3f}); our rule reaches "
+              f"{scale * np.mean([r['base'] for r in rows]):.3f} of at most "
+              f"{scale * np.mean([r['bound'] for r in rows]):.3f}")
+    rows = [r for r in res if "counts_loss" in r]
+    if rows:
+        cl = np.array([r["counts_loss"] for r in rows])
+        print(f"  slot counts at the mean SNRs: the greedy rule ({o.base}'s quotas) equals the exact "
+              f"dynamic program in {100 * np.mean(cl < 1e-9):.1f}% of frames; predicted loss "
+              f"{cl.mean():.4f} dB on average (max {cl.max():.4f})")
 
 
 if __name__ == "__main__":

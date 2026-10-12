@@ -74,13 +74,16 @@ penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target w
    replay (per-CBR vs prefix on the same frames).
 4. The codec gap: about 0.8-0.9 dB below JSCCformer-f's codec after discounting feedback; more
    training (HF tells how much 400 epochs give) or data. Relative claims do not depend on it.
-5. Theory for section 5 (the advantage index as a gradient scheduler with a deadline;
-   conditions under which shortest-remaining-need admission is optimal for the count).
-   With it, the headroom study (section 13.3d, `tools/headroom.py`): one step of rollout on
-   our rules (a lower bound on what any better causal policy, e.g. a reinforcement-learning
-   one, adds) and a clairvoyant search (perfect foresight). Small rollout gains -> "the rules
-   are near the best causal policy for the model"; large ones -> an RL scheduler trained on
-   the model, with our rules as baselines (stand-in curves: +0.04 dB rollout, +0.19 oracle for
-   the mean; +3.8 / +5.0 points at 30 dB).
+5. Theory for section 5, now layered (docs/PROBLEM.md, section 3, "Optimality"): exact slot
+   counts (dynamic program; greedy exact for concave curves), exact count admission
+   (shortest first), the clairvoyant frame problem solved with a certificate (column
+   generation + integer program, `tools/headroom.py`), the online problem as a stochastic DP
+   with the index as a one-step approximation and rollout as one improvement step, and the
+   phase-order result (rearrangement; Derman-Lieberman-Ross thresholds online). Section
+   13.3d measures every gap on the real curves (stand-in: rollout +0.06 dB, clairvoyant
+   optimum +0.19, any phase order +0.27; at 30 dB +1.6 / +4.7 / +4.7 points). Small rollout
+   gains -> "the rules are near the best causal policy for the model"; large ones -> an RL
+   scheduler trained on the model, with our rules as baselines. A large phase-order gain ->
+   a DLR phase-mapping rule for fixed-quota frames (a new, provable component).
 6. Robustness a reviewer may ask for: a second test set (CLIC), MS-SSIM targets, OFDMA
    (several users per slot).

@@ -650,7 +650,7 @@ def check_schedule():
         nxt = []
         run_frame(u, u, im, mn, sn, "slope_adv", start=(lg[5][0], h, sv), stop_after=1, log=nxt)
         same &= nxt == [lg[5]]
-        orc = oracle_frame(o, u, im, sn, av, lg)
+        orc, _ = oracle_frame(o, u, im, sn, av, lg)
         qb = np.mean([u.psnr(i, x) for i, x in zip(im, base)])
         better &= np.mean([u.psnr(i, x) for i, x in zip(im, orc)]) >= qb - 1e-9
         ro = rollout_frame(o, u, u, im, mn, sn, av, se, np.random.default_rng(f))
@@ -659,6 +659,46 @@ def check_schedule():
        f"headroom: a policy resumed mid-frame repeats its own next choice; the clairvoyant search "
        f"never loses to the base; rollout runs (rollout - base {np.mean(rb):+.3f} dB on 12 "
        f"stand-in frames: noise; +0.04 [0.03, 0.06] on 200)")
+    import itertools
+    from tools.headroom import by_sensitivity, clairvoyant, exact_counts
+    from tools.schedule_sim import targets
+    ex, gl = True, 0.0
+    for im, mn, sn, bl, av, se in draw_frames(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                                              seed=1):
+        L, q = exact_counts(u, im, mn, 12)
+        bf = max(sum(q[k, l[k]] for k in range(4))
+                 for l in itertools.product(range(P + 1), repeat=4) if sum(l) == 12)
+        ex &= abs(q[np.arange(4), L].sum() - bf) < 1e-9 and L.sum() == 12
+        gl = max(gl, bf - q[np.arange(4), targets(u, im, mn, 12, "slope")].sum())
+    ok(ex and gl < 1e-9, "slot counts at the mean SNRs: the dynamic program is exact (brute force); "
+       "the greedy equal-slope rule matches it on the stand-in's concave curves")
+    rl = np.array([3.0, 12.0, 7.0])
+    ok(by_sensitivity(u, 0, rl.tolist()) == [12.0, 7.0, 3.0],
+       "phases mapped by sensitivity: the best slot to the first (most sensitive) phase")
+    if importlib.util.find_spec("scipy") is None:
+        print("    --  clairvoyant optimum: skipped (pip install scipy)")
+        return
+    gaps = []
+    for im, mn, sn, bl, av, se in draw_frames(u, 3, 6, 4, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                                              seed=5, preempt=0.2):
+        for tg, free in ((None, False), (None, True), (30.0, False)):
+            best = -np.inf
+            for a in itertools.product(range(-1, 3), repeat=6):
+                if av is not None and any(not av[t] and a[t] >= 0 for t in range(6)):
+                    continue
+                v = 0.0
+                for k in range(3):
+                    h = [float(sn[k, t]) for t in range(6) if a[t] == k]
+                    qk = u.psnr(im[k], by_sensitivity(u, im[k], h) if free else h)
+                    v += qk if tg is None else float(qk >= tg)
+                best = max(best, v)
+            lo, up, _ = clairvoyant(u, im, sn, av, tg, free)
+            gaps.append((best - lo, up - best))
+    gaps = np.array(gaps)
+    ok(np.abs(gaps[:, 0]).max() < 1e-4 and gaps[:, 1].min() > -1e-6,   # LP solver tolerance
+       f"clairvoyant optimum (column generation + integer program) = brute force on {len(gaps)} "
+       f"small frames (mean PSNR and target, prefix and any phase order); the LP bound is valid "
+       f"everywhere, tight in {int(np.sum(gaps[:, 1] < 1e-4))} (largest gap {gaps[:, 1].max():.3f})")
 
 
 def check_eval_seed(x):

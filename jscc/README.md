@@ -93,7 +93,7 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
                         digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
                         replay_report.py (decoded replays paired by frame, also across codecs)
-                        headroom.py (rollout and clairvoyant bounds on what a better policy adds)
+                        headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
