@@ -76,5 +76,11 @@ penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target w
    training (HF tells how much 400 epochs give) or data. Relative claims do not depend on it.
 5. Theory for section 5 (the advantage index as a gradient scheduler with a deadline;
    conditions under which shortest-remaining-need admission is optimal for the count).
+   With it, the headroom study (section 13.3d, `tools/headroom.py`): one step of rollout on
+   our rules (a lower bound on what any better causal policy, e.g. a reinforcement-learning
+   one, adds) and a clairvoyant search (perfect foresight). Small rollout gains -> "the rules
+   are near the best causal policy for the model"; large ones -> an RL scheduler trained on
+   the model, with our rules as baselines (stand-in curves: +0.04 dB rollout, +0.19 oracle for
+   the mean; +3.8 / +5.0 points at 30 dB).
 6. Robustness a reviewer may ask for: a second test set (CLIC), MS-SSIM targets, OFDMA
    (several users per slot).

@@ -19,7 +19,8 @@ Sections 0-12 above it are the record: nothing in them needs to be run again.
   12 the same planner on both codes, a        done (docs/NOTES.md "P1, step 7")
      decoder per length, digital at 6 slots
   13 CQI errors, equal training budget,       TO RUN NOW
-     decoded per-length-decoder schedules
+     decoded per-length-decoder schedules,
+     headroom for a learned policy
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -865,6 +866,8 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
 #   (c) decoded: the per-length-decoder schedules and lost-slot schedules (GPU 5 first, ~40
 #       min), paired across codecs on the same frames (CPU, seconds: tools/replay_report.py).
 #   (d) the per-length decoders at 10% lost slots, 28 dB and K 16 (CPU, minutes).
+#   (e) headroom (CPU, ~20 min in the background, 13.3d): how much ANY scheduler could add over
+#       ours -- the case for (or against) a learned, e.g. reinforcement-learning, policy.
 # Run 13.0, 13.1 (CPU, seconds: the schedules GPU 5 decodes), start 13.2 (GPUs) and 13.3 (CPU,
 # background), do 13.4 while they run, 13.5 when GPU 5 has decoded, 13.6 when training is done.
 
@@ -973,6 +976,26 @@ python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backo
 python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 3 >> results/s13_cqi_backoff.txt 2>&1 ;
 python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 4 >> results/s13_cqi_backoff.txt 2>&1
 " > /dev/null 2>&1 &
+# 13.3d  headroom (tools/headroom.py), on the same frames as schedule_sim.py. rollout = one
+#        step of policy improvement on our rule, causal (it tries the top candidates each slot
+#        and plays out the rest of the frame with our rule over sampled futures): a lower bound
+#        on what a better causal policy, a trained RL one included, could add. oracle =
+#        clairvoyant local search (knows every future SNR): what even perfect foresight adds.
+#        ~1.5 s per frame and worker; 400 frames x 10 runs ~ 15-20 min with 8 workers
+NW=8                                   # worker processes: at most half the server's cores
+HR="--utility $U $B --frames 400 --workers $NW"
+nohup bash -c "
+python tools/headroom.py $HR --base slope_adv > results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --cqi-error 2 >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --fade-corr 0.9 --plan conditional >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --preempt 0.25 >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --target 30 --base plan_adv >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --slots 16 >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --cqi-error 2 >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --preempt 0.25 >> results/s13_headroom.txt 2>&1 ;
+python tools/headroom.py --utility results/utility_hd.json --belief results/belief_hd.json --frames 400 --workers $NW --target 30 --base replan_adv >> results/s13_headroom.txt 2>&1
+" > /dev/null 2>&1 &
 
 # 13.4 -- CPU, now, ~10 min (foreground)
 # 13.4a  section 12's decoded replays, paired: per-CBR vs the prefix code on the same 60 frames
@@ -1020,6 +1043,7 @@ python tools/schedule_sim.py $HF --preempt 0.25 --target 30 $TQ 2>&1 | tee -a re
 # --- reading section 13 (send back everything it prints) ----------------------------
 cat results/s13_replays.txt results/s13_hd_more.txt                           # after 13.4-13.5
 cat results/s13_cqi_jscc.txt results/s13_cqi_dig.txt results/s13_cqi_backoff.txt   # 13.3, ~1 h
+cat results/s13_headroom.txt                                                   # 13.3d, ~20 min
 cat results/s13_budget.txt results/s13_hf.txt                                  # after 13.6
 
 # Decision (docs/PAPER.md C5-C7):
@@ -1030,4 +1054,10 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #       closes the penalty where schedules live; larger -> that is the encoder's share, stated.
 #       HF's schedules against hd's: what the per-length decoders buy at equal training
 #   C7  which QoS policy holds up when the CQI is noisy (replan_adv expected)
+#   RL  rollout - base < ~0.1 dB and < ~2 points in every setting -> our rules are close to
+#       the best causal policy for this model: say so (and a small RL check is a footnote,
+#       not the method). >= ~0.3 dB or >= ~5 points somewhere (noisy CQI, slow fading, lost
+#       slots, tight frames are the likely places) -> build an RL scheduler for those settings,
+#       trained on this model, with our rules as its baselines. oracle - base is the ceiling
+#       with perfect foresight, which no causal policy reaches
 #   decoded: hd's and the lost-slot gains hold when the codecs decode the schedules

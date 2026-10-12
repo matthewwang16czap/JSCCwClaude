@@ -631,6 +631,34 @@ def check_schedule():
        f"digital under 2 dB CQI errors: goodput-optimal backoff {b:g} dB ({100 * bl:.0f}% of "
        f"blocks lost; {100 * dn0['pf']['failed_share']:.0f}% without backoff), below the error-free "
        f"link; without errors unchanged")
+    from types import SimpleNamespace
+    from tools.headroom import oracle_frame, rollout_frame
+    from tools.schedule_sim import draw_frames, rate, run_frame
+    fr = list(draw_frames(u, 4, 12, 12, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=3))
+    same, better, rb = True, True, []
+    o = SimpleNamespace(target=None, margin=0.0, plan_offset=0.0, fade_corr=0.0, plan="mean",
+                        preempt=0.0, t_plan=None, base="slope_adv", candidates=3, futures=4,
+                        fading="rayleigh", snr_clip=(-2.0, 22.0), z=1.0)
+    for f, (im, mn, sn, bl, av, se) in enumerate(fr):
+        lg = []
+        base = run_frame(u, u, im, mn, sn, "slope_adv", log=lg)
+        h, sv = [[] for _ in range(4)], np.zeros(4)
+        for t, k in lg[:5]:                               # resume at the 6th served slot
+            h[k].append(float(sn[k, t]))
+            sv = (1 - 1 / 12) * sv
+            sv[k] += rate(sn[k, t]) / 12
+        nxt = []
+        run_frame(u, u, im, mn, sn, "slope_adv", start=(lg[5][0], h, sv), stop_after=1, log=nxt)
+        same &= nxt == [lg[5]]
+        orc = oracle_frame(o, u, im, sn, av, lg)
+        qb = np.mean([u.psnr(i, x) for i, x in zip(im, base)])
+        better &= np.mean([u.psnr(i, x) for i, x in zip(im, orc)]) >= qb - 1e-9
+        ro = rollout_frame(o, u, u, im, mn, sn, av, se, np.random.default_rng(f))
+        rb.append(np.mean([u.psnr(i, x) for i, x in zip(im, ro)]) - qb)
+    ok(same and better and np.mean(rb) > -0.1 and all(len(x) <= P for x in ro),
+       f"headroom: a policy resumed mid-frame repeats its own next choice; the clairvoyant search "
+       f"never loses to the base; rollout runs (rollout - base {np.mean(rb):+.3f} dB on 12 "
+       f"stand-in frames: noise; +0.04 [0.03, 0.06] on 200)")
 
 
 def check_eval_seed(x):
