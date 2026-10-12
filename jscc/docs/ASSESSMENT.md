@@ -60,6 +60,16 @@ IEEE Transactions on Wireless Communications (TWC).
    schedules) and the two schedulers it enables. Still owed before writing: a realistic
    transmitter (P-C3), the digital baseline (P-D), fixed-length per-CBR codes with the G-C
    nesting penalty (section 4's results), correlated fading, and the codec gap.
+11. **After the baselines (sections 10-12, `docs/NOTES.md` P1 steps 5-7):** P-C3 passes; against
+   HEVC intra with ideal link adaptation at an equal per-user cap JSCC is ahead by small
+   margins (+0.14 to +0.34 dB mean, +0.5 to +10.5 points at the target), not by a clear one;
+   one model per CBR beats the prefix code with known slots (+1.0 to +4.4 points with the same
+   planner) and loses when slots can be lost. A decoder per received length behind the one
+   encoder recovers most of the penalty at 2-4 phases and makes encode-once the best JSCC
+   system on mean PSNR and under lost slots. The paper is framing B: the abstraction and the
+   schedulers, codec-agnostic, with encode-once + per-length decoders as the recommended code.
+   Owed: CQI errors (the last assumption favouring digital), an equal-training-budget check of
+   the codec comparison, theory for the schedulers.
 
 ## 1. Your four points, checked
 

@@ -603,6 +603,34 @@ def check_schedule():
     ok(pre["fixed_uni"]["p5_psnr"] == 10.0 and pre_p["fixed_uni"]["p5_psnr"] > 10.0
        and pre_p["fixed_uni"]["mean_psnr"] > pre["fixed_uni"]["mean_psnr"],
        "--preempt: a fixed code cut short decodes to nothing, a prefix decodes what arrived")
+    from tools.schedule_sim import goodput_backoff
+    _, _, dn = simulate(u, 4, 10, 3, (0.0, 15.0), "none", (-2.0, 22.0), ["slope_adv", "online"],
+                        seed=1, target=30.0, dump=3, cqi_error=3.0)
+    c0, _, _ = simulate(u, 4, 12, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "slope_adv"],
+                        seed=1)
+    c2, _, _ = simulate(u, 4, 12, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "slope_adv"],
+                        seed=1, cqi_error=2.0)
+    ok(all(abs(v - min(max(e["mean_snr"], -2.0), 22.0)) < 1e-9 for e in dn for v in e["snrs"])
+       and c2["slope_adv"]["mean_psnr"] < c0["slope_adv"]["mean_psnr"]
+       and c2["slope_adv"]["vs_pf"] > 0.1,
+       f"--cqi-error: decisions on the reports, prefixes decoded at the true SNR; 2 dB errors "
+       f"cost the advantage index {c0['slope_adv']['mean_psnr'] - c2['slope_adv']['mean_psnr']:.2f} "
+       f"dB, still {c2['slope_adv']['vs_pf']:+.2f} over pf")
+    b, bl = goodput_backoff(d, 2.0, (0.0, 15.0), "rayleigh", (-2.0, 22.0), n=50000)
+    dpol = ["pf", "greedy"]
+    d0, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1)
+    dz, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                        cqi_error=0.0, backoff=0.0)
+    dn0, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                         cqi_error=2.0, backoff=0.0)
+    db, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                        cqi_error=2.0, backoff=b)
+    ok(d0 == dz and 0.5 <= b <= 4.0 and 0.0 < bl < 0.3 and dn0["pf"]["failed_share"] > 0.2
+       and db["pf"]["failed_share"] < dn0["pf"]["failed_share"]
+       and db["pf"]["mean_psnr"] <= d0["pf"]["mean_psnr"],
+       f"digital under 2 dB CQI errors: goodput-optimal backoff {b:g} dB ({100 * bl:.0f}% of "
+       f"blocks lost; {100 * dn0['pf']['failed_share']:.0f}% without backoff), below the error-free "
+       f"link; without errors unchanged")
 
 
 def check_eval_seed(x):

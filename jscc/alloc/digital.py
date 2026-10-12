@@ -15,7 +15,10 @@ At the deadline a user holds B bits per pixel. Mode "step": it decodes the best 
 whose file fits in B (as if the transmitter could switch files for free: optimistic for a
 non-scalable codec); mode "interp": PSNR interpolated in bpp between the points (an ideal
 scalable codec at the codec's efficiency). Below the smallest file: nothing (d_empty).
-Every assumption here favours the digital scheme.
+Every assumption here favours the digital scheme. With CQI errors (tools/schedule_sim.py
+--cqi-error) the transmitter picks the rate from the reported SNR minus a backoff, a block
+whose rate the true SNR does not support is lost, and the transmitter knows which (HARQ
+ACK; no combining gain is modelled).
 """
 
 import numpy as np
@@ -54,8 +57,12 @@ class DigitalUtility:
         if mode not in ("step", "interp"):
             raise ValueError(f"unknown mode {mode!r}")
 
+    def efficiency(self, snr_db):
+        """Bits per channel use of this link at snr_db (dB)."""
+        return efficiency(snr_db, self.link, self.gap_db)
+
     def bpp(self, snrs_db):
-        return float(self.sym_per_pixel * efficiency(snrs_db, self.link, self.gap_db).sum())
+        return float(self.sym_per_pixel * self.efficiency(snrs_db).sum())
 
     def psnr(self, i, snrs_db):
         if len(snrs_db) > self.P:
