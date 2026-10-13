@@ -15,6 +15,31 @@ prefix encoder with a decoder per received length. The prefix-centred title "Sch
 Encode-Once Deep JSCC Prefixes ..." stays off: per-length decoders close most of the nesting
 penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target with known slots)
 
+## The story, if 13.3f / the Jacobian probe confirm it (proposed 2026-10-13)
+
+"Learned JSCC has no rate. What replaces it?" Digital resource allocation rests on one
+abstraction: a slot delivers bits, bits add, quality is a function of the sum (and system
+simulation maps a codeword's SNRs to one effective SNR by averaging mutual information,
+MIESM). A learned JSCC code delivers no bits. The paper's claim: it still admits a link
+abstraction, a different one -- the slots' contributions add as MMSEs (Gaussian MMSE of
+variance kappa at the slot's noise), weighted by the decoder's sensitivity to each part of the
+code -- but only if the code is trained for slot-varying channels. Then:
+
+1. Abstraction (theory + measurement): first-order analysis of the decoder (distortion =
+   noise-free distortion + sum_j n_j x Jacobian energy of chunk j), the MMSE saturation, the
+   training condition (piecewise SNR), calibration from 2P decodes at the transmitter; MMSE
+   averaging vs MIESM / EESM / mean dB, equal vs sensitivity weights (13.3f).
+2. What it does to scheduling: no rate, a quality ceiling per channel use; the scheduler's
+   currency becomes "weighted MMSE removed"; a user's state is two numbers; the frame is a
+   restless bandit (Whittle index; the advantage index as its certainty-equivalent form;
+   bounds certifying near-optimality, 13.3e); QoS deadlines and lost slots exploit encode-once.
+3. Evidence: decoded gains over PF (+0.46 dB) and PADC (+11 points); certified gap to any
+   scheduler; per-length decoders; digital under ideal and noisy CSI.
+
+The schedulers stop being the novelty and become the demonstration of what the abstraction
+buys. Everything already measured still serves; plan_adv / replan_adv details and most
+baseline variants move to an appendix.
+
 ## The story as a dynamic program (proposed 2026-10-13)
 
 The learned link-to-system model turns the system into a reward function: a user's PSNR at

@@ -494,6 +494,14 @@ def check_schedule():
     ok(abs(k_hat / kappa - 1) < 0.05 and worst < 0.01 and rho_err < 0.01,
        f"utility fit recovers the model: kappa {k_hat:.3f} (true {kappa}), rho within {rho_err:.4f}, "
        f"held-out MAE {worst:.4f} dB")
+    from tools.utility_fit import abstraction_errors
+    ab = abstraction_errors(levels, params, k_hat, grid)
+    mae = {key: float(np.abs(v).mean()) for key, v in ab.items()}
+    ok(mae[("MMSE", "rho")] < 0.05 and mae[("MMSE", "rho")] < mae[("capacity", "rho")] / 3
+       and mae[("MMSE", "rho")] < mae[("MMSE", "equal")] / 3,
+       f"link abstractions: on an additive-MMSE code, sensitivity-weighted MMSE averaging "
+       f"({mae[('MMSE', 'rho')]:.3f} dB) beats capacity averaging (MIESM-like, "
+       f"{mae[('capacity', 'rho')]:.3f}) and equal weights ({mae[('MMSE', 'equal')]:.3f})")
     tg = targets(u, np.arange(4), [3.0, 6.0, 9.0, 12.0], 10, "slope")
     ok(tg.sum() == 10 and tg.max() <= P, f"equal-slope targets spend the slots: {tg.tolist()}")
     summ, base_p, dumped = simulate(u, 4, 10, 60, (0.0, 15.0), "none", (-2.0, 22.0),

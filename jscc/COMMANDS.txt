@@ -1028,6 +1028,18 @@ python tools/schedule_sim.py $NU --frames 1000 --policies pf fixed_uni slope_adv
 python tools/schedule_sim.py $NU --frames 1000 --target 30 --policies padc_adv online plan_adv replan_adv whittle >> results/s13_rmab.txt 2>&1
 " > /dev/null 2>&1 &
 
+# 13.3f  which LINK ABSTRACTION a learned code obeys (CPU, seconds; docs/ASSESSMENT.md, 12):
+#        held-out profiles mapped to one effective SNR on each image's own constant curve, by
+#        averaging the slot SNRs as mean dB / noise / capacity (the MIESM of digital system
+#        simulation) / EESM / MMSE, with equal weights or the decoder's sensitivity weights.
+#        Piecewise-trained (snrc4), constant-SNR-trained (s1), per-length decoders, per-CBR codes
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --compare-abstractions 2>&1 | tee results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p2_full_s1.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p4_full_h48.json results/p4_full_h24.json results/p4_full_h16.json \
+  results/p4_full_h12.json results/p4_full_h5-48.json results/p4_full_h8.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p3_full_fix1.json results/p3_full_fix2.json results/p3_full_fix3.json \
+  results/p3_full_fix4.json results/p3_full_fix5.json results/p3_full_fix6.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+
 # 13.4 -- CPU, now, ~10 min (foreground)
 # 13.4a  section 12's decoded replays, paired: per-CBR vs the prefix code on the same 60 frames
 python tools/replay_report.py results/s12_dec_percbr_tgt.json results/s12_dec_prefix_tgt.json \
@@ -1076,6 +1088,7 @@ cat results/s13_replays.txt results/s13_hd_more.txt                           # 
 cat results/s13_cqi_jscc.txt results/s13_cqi_dig.txt results/s13_cqi_backoff.txt   # 13.3, ~1 h
 cat results/s13_headroom.txt                                                   # 13.3d, ~40 min
 cat results/s13_nested.txt results/s13_rmab.txt                                # 13.3e, ~45 min
+cat results/s13_abstractions.txt                                               # 13.3f, seconds
 cat results/s13_budget.txt results/s13_hf.txt                                  # after 13.6
 
 # Decision (docs/PAPER.md C5-C7):
@@ -1096,6 +1109,10 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #       online phase-mapping rule (Derman-Lieberman-Ross thresholds) for fixed-quota frames
 #       is worth building; "slot counts ... equals the exact dynamic program in 100%" -> the
 #       greedy quotas are exact on our curves
+#   ABS (13.3f) sensitivity-weighted MMSE clearly best for snrc4 and capacity (MIESM-like)
+#       clearly worse -> "slot qualities add as MMSEs, not as bits": the abstraction is the
+#       paper's spine (docs/ASSESSMENT.md, 12); s1 best under another rule (e.g. mean noise) ->
+#       the training decides which abstraction a learned code obeys
 #   RMAB (13.3e) nested held-out MAE within ~0.02 dB of the free fit's -> the two-number user
 #       state is exact enough: the restless-bandit formulation frames the paper, and
 #       "causal upper bound" - base is the certified gap of our rule to the best causal

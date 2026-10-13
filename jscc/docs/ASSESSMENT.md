@@ -70,6 +70,30 @@ IEEE Transactions on Wireless Communications (TWC).
    schedulers, codec-agnostic, with encode-once + per-length decoders as the recommended code.
    Owed: CQI errors (the last assumption favouring digital), an equal-training-budget check of
    the codec comparison, theory for the schedulers.
+12. **Is it research or engineering? (2026-10-13)** As packaged so far it reads as engineering:
+   a codec trick, a fitted curve, heuristic schedulers, many baselines. Each part is a modest
+   "first X for Y"; the gains are moderate (+0.46 dB, +11 points); digital is beaten only by
+   small margins; and our own bounds now say the heuristic is near-optimal, so there is no new
+   algorithm that wins big. A TWC reviewer would likely call it incremental. What is new and
+   could carry a story is one finding with consequences: a learned JSCC code admits a link
+   abstraction, and only when trained for it. The story to test, in that order:
+   (a) Abstraction: the slots' qualities add as MMSEs weighted by the decoder's sensitivity
+       (phi(n) = n / (1 + n / kappa) is the MMSE of a Gaussian of variance kappa), not as
+       bits; digital system simulation averages mutual information (MIESM), and that fails
+       here. Test: COMMANDS 13.3f (capacity vs MMSE averaging, equal vs sensitivity weights).
+   (b) Mechanism: to first order the decoder adds sum_j n_j ||J_j||^2 (its Jacobian energy per
+       chunk), so the weights are measurable from the network itself; piecewise-SNR training
+       is what makes the decoder chunk-separable (the constant-SNR decoder obeys another rule
+       or none). Test: 13.3f for s1; a Jacobian probe (to build) against the fitted weights.
+   (c) Consequence: with the abstraction a user's state is two numbers and multi-user deadline
+       scheduling is a restless bandit: Whittle index, the advantage index as its
+       certainty-equivalent form, bounds that certify near-optimality (13.3e).
+   (d) Systems lessons: no rate means a quality ceiling per channel use (peaks are worth less
+       than to a digital link); encode once and decide lengths after the channel is seen
+       (lost slots, stopping); per-length decoders make encode-once nearly free.
+   If (a)-(b) hold, the paper is "how to abstract and schedule learned codes" with theory at
+   its core; if they fail, the honest frame is a system study, better aimed at a magazine-
+   or letter-length venue.
 
 ## 1. Your four points, checked
 

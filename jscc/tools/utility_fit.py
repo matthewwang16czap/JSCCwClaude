@@ -84,6 +84,55 @@ def symmetric_rule_errors(lv, grid):
             "p95": float(np.percentile(np.abs(e), 95))}
 
 
+def abstraction_errors(levels, params, kappa, grid):
+    """Link abstractions compared on the held-out profiles of every level with >= 2 chunks:
+    each profile mapped to ONE effective SNR, then read off the image's own constant-SNR
+    curve (the way EESM / MIESM serve digital system simulation). The chunks are averaged by
+    rule -- mean dB; noise variance; capacity (MIESM-like, Gaussian input); exponential (EESM,
+    beta fitted per level on the one-at-a-time profiles); MMSE of a Gaussian of variance kappa,
+    n / (1 + n / kappa), the noise response of alloc/utility.py -- with equal weights or with
+    the fitted sensitivity weights rho. MMSE with rho is the additive model read through the
+    measured curve. Returns {(rule, weights): array of errors (predicted - actual PSNR)}."""
+    def s_eff(prof, w, rule, beta=1.0):
+        lin = 10.0 ** (prof / 10.0)
+        n = 1.0 / lin
+        if rule == "mean dB":
+            return prof @ w
+        if rule == "noise":
+            return -10.0 * np.log10(n @ w)
+        if rule == "capacity":
+            return 10.0 * np.log10(np.maximum(2.0 ** (np.log2(1.0 + lin) @ w) - 1.0, 1e-12))
+        if rule == "EESM":
+            return 10.0 * np.log10(np.maximum(-beta * np.log(np.maximum(np.exp(-lin / beta) @ w,
+                                                                          1e-300)), 1e-12))
+        m = (n / (1.0 + n / kappa)) @ w                       # MMSE
+        return -10.0 * np.log10(np.maximum(m / np.maximum(1.0 - m / kappa, 1e-12), 1e-12))
+
+    out = {}
+    for lv in levels:
+        prof = np.asarray(lv["profiles"], dtype=np.float64)
+        kinds = np.array(lv["kinds"])
+        if prof.shape[1] < 2 or not (kinds == "random").any():
+            continue
+        Y = np.asarray(lv["psnr"], dtype=np.float64)
+        const = [int(np.flatnonzero((kinds == "constant") & np.all(prof == s, 1))[0]) for s in grid]
+        curve = Y[:, const]
+        k = prof.shape[1]
+        rho = np.asarray(params[lv["key"]][2], dtype=np.float64)
+        for wname, w in (("equal", np.full(k, 1.0 / k)), ("rho", rho / rho.sum())):
+            def err(rule, beta, sel):
+                e = [np.interp(s_eff(prof[j], w, rule, beta), grid, curve[i]) - Y[i, j]
+                     for j in np.flatnonzero(sel) for i in range(len(Y))]
+                return np.array(e)
+            beta = 1.0
+            if (kinds == "oat").any():                         # EESM's one parameter
+                betas = np.logspace(-1, 2, 31)
+                beta = min(betas, key=lambda b: np.abs(err("EESM", b, kinds == "oat")).mean())
+            for rule in ("mean dB", "noise", "capacity", "EESM", "MMSE"):
+                out.setdefault((rule, wname), []).append(err(rule, beta, kinds == "random"))
+    return {key: np.concatenate(v) for key, v in out.items()}
+
+
 def phase_levels(meta, levels):
     """{L: level} for --chunks phase runs with one level per number of phases 1..P."""
     per = meta.get("per_phase")
@@ -157,6 +206,10 @@ def main():
                     help="SNRs (dB) of the constant decodes a transmitter calibrates from")
     ap.add_argument("--folds", type=int, default=2, help="--calib: cross-fitting folds")
     ap.add_argument("--belief-out", default=None, help="--calib: the belief file to write")
+    ap.add_argument("--compare-abstractions", action="store_true",
+                    help="held-out errors of effective-SNR link abstractions (mean dB, noise, "
+                         "capacity = MIESM-like, EESM, MMSE), equal or sensitivity weights, next "
+                         "to the additive model")
     ap.add_argument("--nested", action="store_true",
                     help="one master sensitivity profile for every prefix length (rho_L = "
                          "master[:L] / sum): each user's state becomes two numbers, for the "
@@ -198,6 +251,25 @@ def main():
         print(f"{lv['cbr']:>6s} {lv['chunks']:6d}  {rho:48s} {fit_s:>13s} {ho_s:>17s} {rule_s:>19s}")
         if ho and rule:
             rep["noise_rule_held_out"] = rule
+    if a.compare_abstractions:
+        ab = abstraction_errors(levels, params, kappa, grid)
+        held = [np.asarray(report["levels"][lv["key"]]["held_out"]["mae"]) for lv in levels
+                if "held_out" in report["levels"][lv["key"]] and lv["chunks"] >= 2]
+        print("link abstractions on the held-out profiles (levels with >= 2 chunks): one "
+              "effective SNR read off the image's own constant curve; MAE / p95 (dB)")
+        print(f"  {'averaging rule':28s} {'equal weights':>15s} {'sensitivity weights':>21s}")
+        names = {"mean dB": "mean dB", "noise": "noise variance", "capacity": "capacity (MIESM-like)",
+                 "EESM": "exponential (EESM)", "MMSE": "MMSE, kappa " + format(kappa, ".2f")}
+        for rule in ("mean dB", "noise", "capacity", "EESM", "MMSE"):
+            cells = []
+            for wname in ("equal", "rho"):
+                e = ab.get((rule, wname))
+                cells.append("-" if e is None else f"{np.abs(e).mean():.3f} / "
+                             f"{np.percentile(np.abs(e), 95):.3f}")
+            print(f"  {names[rule]:28s} {cells[0]:>15s} {cells[1]:>21s}")
+        if held:
+            print("  additive model (alloc/utility.py), held-out MAE by level: "
+                  + " ".join(f"{float(h):.3f}" for h in held))
     if a.calib:
         by_L, P = phase_levels(meta, levels)
         belief, crep = calibrate(by_L, P, images, a.calib, a.folds, a.nested)
