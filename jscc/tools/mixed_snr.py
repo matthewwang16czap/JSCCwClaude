@@ -214,7 +214,8 @@ def paired_report(entries, target=None):
     """Decoded differences between policies on the same frames (tools/schedule_sim.py
     dumps every policy on the same images and fades): per frame the users' mean PSNR, or
     with a target the share that reaches it, minus pf's (and padc's), 95% bootstrap CIs
-    over frames. A user that received nothing scores as the model's empty prefix."""
+    over frames. A user that received nothing scores as the model's empty prefix.
+    tools/replay_report.py re-reads the output on the CPU, with any base and across files."""
     frames = {}
     for e in entries:
         if "frame" not in e or "user" not in e:
@@ -223,7 +224,7 @@ def paired_report(entries, target=None):
         a = e.get("predicted_psnr", 0.0) if a is None else a
         v = float(a >= target) if target is not None else float(a)
         frames.setdefault(e.get("policy", "?"), {}).setdefault(e["frame"], []).append(v)
-    for base in ("pf", "padc"):
+    for base in ("pf", "padc", "fixed_uni", "online"):
         if base not in frames or len(frames) < 2:
             continue
         what = "share reaching the target" if target is not None else "mean PSNR"

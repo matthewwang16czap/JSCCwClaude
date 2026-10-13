@@ -63,6 +63,12 @@ phases left, so every policy can use the whole frame. Policies:
                  need (phases at the mean SNR) that fit in the slots left are served first;
                  spare slots open to all. Content-aware sizing, channel-aware stopping and
                  timing: what only an encode-once prefix code with a mixed-SNR utility allows
+    whittle      (both objectives) the Whittle index of the frame as a restless bandit
+                 (alloc/whittle.py): each user's own dynamic program over (slot, phases
+                 held, accumulated weighted noise) under a slot price; serve the user whose
+                 indifference price for this slot is highest (with --target, a slot nobody
+                 gains from goes to PF). Exact for a --nested utility, an approximation
+                 otherwise
 
 All policies see the same images, mean SNRs and fades (common random numbers). Reported per
 policy: mean PSNR at the deadline, the 5th percentile over users, the worst user of a frame on
@@ -83,7 +89,12 @@ image's noise-free MSE and sensitivity), --belief FILE (the transmitter decides 
 calibrated curves, tools/utility_fit.py --calib; users are scored on --utility).
 --utility may also be a digital baseline (tools/digital_rd.py, alloc/digital.py: an image
 codec's R-D points over the same slots with ideal link adaptation; --link, --gap-db,
---digital-mode, --digital-max-phases override the file). --dump N writes the
+--digital-mode, --digital-max-phases override the file). --cqi-error s: the reported slot
+SNRs are off by N(0, s^2) dB; every policy decides on the reports (needs, stopping, timing),
+a token prefix is decoded at the true SNR (the codec needs no SNR at either end), and a
+digital slot is sent at the rate of its report minus --cqi-backoff (default: tuned per
+policy and objective on other frames, the best outer-loop link adaptation could settle at) and
+lost if the true SNR does not support that rate (the transmitter learns it: HARQ ACK). --dump N writes the
 delivery histories of the first N frames for tools/mixed_snr.py --design file, which decodes
 them with the codec itself.
 """
@@ -100,9 +111,9 @@ import numpy as np  # noqa: E402
 from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
-                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel")
+                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle")
 TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
-                   "online_pf", "online", "replan_adv")
+                   "online_pf", "online", "replan_adv", "whittle")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
 NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
                 "online", "replan_adv")
@@ -179,6 +190,22 @@ def plan_snr(means, snr, t, offset=0.0, corr=0.0):
 
 
 FILL = "admit"
+_ARMS = {}
+
+
+def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip):
+    """The users' dynamic programs for the whittle policy (alloc/whittle.py), one per user
+    of the frame, cached for the frame (rollouts resume the same frame many times)."""
+    from alloc.whittle import Arm
+    key = (id(belief), tuple(int(i) for i in imgs), tuple(np.round(means, 9)), T, goal, offset,
+           p_avail, tuple(clip))
+    if key not in _ARMS:
+        if len(_ARMS) > 8:
+            _ARMS.clear()
+        _ARMS[key] = [Arm(belief, int(i), float(m) + offset, T, target=goal,
+                          p_lost=1.0 - p_avail, clip=clip) for i, m in zip(imgs, means)]
+    return _ARMS[key]
+
 
 
 def replan_target(belief, imgs, hist, plan, rest, ok, left, P):
@@ -243,17 +270,33 @@ def fill(belief, imgs, plan, goal, tgt, spare, P, rule="admit", delta=1.0):
     return tgt
 
 
+FAILED = -100.0                                               # a lost digital block (no bits)
+
+
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
-              t_plan=None):
+              t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None,
+              clip=(-2.0, 22.0)):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
-    to PF over every user with phases left (so every policy can use the whole frame)."""
+    to PF over every user with phases left (so every policy can use the whole frame).
+    `seen`: the SNRs the transmitter is told (CQI with errors; default: the true `snr`).
+    Every decision is made on them; a token prefix is decoded at the true SNR. A digital
+    slot is sent at the rate of its reported SNR minus `backoff` dB and is lost when that
+    rate exceeds what the true SNR supports (the transmitter learns which: HARQ ACK).
+    For tools/headroom.py: `start` = (t0, histories, PF averages) resumes the policy at slot
+    t0 from that state (the transmitter's own play-outs: no `seen`); `stop_after` n returns
+    after n served slots; `log` (a list) receives (slot, user) for every served slot."""
     K, T = snr.shape
     P = util.P
-    hist = [[] for _ in range(K)]
+    digital = getattr(util, "kind", "") == "digital"
+    rep = snr if seen is None else seen                       # what the transmitter knows
+    dec = rep - backoff if digital else rep                   # what it assumes a slot brings
+    off = offset - (backoff if digital else 0.0)
+    hist = [[] for _ in range(K)]                             # as the transmitter knows them
+    out = [[] for _ in range(K)]                              # as delivered (what is decoded)
     served = np.zeros(K)                                      # PF: served-rate average
-    plan = plan_snr(means, snr, 0, offset, corr)             # SNR assumed for future phases
+    plan = plan_snr(means, rep, 0, off, corr)                # SNR assumed for future phases
     T_plan = int(round(T * p_avail)) if t_plan is None else int(t_plan)  # slots planned for
     goal = None if target is None else target + margin
     tgt = None                                                # phases per user, fixed upfront
@@ -272,18 +315,29 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 tgt[k], left = int(L[k]), left - int(L[k])
         if (fixed_codes or policy.startswith("plan")) and left > 0:   # plan the spare slots
             tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
+    arms = (arms_for(belief, imgs, means, T, goal, offset, p_avail, clip)
+            if policy == "whittle" else None)
     rest = None                                               # online: phases still needed
     if policy in ("stop", "stop_adv", "online_pf", "online", "replan_adv"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
+    t0, sent = 0, 0
+    if start is not None:                                     # resume from a given state
+        t0, hist0, served0 = start
+        hist = [list(h) for h in hist0]
+        out = [list(h) for h in hist0]
+        served = np.array(served0, dtype=np.float64)
+        if rest is not None:
+            rest = np.array([need(belief, imgs[k], hist[k], plan[k], goal) for k in range(K)],
+                            dtype=float)
     last = -1
-    for t in range(T):
+    for t in range(t0, T):
         if avail is not None and not avail[t]:                # taken by other traffic
             continue
         has = np.array([len(h) < P for h in hist])
         if not has.any():
             break
         if corr > 0 and t > 0:                                # the channel state moved
-            plan = plan_snr(means, snr, t, offset, corr)
+            plan = plan_snr(means, rep, t, off, corr)
             if rest is not None:
                 rest = np.array([need(belief, imgs[k], hist[k], plan[k], goal) for k in range(K)],
                                 dtype=float)
@@ -305,12 +359,21 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                                         int(round((T - t) * p_avail)), P)
                 if planned.any():
                     ok = planned
-        g = snr[:, t]
+        g = dec[:, t]
         if policy == "adaptive_slope":
             below = ok & (np.array([len(h) for h in hist])
                           < replan(belief, imgs, means, hist, int(round((T - t) * p_avail))))
             if below.any():
                 ok = below
+        if arms is not None:                                  # the Whittle index (alloc/whittle.py)
+            idx = np.full(K, -np.inf)
+            for j in np.flatnonzero(ok):
+                n, Y = arms[j].state(hist[j])
+                idx[j] = arms[j].index(t, n, Y, float(g[j]))
+            if np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
+                ok = idx >= idx.max()                         # served below (ties: first)
+            else:
+                ok = has                                      # nobody gains: leftover (PF)
         if not ok.any():
             if fixed_codes and tgt is not None:
                 break                                         # a fixed-length code is complete
@@ -322,7 +385,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             k = next(j for j in order if ok[j])
         elif policy == "maxsnr":
             k = int(np.argmax(np.where(ok, g, -np.inf)))
-        elif policy in PF_TIMING:
+        elif policy in PF_TIMING or policy == "whittle":      # whittle: ok is its choice
             r = rate(g)
             k = int(np.argmax(np.where(ok, r / (served + 1e-3 * r.mean()), -np.inf)))
         else:
@@ -339,15 +402,27 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 elif alpha:
                     gain[j] *= max(now, 1e-3) ** (-alpha)
             k = int(np.argmax(gain))
-        hist[k].append(float(g[k]))
+        if digital:                                           # the block arrives or is lost
+            x = float(g[k]) if util.efficiency(g[k]) <= util.efficiency(snr[k, t]) + 1e-12 \
+                else FAILED
+            hist[k].append(x)
+            out[k].append(x)
+        else:
+            hist[k].append(float(g[k]))
+            out[k].append(float(snr[k, t]))
         if rest is not None:
             rest[k] = need(belief, imgs[k], hist[k], plan[k], goal)
         served = (1 - 1.0 / T) * served
         served[k] += rate(g[k]) / T
         last = k
+        if log is not None:
+            log.append((t, k))
+        sent += 1
+        if stop_after is not None and sent >= stop_after:
+            break
     if fixed_codes and tgt is not None:                       # an incomplete fixed-length
-        hist = [h if len(h) >= n else [] for h, n in zip(hist, tgt)]   # code cannot be decoded
-    return hist
+        out = [h if len(h) >= n else [] for h, n in zip(out, tgt)]     # code cannot be decoded
+    return out
 
 
 def bootstrap(d, n=2000, seed=0):
@@ -372,28 +447,51 @@ def fades(rng, users, slots, fading, corr=0.0):
     return 10 * np.log10(np.maximum(np.abs(h) ** 2, 1e-12))
 
 
-def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=0,
-             same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
-             offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
-             preempt=0.0, preempt_quantile=None):
-    """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
-    on it, users are scored on `util`."""
+def goodput_backoff(util, sigma, mean_snr, fading, clip, n=200000, seed=12345):
+    """The MCS backoff (dB) that maximises a digital link's expected goodput when the
+    reported SNR is off by N(0, sigma^2) dB, over this simulation's slot SNRs (what outer-
+    loop link adaptation settles at), and the share of blocks lost there."""
+    if sigma <= 0:
+        return 0.0, 0.0
+    rng = np.random.default_rng(seed)
+    s = np.clip(rng.uniform(mean_snr[0], mean_snr[1], n) + fades(rng, n, 1, fading)[:, 0],
+                clip[0], clip[1])
+    r = np.clip(s + rng.normal(0.0, sigma, n), clip[0], clip[1])
+    cap = util.efficiency(s)
+    best = (-1.0, 0.0, 0.0)
+    for b in np.arange(0.0, 3.0 * sigma + 1e-9, 0.25):
+        e = util.efficiency(r - b)
+        ok = e <= cap + 1e-12
+        good = float(np.mean(e * ok))
+        if good > best[0]:
+            best = (good, float(b), float(np.mean(~ok[e > 0])) if (e > 0).any() else 0.0)
+    return best[1], best[2]
+
+
+def planned_slots(slots, preempt=0.0, quantile=None):
+    """--preempt-quantile: the slots a fixed-length plan assumes (that quantile of the
+    binomial number of slots left to this traffic); None: plan for the expected share."""
+    if not (preempt > 0 and quantile is not None):
+        return None
+    from math import comb
+    cdf = 0.0
+    for n in range(slots + 1):
+        cdf += comb(slots, n) * (1 - preempt) ** n * preempt ** (slots - n)
+        if cdf >= quantile:
+            return n
+    return slots
+
+
+def draw_frames(util, users, slots, frames, mean_snr, fading, clip, seed=0, same_image=False,
+                pred_noise=0.0, belief_util=None, fade_corr=0.0, preempt=0.0, cqi_error=0.0):
+    """The frames of a run: (images, mean SNRs, true slot SNRs, the transmitter's curves,
+    available slots or None, reported SNRs or None) for each. The same arguments give the
+    same frames to every policy, utility file and tool (common random numbers)."""
     if users > len(util.names) and not same_image:
         raise ValueError(f"{users} users but only {len(util.names)} images in the pool")
     rng = np.random.default_rng(seed)
-    t_plan = None
-    if preempt > 0 and preempt_quantile is not None:     # plan for a quantile of the slots
-        from math import comb
-        cdf, t_plan = 0.0, slots
-        for n in range(slots + 1):
-            cdf += comb(slots, n) * (1 - preempt) ** n * preempt ** (slots - n)
-            if cdf >= preempt_quantile:
-                t_plan = n
-                break
-    res = {p: {"psnr": [], "frame_mean": [], "frame_min": [], "deep": [], "served": [],
-               "lift": [], "sat": [], "frame_sat": []} for p in policies}
-    dumped = []
-    for f in range(frames):
+    crng = np.random.default_rng([seed, 1])              # CQI errors: the same frames at any sd
+    for _ in range(frames):
         imgs = (np.full(users, rng.integers(len(util.names))) if same_image
                 else rng.choice(len(util.names), users, replace=False))
         means = rng.uniform(mean_snr[0], mean_snr[1], users)
@@ -401,20 +499,59 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
         snr = np.clip(means[:, None] + fade, clip[0], clip[1])
         belief = (belief_util or util).perturbed(pred_noise, rng)
         avail = rng.random(slots) >= preempt if preempt > 0 else None
+        seen = (np.clip(snr + cqi_error * crng.standard_normal(snr.shape), clip[0], clip[1])
+                if cqi_error > 0 else None)
+        yield imgs, means, snr, belief, avail, seen
+
+
+def tune_backoff(util, a, policy, sigma, belief, frames=300):
+    """A digital policy's MCS backoff under CQI errors of sd sigma, the best on a grid of
+    0.5 dB for its own objective on `frames` OTHER frames (seed + 1): where outer-loop link
+    adaptation, which sees the ACKs of the blocks this policy schedules, would settle at best."""
+    best = None
+    for b in np.arange(0.0, 2.0 * sigma + 0.51, 0.5):
+        s, _, _ = simulate(util, a.users, a.slots, frames, a.mean_snr, a.fading, a.snr_clip,
+                           [policy], a.seed + 1, a.same_image, a.pred_noise, a.alpha, 0,
+                           a.target, a.margin, a.plan_offset, belief, a.fade_corr, a.plan,
+                           a.fixed_codes, a.preempt, a.preempt_quantile, sigma, float(b))
+        v = s[policy]["mean_psnr" if a.target is None else "satisfied"]
+        if best is None or v > best[0] + 1e-12:
+            best = (v, float(b))
+    return best[1]
+
+
+def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=0,
+             same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
+             offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
+             preempt=0.0, preempt_quantile=None, cqi_error=0.0, backoff=0.0):
+    """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
+    on it, users are scored on `util`. cqi_error: sd (dB) of the error of the reported slot
+    SNRs; backoff: a digital link's MCS backoff (dB), or one per policy {policy: dB}."""
+    t_plan = planned_slots(slots, preempt, preempt_quantile)
+    res = {p: {"psnr": [], "frame_mean": [], "frame_min": [], "deep": [], "served": [],
+               "lift": [], "sat": [], "frame_sat": [], "failed": []} for p in policies}
+    dumped = []
+    frame_iter = draw_frames(util, users, slots, frames, mean_snr, fading, clip, seed, same_image,
+                             pred_noise, belief_util, fade_corr, preempt, cqi_error)
+    for f, (imgs, means, snr, belief, avail, seen) in enumerate(frame_iter):
         avg = belief.average() if target is not None else None
         for p in policies:
             hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg,
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
-                             avail, 1.0 - preempt, t_plan)
+                             avail, 1.0 - preempt, t_plan, seen,
+                             backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
+                             clip=clip)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
             r["frame_mean"].append(float(q.mean()))
             r["frame_min"].append(float(q.min()))
-            sent = [s for h in hist for s in h]
+            sent = [s for h in hist for s in h if s > FAILED]
+            lost = sum(s <= FAILED for h in hist for s in h)
             r["deep"].append(float(np.mean(np.array(sent) < 0.0)) if sent else 0.0)
+            r["failed"].append(lost / max(lost + len(sent), 1))
             r["served"].append(float(np.mean([len(h) for h in hist])))
-            r["lift"] += [s - m for h, m in zip(hist, means) for s in h]
+            r["lift"] += [s - m for h, m in zip(hist, means) for s in h if s > FAILED]
             if target is not None:
                 ok = q >= target
                 r["sat"] += ok.tolist()
@@ -437,6 +574,7 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                       "deep_fade_share": float(np.mean(r["deep"])),
                       "phases_per_user": float(np.mean(r["served"])),
                       "served_snr_lift": float(np.mean(r["lift"])) if r["lift"] else 0.0,
+                      "failed_share": float(np.mean(r["failed"])),
                       f"vs_{base}": float(d.mean()), f"vs_{base}_ci": [lo, hi]}
         if target is not None:
             summary[p]["satisfied"] = float(np.mean(r["sat"]))
@@ -482,6 +620,14 @@ def main():
                     help="digital: best complete file, or an ideal scalable codec")
     ap.add_argument("--digital-max-phases", type=int, default=None,
                     help="digital: slots one user may take (default: the file's, 12)")
+    ap.add_argument("--cqi-error", nargs="+", type=float, default=[0.0],
+                    help="sd (dB) of the error of the reported slot SNRs: every decision is "
+                         "made on the reports, codes are decoded at the true SNR; several "
+                         "values: one table each (same frames)")
+    ap.add_argument("--cqi-backoff", default="auto",
+                    help="digital: MCS backoff (dB) under --cqi-error; 'auto': tuned per policy "
+                         "and objective on other frames (the best outer-loop link adaptation "
+                         "could settle at)")
     ap.add_argument("--snr-clip", nargs=2, type=float, default=[-2.0, 22.0],
                     help="slot SNRs clipped to the codec's training range")
     ap.add_argument("--policies", nargs="+", default=None, choices=POLICIES,
@@ -515,17 +661,47 @@ def main():
         ap.error("--preempt is in [0, 1)")
     if not 0.0 <= a.fade_corr < 1.0:
         ap.error("--fade-corr is in [0, 1)")
+    if min(a.cqi_error) < 0:
+        ap.error("--cqi-error is an sd (dB), >= 0")
+    if len(a.cqi_error) > 1 and (a.out or a.dump):
+        ap.error("--out / --dump take one --cqi-error value")
+    digital = getattr(util, "kind", "") == "digital"
     if a.length_bonus:
-        if getattr(util, "kind", "") == "digital":
+        if digital:
             ap.error("--length-bonus is for the token-prefix utility")
         bonus = a.length_bonus * util.P if len(a.length_bonus) == 1 else a.length_bonus
         util = util.shifted(bonus)
         belief = belief.shifted(bonus) if belief is not None else None
-    summary, base, dumped = simulate(util, a.users, a.slots, a.frames, a.mean_snr, a.fading,
-                                     a.snr_clip, a.policies, a.seed, a.same_image,
-                                     a.pred_noise, a.alpha, a.dump, a.target, a.margin,
-                                     a.plan_offset, belief, a.fade_corr, a.plan,
-                                     a.fixed_codes, a.preempt, a.preempt_quantile)
+    for sigma in a.cqi_error:
+        backoff, ref = 0.0, None
+        if digital and sigma > 0:
+            if a.cqi_backoff == "auto":
+                ref = goodput_backoff(util, sigma, a.mean_snr, a.fading, a.snr_clip)
+                backoff = {p: tune_backoff(util, a, p, sigma, belief) for p in a.policies}
+            else:
+                backoff = float(a.cqi_backoff)
+        summary, base, dumped = simulate(util, a.users, a.slots, a.frames, a.mean_snr, a.fading,
+                                         a.snr_clip, a.policies, a.seed, a.same_image,
+                                         a.pred_noise, a.alpha, a.dump, a.target, a.margin,
+                                         a.plan_offset, belief, a.fade_corr, a.plan,
+                                         a.fixed_codes, a.preempt, a.preempt_quantile,
+                                         sigma, backoff)
+        report(a, util, digital, summary, base, sigma, backoff, ref)
+    if a.out:
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+        with open(a.out, "w") as f:
+            json.dump({"args": vars(a), "summary": summary, "backoff": backoff}, f, indent=1)
+        print(f"wrote {a.out}")
+    if a.dump:
+        path = a.dump_out or os.path.splitext(a.out or "sched")[0] + "_histories.json"
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"chunking": "phase", "utility": a.utility, "target": a.target,
+                       "entries": dumped}, f)
+        print(f"wrote {path}: {len(dumped)} delivery histories")
+
+
+def report(a, util, digital, summary, base, sigma, backoff, ref):
     print(f"{a.users} users, {a.slots} slots ({a.slots / a.users:.2f} phases per user, at most "
           f"{util.P}), {a.frames} frames, mean SNR U{a.mean_snr} dB, fading {a.fading}"
           f"{f' (slot correlation {a.fade_corr:g}, plan {a.plan})' if a.fade_corr else ''}"
@@ -535,7 +711,9 @@ def main():
           f"{f' (planned at their {a.preempt_quantile:g} quantile)' if a.preempt and a.preempt_quantile is not None else ''}"
           f"{', same image' if a.same_image else ''}"
           f"{f', transmitter curves {a.belief}' if a.belief else ''}"
-          f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if getattr(util, 'kind', '') == 'digital' else ''}"
+          f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if digital else ''}"
+          f"{f', CQI error {sigma:g} dB' if sigma else ''}"
+          f"{f' (MCS backoff {backoff:g} dB)' if digital and sigma and not isinstance(backoff, dict) else ''}"
           f"{f', prediction noise {a.pred_noise:g}' if a.pred_noise else ''}"
           f"{f', alpha {a.alpha:g}' if a.alpha else ''}; utility {a.utility}")
     if a.target is None:
@@ -564,19 +742,13 @@ def main():
                 lo, hi = s["vs_padc_ci"]
                 line += f"   {100 * s['vs_padc']:+7.1f}% [{100 * lo:+.1f}, {100 * hi:+.1f}]"
             print(line)
-    if a.out:
-        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-        with open(a.out, "w") as f:
-            json.dump({"args": vars(a), "summary": summary}, f, indent=1)
-        print(f"wrote {a.out}")
-    if a.dump:
-        path = a.dump_out or os.path.splitext(a.out or "sched")[0] + "_histories.json"
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump({"chunking": "phase", "utility": a.utility, "target": a.target,
-                       "entries": dumped}, f)
-        print(f"wrote {path}: {len(dumped)} delivery histories")
-
+    if digital and sigma:
+        if isinstance(backoff, dict):
+            print("MCS backoff per policy, tuned on 300 other frames (0.5 dB grid): " + ", ".join(
+                f"{p} {b:g} dB" for p, b in backoff.items()) + f"; goodput-optimal over all "
+                f"slots {ref[0]:g} dB ({100 * ref[1]:.1f}% of blocks lost there)")
+        print("blocks lost (rate above what the slot supported): " + ", ".join(
+            f"{p} {100 * s['failed_share']:.1f}%" for p, s in summary.items()))
 
 if __name__ == "__main__":
     main()

@@ -86,12 +86,16 @@ net/modules/            swin.py  transformer.py  rate_mod.py  common.py
 alloc/                  per-image budget policy: core.py (allocation, statistics),
                         sweep.py (curves), predictor.py (the policy), io.py,
                         utility.py (additive noise-sensitivity model of a prefix, for scheduling),
-                        digital.py (separation baseline: codec R-D points + link adaptation)
+                        digital.py (separation baseline: codec R-D points + link adaptation),
+                        whittle.py (the frame as a restless bandit: per-user dynamic programs,
+                        the Whittle index, an upper bound on every causal scheduler)
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
                         mixed_snr.py (prefixes whose chunks arrived at different SNRs)
                         utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
                         digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
+                        replay_report.py (decoded replays paired by frame, also across codecs)
+                        headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -147,12 +151,16 @@ for the mean PSNR (round robin, max-SNR, PF, equal shares, PADC-style and equal-
 lengths, the advantage index `slope_adv`, greedy) or, with `--target Q`, for the share of
 users reaching Q dB (PADC's per-image lengths, online stopping, `online`: admission by
 remaining need + advantage timing), and `--dump`s histories that `mixed_snr.py --design
-file` replays through the codec (decoded differences between policies, paired by frame).
+file` replays through the codec (decoded differences between policies, paired by frame;
+`tools/replay_report.py` re-reads them on the CPU and pairs codecs on the same frames).
 `utility_fit.py --calib 1 13 --belief-out` builds what a transmitter can know (each image
 from 2P constant decodes, kappa and rho cross-fitted on other images) for `schedule_sim.py
 --belief`; `tools/digital_rd.py` measures a codec's R-D points (BPG, HEIC, JPEG 2000, WebP)
 for the separation baseline (`alloc/digital.py`), which `schedule_sim.py` schedules like
-any utility.
+any utility. `--cqi-error 0 1 2 3` repeats a run with erroneous SNR reports (decisions on the
+reports; JSCC decoded at the true SNR, a digital block lost when its rate exceeds the slot's,
+the digital backoff tuned per policy); `--preempt` loses slots to other traffic; `--fixed-codes`
+schedules one model per CBR, `--length-checkpoints` (mixed_snr) decodes with one per length.
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`

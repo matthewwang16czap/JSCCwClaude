@@ -639,3 +639,104 @@ the price of encoding before the length is known. The LoRA heads recover none of
 within 0.01 dB everywhere): gate P-F fails for heads; framing A is off. HL / HC as utilities
 (model errors as snrc4's): slope_adv 31.58 / 31.57 dB (= per-CBR's 31.58, with twice the
 decoder training: not a fair codec comparison), online 75.5% at 30 dB, 68.0% at T 16.
+
+## Problem P1, step 7: the same planner on both codes, a decoder per length, digital at an equal cap (2026-10-12)
+
+COMMANDS.txt section 12 on the server.
+
+**The per-CBR planner on the prefix code** (snrc4, calibrated transmitter, 2000 frames; share
+of users at the target):
+
+| | 28 dB | 30 dB | 32 dB | 30 dB, T 16 | 30 dB, K 16 |
+|---|---|---|---|---|---|
+| prefix: padc_adv (spare slots by the index, unplanned) | 86.4 | 68.9 | 50.1 | 64.9 | 71.3 |
+| prefix: online | 90.5 | 74.0 | 54.0 | 66.8 | 76.9 |
+| prefix: plan_adv (padc_adv + fill) | **91.5** | **74.9** | **56.2** | 67.9 | **78.1** |
+| prefix: replan_adv | 90.5 | 74.2 | 55.5 | **68.9** | 76.9 |
+| prefix + a decoder per length (below), best | - | 77.2 | 58.6 | 71.0 | - |
+| one model per CBR: padc_adv + fill (s11) | 92.5 | 78.1 | 60.0 | 69.8 | 82.5 |
+
+With the same planner the prefix code still trails per-CBR codes by 1.0-4.4 points with known
+slots (0.9 at T 16): what is left is the nesting penalty itself. The planner is worth +3.0 to
++6.8 points over padc_adv on the prefix code too. Among the prefix policies, plan_adv is best
+on the count with known slots (+0.3 to +1.2 over replan_adv) but pays in mean PSNR (29.94 vs
+online's 30.54 at 30 dB: users outside the plan get little); replan_adv is best when slots are
+tight (T 16) or lost:
+
+| at 30 dB, slots lost | online | plan_adv | replan_adv | per CBR, best hedge (s11) |
+|---|---|---|---|---|
+| 10% | 71.4 | 71.8 | **72.4** | 73.8 |
+| 25% | 66.4 | 67.2 | **69.4** | 68.9 |
+
+replan_adv takes the target at 25% from per-CBR (+0.5) and cuts its lead at 10% to 1.4 points
+(from 2.4); the prefix code wins mean PSNR at both (+0.35 / +0.54 dB, s11).
+
+**Decoded** (60 frames each, the codecs decoding the schedules; target runs aim 0.3 dB high):
+
+| | model bias / MAE / p95 (dB) | decoded |
+|---|---|---|
+| per CBR, mean: fixed_uni / slope_adv | -0.046 / 0.078 / 0.214 | 31.423 / 31.762: +0.339 dB (predicted +0.353) |
+| per CBR, 30 dB: padc / padc_adv | -0.000 / 0.059 / 0.180 | 75.4 / 81.0%: +5.6 points [3.3, 8.1] (= predicted) |
+| prefix, 30 dB: padc_adv / online / plan_adv / replan_adv | -0.018 / 0.053 / 0.143 | 67.7 / 76.5 / 76.7 / 77.7% (predicted within 0.2) |
+
+The abstraction holds, decoded, for six separately trained codes too (the model is codec-
+agnostic), and so do the advantage index (+0.34 dB) and the planner (+5.6 points). On the same
+60 frames per-CBR padc_adv decodes 81.0% against the prefix code's best 77.7% (replan_adv):
++3.3 points (paired CI: section 13, `tools/replay_report.py`).
+
+**A decoder of its own per length, behind the shared (frozen) encoder** (decoder fine-tuned 400
+epochs at one CBR; HC: the same at all CBRs, i.e. more training alone; paired over Kodak, mean
+over SNRs, dB over snrc4; 5/48 from the constant profiles of the per-phase measurement):
+
+| length (phases) | 1/48 (1) | 1/24 (2) | 1/16 (3) | 1/12 (4) | 5/48 (5) | 1/8 (6) |
+|---|---|---|---|---|---|---|
+| HC: one decoder, all lengths | +0.08 | +0.095 | +0.118 | +0.131 | - | +0.15 |
+| a decoder of its own | +0.22 | +0.147 | +0.168 | +0.200 | +0.240 | +0.28 |
+| full specialist (section 10) | +0.446 | +0.179 | +0.166 | +0.253 | +0.371 | +0.470 |
+| share of the penalty the decoder recovers | 49% | 82% | 101% | 79% | 65% | 60% |
+| beyond more training: (own - HC) / (spec - HC) | 38% | 62% | ~100% | 57% | - | 41% |
+
+Section 11's "~60% of the penalty lives in the encoder" holds only at the two ends. At 2-4
+phases, where the schedulers put most users, a decoder of its own recovers 79-101% of it
+(57-100% beyond more training): there the penalty is mostly a DECODER matter, and the receiver,
+which knows how many phases arrived, can pay it. The ends stay encoder-bound (1 phase: the
+base layer must serve every length; 6 phases).
+
+**The system: encode once, decode per length** (utility_hd: the six per-length decoders behind
+the one snrc4 encoder; the transmitter encodes once and needs no length, the receiver picks the
+decoder for the length that arrived). Its model is as accurate as snrc4's (fit 0.018-0.042 dB,
+held-out 0.048-0.093, calibration from 12 decodes 0.039-0.072), and its noise sensitivity
+keeps the prefix code's steep order (1/8: rho 0.49 0.25 0.17 0.07 0.02 0.01; the specialists'
+0.34 0.26 0.20 0.13 0.05 0.03): the order comes from the nested encoder, not the decoder.
+
+| | prefix (snrc4) | + one more-trained decoder (HC) | + a decoder per length | per CBR |
+|---|---|---|---|---|
+| mean PSNR, slope_adv (dB) | 31.43 | 31.57 | **31.63** | 31.58 |
+| 30 dB, best policy | 74.9 | 76.0 | 77.2 | **78.1** |
+| 32 dB / 30 dB at T 16 | 56.2 / 68.9 | - | 58.6 / **71.0** | **60.0** / 69.8 |
+| 25% lost: mean PSNR / 30 dB | 30.16 / 69.4 | - | **30.35 / 71.7** | 29.62 / 68.9 |
+
+Encode-once with per-length decoders is the best JSCC system on mean PSNR and whenever slots
+can be lost (+0.73 dB and +2.8 points over per-CBR's best hedge at 25%), and within 0.9-1.4
+points of per-CBR codes at the target with known slots (ahead at T 16). Caveat: its decoders
+trained 400 epochs more than the specialists; HC, with the same extra training, shows that
++0.10-0.15 dB of it is training alone. The equal-budget comparison is section 13.
+
+**Digital at the same per-user cap as JSCC** (6 slots = CBR 1/8; s11 allowed 12): the mean is
+unchanged (HEIC + CQI 31.29 dB best; it rarely needs more than 6 slots), the target loses 0.1-3.7
+points (online_pf 86.5 / 74.4 / 57.8 / 60.5% at 28 / 30 / 32 dB / T 16). Best policy each:
+
+| vs HEIC + CQI, 6 slots | mean PSNR | 28 dB | 30 dB | 32 dB | 30 dB, T 16 |
+|---|---|---|---|---|---|
+| prefix code | +0.14 dB | +5.0 | +0.5 | -1.6 | +8.4 |
+| prefix + a decoder per length | +0.34 dB | - | +2.8 | +0.8 | +10.5 |
+| one model per CBR | +0.29 dB | +6.0 | +3.7 | +2.2 | +9.3 |
+| each against a 3 dB-gap code (6 slots) | -0.70 / -0.50 / -0.55 dB | - | -5.5 / -3.2 / -2.3 | - | - |
+
+At equal caps JSCC with a decoder per length is ahead of HEVC intra with ideal, error-free link
+adaptation everywhere, by small margins except in tight frames; a code 3 dB from capacity is
+still ahead. The assumption left that favours digital most is error-free CQI: JSCC degrades
+smoothly when the reported SNR is off, a digital link backs off or loses blocks. Section 13
+measures it (`tools/schedule_sim.py --cqi-error`: decisions on the reports, codes decoded at the
+true SNR; a digital slot sent at its report minus a backoff tuned per policy on other frames,
+lost when its rate exceeds what the slot supported, HARQ ACK to the transmitter).

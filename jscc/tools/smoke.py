@@ -603,6 +603,161 @@ def check_schedule():
     ok(pre["fixed_uni"]["p5_psnr"] == 10.0 and pre_p["fixed_uni"]["p5_psnr"] > 10.0
        and pre_p["fixed_uni"]["mean_psnr"] > pre["fixed_uni"]["mean_psnr"],
        "--preempt: a fixed code cut short decodes to nothing, a prefix decodes what arrived")
+    from tools.schedule_sim import goodput_backoff
+    _, _, dn = simulate(u, 4, 10, 3, (0.0, 15.0), "none", (-2.0, 22.0), ["slope_adv", "online"],
+                        seed=1, target=30.0, dump=3, cqi_error=3.0)
+    c0, _, _ = simulate(u, 4, 12, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "slope_adv"],
+                        seed=1)
+    c2, _, _ = simulate(u, 4, 12, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "slope_adv"],
+                        seed=1, cqi_error=2.0)
+    ok(all(abs(v - min(max(e["mean_snr"], -2.0), 22.0)) < 1e-9 for e in dn for v in e["snrs"])
+       and c2["slope_adv"]["mean_psnr"] < c0["slope_adv"]["mean_psnr"]
+       and c2["slope_adv"]["vs_pf"] > 0.1,
+       f"--cqi-error: decisions on the reports, prefixes decoded at the true SNR; 2 dB errors "
+       f"cost the advantage index {c0['slope_adv']['mean_psnr'] - c2['slope_adv']['mean_psnr']:.2f} "
+       f"dB, still {c2['slope_adv']['vs_pf']:+.2f} over pf")
+    b, bl = goodput_backoff(d, 2.0, (0.0, 15.0), "rayleigh", (-2.0, 22.0), n=50000)
+    dpol = ["pf", "greedy"]
+    d0, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1)
+    dz, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                        cqi_error=0.0, backoff=0.0)
+    dn0, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                         cqi_error=2.0, backoff=0.0)
+    db, _, _ = simulate(d, 2, 6, 60, (0.0, 15.0), "rayleigh", (-2.0, 22.0), dpol, seed=1,
+                        cqi_error=2.0, backoff=b)
+    ok(d0 == dz and 0.5 <= b <= 4.0 and 0.0 < bl < 0.3 and dn0["pf"]["failed_share"] > 0.2
+       and db["pf"]["failed_share"] < dn0["pf"]["failed_share"]
+       and db["pf"]["mean_psnr"] <= d0["pf"]["mean_psnr"],
+       f"digital under 2 dB CQI errors: goodput-optimal backoff {b:g} dB ({100 * bl:.0f}% of "
+       f"blocks lost; {100 * dn0['pf']['failed_share']:.0f}% without backoff), below the error-free "
+       f"link; without errors unchanged")
+    from types import SimpleNamespace
+    from tools.headroom import oracle_frame, rollout_frame
+    from tools.schedule_sim import draw_frames, rate, run_frame
+    fr = list(draw_frames(u, 4, 12, 12, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=3))
+    same, better, rb = True, True, []
+    o = SimpleNamespace(target=None, margin=0.0, plan_offset=0.0, fade_corr=0.0, plan="mean",
+                        preempt=0.0, t_plan=None, base="slope_adv", candidates=3, futures=4,
+                        fading="rayleigh", snr_clip=(-2.0, 22.0), z=1.0)
+    for f, (im, mn, sn, bl, av, se) in enumerate(fr):
+        lg = []
+        base = run_frame(u, u, im, mn, sn, "slope_adv", log=lg)
+        h, sv = [[] for _ in range(4)], np.zeros(4)
+        for t, k in lg[:5]:                               # resume at the 6th served slot
+            h[k].append(float(sn[k, t]))
+            sv = (1 - 1 / 12) * sv
+            sv[k] += rate(sn[k, t]) / 12
+        nxt = []
+        run_frame(u, u, im, mn, sn, "slope_adv", start=(lg[5][0], h, sv), stop_after=1, log=nxt)
+        same &= nxt == [lg[5]]
+        orc, _ = oracle_frame(o, u, im, sn, av, lg)
+        qb = np.mean([u.psnr(i, x) for i, x in zip(im, base)])
+        better &= np.mean([u.psnr(i, x) for i, x in zip(im, orc)]) >= qb - 1e-9
+        ro = rollout_frame(o, u, u, im, mn, sn, av, se, np.random.default_rng(f))
+        rb.append(np.mean([u.psnr(i, x) for i, x in zip(im, ro)]) - qb)
+    ok(same and better and np.mean(rb) > -0.1 and all(len(x) <= P for x in ro),
+       f"headroom: a policy resumed mid-frame repeats its own next choice; the clairvoyant search "
+       f"never loses to the base; rollout runs (rollout - base {np.mean(rb):+.3f} dB on 12 "
+       f"stand-in frames: noise; +0.04 [0.03, 0.06] on 200)")
+    import itertools
+    from tools.headroom import by_sensitivity, clairvoyant, exact_counts
+    from tools.schedule_sim import targets
+    ex, gl = True, 0.0
+    for im, mn, sn, bl, av, se in draw_frames(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                                              seed=1):
+        L, q = exact_counts(u, im, mn, 12)
+        bf = max(sum(q[k, l[k]] for k in range(4))
+                 for l in itertools.product(range(P + 1), repeat=4) if sum(l) == 12)
+        ex &= abs(q[np.arange(4), L].sum() - bf) < 1e-9 and L.sum() == 12
+        gl = max(gl, bf - q[np.arange(4), targets(u, im, mn, 12, "slope")].sum())
+    ok(ex and gl < 1e-9, "slot counts at the mean SNRs: the dynamic program is exact (brute force); "
+       "the greedy equal-slope rule matches it on the stand-in's concave curves")
+    rl = np.array([3.0, 12.0, 7.0])
+    ok(by_sensitivity(u, 0, rl.tolist()) == [12.0, 7.0, 3.0],
+       "phases mapped by sensitivity: the best slot to the first (most sensitive) phase")
+    from functools import lru_cache
+    from alloc.utility import fit as fit_u, nested_rho
+    from alloc.whittle import Arm, lagrangian_bound
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    lv = []
+    for L in range(1, P + 1):
+        prof, kinds = make_profiles("full", L, grid, 7.0, 8, rng)
+        F = phi(noise(np.array(prof)), kappa)
+        D = dsrc[:, L - 1:L] + csens[:, L - 1:L] * (F @ nested_rho(master, L))[None, :]
+        lv.append({"key": str(L), "profiles": prof, "kinds": kinds,
+                   "psnr": (-10 * np.log10(D)).tolist()})
+    _, _, nrep = fit_u(lv, nested=True)
+    ok(np.abs(np.array(nrep["master"]) - master).max() < 0.005,
+       f"--nested fit: one master sensitivity profile for every prefix length, recovered "
+       f"({np.round(nrep['master'], 3).tolist()})")
+    fd, fw = np.array([-6.0, 0.0, 4.0]), np.array([0.3, 0.4, 0.3])  # a discrete fading law
+
+    def exact(imgs, means, T, tg, policy=None):
+        """The best causal schedule's expected value (or a policy's), by full expectimax."""
+        K = len(imgs)
+        outs = list(itertools.product(range(len(fd)), repeat=K))
+
+        def U(k, h):
+            q = u.psnr(imgs[k], list(h))
+            return q if tg is None else float(q >= tg)
+
+        @lru_cache(maxsize=None)
+        def V(t, hs):
+            if t == T:
+                return sum(U(k, h) for k, h in enumerate(hs))
+            tot = 0.0
+            for o in outs:
+                pr = float(np.prod([fw[b] for b in o]))
+                gs = [float(np.clip(means[k] + fd[o[k]], -2, 22)) for k in range(K)]
+                nxt = [tuple(h + (gs[k],) if j == k else h for j, h in enumerate(hs))
+                       for k in range(K) if len(hs[k]) < P]
+                if policy is None:
+                    tot += pr * max([V(t + 1, hs)] + [V(t + 1, h2) for h2 in nxt])
+                else:
+                    w = [policy[k].index(t, *policy[k].state(list(hs[k])), gs[k]) for k in range(K)]
+                    k = int(np.argmax(w))
+                    tot += pr * V(t + 1, tuple(h + (gs[k],) if j == k else h
+                                               for j, h in enumerate(hs)))
+            return tot
+        return V(0, tuple(() for _ in range(K)))
+
+    one = Arm(u, 1, 6.0, 3, ny=3000, fade_db=fd, fade_w=fw)
+    rows = []
+    for imgs, means, T, tg in (([0, 3], [3.0, 9.0], 3, None), ([1, 4, 5], [2.0, 8.0, 13.0], 3, None),
+                               ([0, 3], [3.0, 9.0], 3, 30.0)):
+        arms = [Arm(u, i, m, T, target=tg, ny=1500, fade_db=fd, fade_w=fw) for i, m in zip(imgs, means)]
+        ub, _ = lagrangian_bound(arms, T)
+        rows.append((ub, exact(imgs, means, T, tg), exact(imgs, means, T, tg, arms)))
+    rows = np.array(rows)
+    ok(abs(one.value(0.0) - exact([1], [6.0], 3, None)) < 1e-4
+       and np.all(rows[:, 0] >= rows[:, 1] - 1e-4) and np.all(rows[:, 1] >= rows[:, 2] - 1e-9),
+       f"restless bandit (alloc/whittle.py): a user's program = exact expectimax; Lagrangian bound "
+       f">= best causal schedule >= Whittle index policy (exact, small frames; policy within "
+       f"{(rows[:, 1] - rows[:, 2]).max():.3f}, bound within {(rows[:, 0] - rows[:, 1]).max():.3f})")
+    if importlib.util.find_spec("scipy") is None:
+        print("    --  clairvoyant optimum: skipped (pip install scipy)")
+        return
+    gaps = []
+    for im, mn, sn, bl, av, se in draw_frames(u, 3, 6, 4, (0.0, 15.0), "rayleigh", (-2.0, 22.0),
+                                              seed=5, preempt=0.2):
+        for tg, free in ((None, False), (None, True), (30.0, False)):
+            best = -np.inf
+            for a in itertools.product(range(-1, 3), repeat=6):
+                if av is not None and any(not av[t] and a[t] >= 0 for t in range(6)):
+                    continue
+                v = 0.0
+                for k in range(3):
+                    h = [float(sn[k, t]) for t in range(6) if a[t] == k]
+                    qk = u.psnr(im[k], by_sensitivity(u, im[k], h) if free else h)
+                    v += qk if tg is None else float(qk >= tg)
+                best = max(best, v)
+            lo, up, _ = clairvoyant(u, im, sn, av, tg, free)
+            gaps.append((best - lo, up - best))
+    gaps = np.array(gaps)
+    ok(np.abs(gaps[:, 0]).max() < 1e-4 and gaps[:, 1].min() > -1e-6,   # LP solver tolerance
+       f"clairvoyant optimum (column generation + integer program) = brute force on {len(gaps)} "
+       f"small frames (mean PSNR and target, prefix and any phase order); the LP bound is valid "
+       f"everywhere, tight in {int(np.sum(gaps[:, 1] < 1e-4))} (largest gap {gaps[:, 1].max():.3f})")
 
 
 def check_eval_seed(x):

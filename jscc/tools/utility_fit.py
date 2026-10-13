@@ -25,6 +25,10 @@ tools/schedule_sim.py.
 
     python tools/utility_fit.py --mixed results/p2_full_snrc4.json --calib 1 13 \\
         --belief-out results/belief_snrc4.json
+
+--nested: one master sensitivity profile for every prefix length (alloc/utility.nested_rho),
+which makes each user's state two numbers (phases held, accumulated weighted noise) for the
+dynamic program of alloc/whittle.py; printed: its held-out errors against the free fit.
 """
 
 import argparse
@@ -93,7 +97,7 @@ def phase_levels(meta, levels):
     return by_L, P
 
 
-def calibrate(by_L, P, images, calib, folds=2):
+def calibrate(by_L, P, images, calib, folds=2, nested=False):
     """Cross-fitted transmitter belief (see the module doc). Returns (Utility, report)."""
     N = len(images)
     fold = np.arange(N) % folds
@@ -104,7 +108,7 @@ def calibrate(by_L, P, images, calib, folds=2):
         rest, mine = fold != f, np.flatnonzero(fold == f)
         sub = [dict(by_L[L], key=str(L), psnr=np.asarray(by_L[L]["psnr"])[rest].tolist())
                for L in range(1, P + 1)]
-        k_f, params, _ = fit(sub)
+        k_f, params, _ = fit(sub, nested=nested)
         kappa[mine] = k_f
         for L in range(1, P + 1):
             lv = by_L[L]
@@ -153,6 +157,11 @@ def main():
                     help="SNRs (dB) of the constant decodes a transmitter calibrates from")
     ap.add_argument("--folds", type=int, default=2, help="--calib: cross-fitting folds")
     ap.add_argument("--belief-out", default=None, help="--calib: the belief file to write")
+    ap.add_argument("--nested", action="store_true",
+                    help="one master sensitivity profile for every prefix length (rho_L = "
+                         "master[:L] / sum): each user's state becomes two numbers, for the "
+                         "dynamic program of alloc/whittle.py; prints its cost against the free "
+                         "fit and writes the nested model")
     a = ap.parse_args()
     meta, levels, images = None, [], None
     for path in a.mixed:
@@ -162,6 +171,17 @@ def main():
         images, meta = d["images"], meta or d
         levels += lv
     kappa, params, report = fit(levels)
+    if a.nested:
+        free = report
+        kappa, params, report = fit(levels, nested=True)
+        print(f"nested model: master profile {' '.join(f'{v:.3f}' for v in report['master'])}; "
+              f"fit rms {report['fit_rms']:.3f} dB (free fit {free['fit_rms']:.3f}); held-out "
+              f"MAE / p95 per CBR, nested against free:")
+        for lv in levels:
+            fh, nh = free["levels"][lv["key"]].get("held_out"), report["levels"][lv["key"]].get("held_out")
+            if fh and nh:
+                print(f"  {lv['cbr']:>6s}  nested {nh['mae']:.3f} / {nh['p95']:.3f}   free "
+                      f"{fh['mae']:.3f} / {fh['p95']:.3f}   (+{nh['mae'] - fh['mae']:.3f} dB MAE)")
     grid = [float(s) for s in meta["grid"]]
     print(f"{len(images)} images, {len(levels)} levels; noise response phi(n) = n / (1 + n / "
           f"{kappa:.3f}); fit rms {report['fit_rms']:.3f} dB")
@@ -180,7 +200,7 @@ def main():
             rep["noise_rule_held_out"] = rule
     if a.calib:
         by_L, P = phase_levels(meta, levels)
-        belief, crep = calibrate(by_L, P, images, a.calib, a.folds)
+        belief, crep = calibrate(by_L, P, images, a.calib, a.folds, a.nested)
         print(f"transmitter belief: kappa and rho cross-fitted over {a.folds} folds of images, "
               f"each image's Dsrc and C from its constant decodes at {a.calib} dB "
               f"({2 * P if len(a.calib) == 2 else len(a.calib) * P} decodes); errors (belief - "
@@ -210,7 +230,7 @@ def main():
                        meta={"sources": a.mixed, "run_name": meta.get("run_name"),
                              "checkpoint": meta.get("checkpoint"),
                              "cbr_per_phase": str(Fraction(by_L[1]["cbr"])),
-                             "report": report})
+                             "nested": report.get("master"), "report": report})
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         util.save(a.out)
         print(f"wrote {a.out}: {len(images)} images x {P} prefix lengths")
