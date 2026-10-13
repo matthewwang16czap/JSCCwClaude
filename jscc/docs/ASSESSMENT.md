@@ -88,7 +88,8 @@ IEEE Transactions on Wireless Communications (TWC).
    (c) Consequence: with the abstraction a user's state is two numbers and multi-user deadline
        scheduling is a restless bandit: Whittle index, the advantage index as its
        certainty-equivalent form, bounds that certify near-optimality (13.3e).
-   (d) Systems lessons: no rate means a quality ceiling per channel use (peaks are worth less
+   (d) Systems lessons: no SNR-dependent bit rate per slot (bandwidth, the CBR, is allocated;
+       the SNR only sets the noise) means a quality ceiling per channel use (peaks are worth less
        than to a digital link); encode once and decide lengths after the channel is seen
        (lost slots, stopping); per-length decoders make encode-once nearly free.
    If (a)-(b) hold, the paper is "how to abstract and schedule learned codes" with theory at

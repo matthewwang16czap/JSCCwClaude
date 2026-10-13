@@ -17,20 +17,28 @@ penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target w
 
 ## The story, if 13.3f / the Jacobian probe confirm it (proposed 2026-10-13)
 
-"Learned JSCC has no rate. What replaces it?" Digital resource allocation rests on one
-abstraction: a slot delivers bits, bits add, quality is a function of the sum (and system
-simulation maps a codeword's SNRs to one effective SNR by averaging mutual information,
-MIESM). A learned JSCC code delivers no bits. The paper's claim: it still admits a link
-abstraction, a different one -- the slots' contributions add as MMSEs (Gaussian MMSE of
-variance kappa at the slot's noise), weighted by the decoder's sensitivity to each part of the
-code -- but only if the code is trained for slot-varying channels. Then:
+"A slot's SNR buys bits in a digital link. What does it buy a learned JSCC code?" Both
+systems allocate bandwidth: how many slots, i.e. channel uses, each user gets (for us the CBR,
+1/48 per phase). They differ in what a slot's SNR does. In a digital link it sets the BIT
+RATE of the slot (link adaptation: a 13 dB slot carries ~4.4 bits per channel use, a 1 dB slot
+~1.2), bits add, quality is a function of the total (and system simulation maps a codeword's
+SNRs to one effective SNR by averaging mutual information, MIESM). Order does not matter. In
+a learned JSCC link every slot carries the same symbols (one phase) whatever its SNR; the SNR
+sets how noisy they arrive, and what that costs depends on WHICH phase the slot carried: two
+slots at 13 and 1 dB give ~29.2 dB PSNR at 1/24 when the 13 dB slot carries phase 1, ~28.1
+when it carries phase 2 (our model; the decoded order effect is +0.55 dB on average at 1/24).
+The paper's claim: such a code still admits a link abstraction, a different one -- the slots'
+contributions add as MMSEs (Gaussian MMSE of variance kappa at the slot's noise), weighted by
+the decoder's sensitivity to the phase they carry -- but only if the code is trained for
+slot-varying channels. Then:
 
 1. Abstraction (theory + measurement): first-order analysis of the decoder (distortion =
    noise-free distortion + sum_j n_j x Jacobian energy of chunk j), the MMSE saturation, the
    training condition (piecewise SNR), calibration from 2P decodes at the transmitter; MMSE
    averaging vs MIESM / EESM / mean dB, equal vs sensitivity weights (13.3f).
-2. What it does to scheduling: no rate, a quality ceiling per channel use; the scheduler's
-   currency becomes "weighted MMSE removed"; a user's state is two numbers; the frame is a
+2. What it does to scheduling: no SNR-dependent bit rate per slot (the scheduler allocates
+   bandwidth only), so a quality ceiling per channel use; the scheduler's currency becomes
+   "weighted MMSE removed", not bits; a user's state is two numbers; the frame is a
    restless bandit (Whittle index; the advantage index as its certainty-equivalent form;
    bounds certifying near-optimality, 13.3e); QoS deadlines and lost slots exploit encode-once.
 3. Evidence: decoded gains over PF (+0.46 dB) and PADC (+11 points); certified gap to any
