@@ -1,7 +1,7 @@
 # Paper plan (IEEE TWC)
 
-2026-10-12. What the measurements so far support, how the paper is laid out, and what is
-still owed. Numbers are Kodak (24 images), the snrc4 ViT (p8, 768 x 10, 4 symbols per
+2026-10-12, story candidate added 2026-10-13. What the measurements so far support, how the
+paper is laid out, and what is still owed. Numbers are Kodak (24 images), the snrc4 ViT (p8, 768 x 10, 4 symbols per
 token, 6 phases of CBR 1/48 at 256 px), 8 users, 24 slots, mean SNRs U[0, 15] dB, Rayleigh
 block fading, unless stated; "decoded" means the schedules were decoded by the codec
 itself (`docs/NOTES.md`, P1 steps 1-7).
@@ -14,6 +14,78 @@ prefix code, on one model per CBR, and on the system P1 step 7 recommends: one e
 prefix encoder with a decoder per received length. The prefix-centred title "Scheduling
 Encode-Once Deep JSCC Prefixes ..." stays off: per-length decoders close most of the nesting
 penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target with known slots)
+
+## The story, if section 14 passes: the scheduler makes the code's channel (2026-10-13)
+
+The leading candidate; the two framings below it (abstraction; dynamic program) become its
+supporting sections if it passes, and stay the fallback if it fails. Candidate title:
+"Scheduling Makes the Channel: Co-Designing Deep JSCC Codes and Opportunistic Multi-User
+Schedulers".
+
+1. Observation. Learned JSCC codes are trained for a channel: a random SNR, piecewise SNRs,
+   block fading. In a multi-user downlink that channel does not exist: every phase of a
+   user's code goes out in the slot the scheduler picked for it, and how many phases the
+   user gets is the scheduler's decision too. The channel a code sees is ENDOGENOUS, made by
+   the MAC. Measured (`tools/codesign.py`, COMMANDS 14.1): an opportunistic, quality-aware
+   scheduler gives the first phases fading peaks (stand-in: +3.3 dB over the user's mean SNR
+   at phase 1, ~0 at the tail; blind slots -1.9 dB), shapes the lengths, and makes the
+   received length informative about the channel -- none of it in the i.i.d. channel snrc4
+   trained on.
+2. Claim. The code should be trained for the channel its scheduler makes, and the scheduler
+   re-planned for the code it gets: two designers with one objective, a common-payoff game;
+   alternating best responses cannot lower the objective (up to the measured approximation
+   gaps of each step), and a fixed point is a code trained for its own scheduler's channel
+   (docs/PROBLEM.md, section 7).
+3. Enabler. Each step needs the other side in a cheap form: the scheduler needs the code as a
+   utility (our additive MMSE model, calibrated from 2P decodes: the abstraction framing below
+   becomes this section), the code needs the scheduler as a channel (a bank of histories,
+   generated on the model with no decoding). The scheduler's near-optimality (the restless
+   bandit bounds) makes its step a near-best response.
+4. Evidence (section 14, decoded): on the SAME slots, the code trained on the scheduler's
+   channel against the same-budget control (C8), the blind control that separates slot
+   selection from lengths (C9), scheduler specificity (C10), the loop closed once against the
+   original system, convergence of the induced channel, and the price at constant SNR.
+5. Prior work it must be distinguished from: SNR-varying DeepJSCC training (CFA-JSCC, DRJSCC,
+   euJSCC: an exogenous channel); multi-user JSCC resource allocation (the code fixed, the
+   allocation optimised); training on the deployment SNR distribution (matched training: our
+   blind control is exactly that); end-to-end learned MAC (not with a fixed, analysable
+   scheduler). Searches of 2026-10-13 found no work training a learned code on the channel a
+   scheduler induces (docs/SURVEY.md, F3).
+
+If it fails (C8 < +0.1 dB and < +1 point), docs/ASSESSMENT.md 13 lists the fallbacks.
+
+## The story, if 13.3f / the Jacobian probe confirm it (proposed 2026-10-13)
+
+"A slot's SNR buys bits in a digital link. What does it buy a learned JSCC code?" Both
+systems allocate bandwidth: how many slots, i.e. channel uses, each user gets (for us the CBR,
+1/48 per phase). They differ in what a slot's SNR does. In a digital link it sets the BIT
+RATE of the slot (link adaptation: a 13 dB slot carries ~4.4 bits per channel use, a 1 dB slot
+~1.2), bits add, quality is a function of the total (and system simulation maps a codeword's
+SNRs to one effective SNR by averaging mutual information, MIESM). Order does not matter. In
+a learned JSCC link every slot carries the same symbols (one phase) whatever its SNR; the SNR
+sets how noisy they arrive, and what that costs depends on WHICH phase the slot carried: two
+slots at 13 and 1 dB give ~29.2 dB PSNR at 1/24 when the 13 dB slot carries phase 1, ~28.1
+when it carries phase 2 (our model; the decoded order effect is +0.55 dB on average at 1/24).
+The paper's claim: such a code still admits a link abstraction, a different one -- the slots'
+contributions add as MMSEs (Gaussian MMSE of variance kappa at the slot's noise), weighted by
+the decoder's sensitivity to the phase they carry -- but only if the code is trained for
+slot-varying channels. Then:
+
+1. Abstraction (theory + measurement): first-order analysis of the decoder (distortion =
+   noise-free distortion + sum_j n_j x Jacobian energy of chunk j), the MMSE saturation, the
+   training condition (piecewise SNR), calibration from 2P decodes at the transmitter; MMSE
+   averaging vs MIESM / EESM / mean dB, equal vs sensitivity weights (13.3f).
+2. What it does to scheduling: no SNR-dependent bit rate per slot (the scheduler allocates
+   bandwidth only), so a quality ceiling per channel use; the scheduler's currency becomes
+   "weighted MMSE removed", not bits; a user's state is two numbers; the frame is a
+   restless bandit (Whittle index; the advantage index as its certainty-equivalent form;
+   bounds certifying near-optimality, 13.3e); QoS deadlines and lost slots exploit encode-once.
+3. Evidence: decoded gains over PF (+0.46 dB) and PADC (+11 points); certified gap to any
+   scheduler; per-length decoders; digital under ideal and noisy CSI.
+
+The schedulers stop being the novelty and become the demonstration of what the abstraction
+buys. Everything already measured still serves; plan_adv / replan_adv details and most
+baseline variants move to an appendix.
 
 ## The story as a dynamic program (proposed 2026-10-13)
 
@@ -58,6 +130,9 @@ F2). Gate: COMMANDS 13.3e (the nested model on the real codec, then every bound 
 | C5 | Against separation (HEIC intra + error-free CQI link adaptation, the same schedulers, the same 6-slot cap per user): ahead by small margins -- mean PSNR +0.14 dB (prefix) / +0.34 (a decoder per length) / +0.29 (per CBR); target +0.5 to +10.5 points with per-length decoders (largest in tight frames), the prefix code alone -1.6 at 32 dB; a 3 dB-gap code is 0.5-0.7 dB ahead. Under CQI errors (sd 1-3 dB; digital with its best backoff per policy) the gap is expected to open: to measure | P1 steps 6-7; section 13 (`--cqi-error`) | done at ideal CQI; CQI errors owed |
 | C6 | Against one model per CBR (six piecewise-trained specialists): nesting penalty 0.17-0.47 dB; a decoder per received length behind the one encoder recovers 79-101% of it at 2-4 phases (49-65% at 1, 5, 6). Encode once + per-length decoders is the best JSCC system on mean PSNR (31.63 vs 31.58 dB) and when slots can be lost (+0.73 dB, +2.8 points at 25%); per-CBR codes keep +0.9 to +1.4 points at the target with known slots. The model and the schedulers work on all three (codec-agnostic) | P1 steps 5-7; section 13 (equal training budget) | done, equal-budget check owed |
 | C7 | Which QoS policy when: plan_adv (shortest-first admission + slots planned before the frame + advantage timing) with known slots; replan_adv (the same re-planned every slot from what users hold, with stopping) when slots are tight, lost or (to measure) the CQI is noisy; online when mean PSNR matters too | P1 step 7 (decoded: replan_adv 77.7, plan_adv 76.7, online 76.5, padc_adv 67.7%) | done; CQI errors owed |
+| C8 | Trained on the channel its scheduler makes (a bank of the scheduler's per-phase SNR histories), the code beats the same-budget fine-tune on the usual i.i.d. channel ON THE SAME SLOTS, decoded: >= +0.3 dB mean PSNR under slope_adv, or >= +3 points at 30 dB under replan_adv, carries the paper | section 14 (14.3a) | to measure |
+| C9 | It is the scheduler's slot SELECTION the code adapts to, not only its lengths and the users' SNR range: sa - blind >= half of sa - hf | section 14 (14.3a) | to measure |
+| C10 | Specific to the scheduler: the lead shrinks under PF slots; the QoS-trained code leads at the target, the mean-trained one on mean PSNR; the loop closed once (each code under its re-planned scheduler) beats the original system, and the induced channel barely moves after one round | section 14 (14.3a-b, 14.4b) | to measure |
 
 ## Outline
 
@@ -97,6 +172,7 @@ F2). Gate: COMMANDS 13.3e (the nested model on the real codec, then every bound 
 
 ## Still owed, in order
 
+0. Section 14 (GPUs 2-5, ~6 h): C8-C10, the story test. Everything below waits for it.
 1. CQI errors (section 13, CPU): JSCC (prefix, per-length decoders, per-CBR) against HEIC with
    its best backoff, sd 1-3 dB. Decides whether C5 is "on par" or "ahead under realistic CSI".
 2. Equal training budget (section 13, GPUs): the prefix code and per-CBR codes with the same

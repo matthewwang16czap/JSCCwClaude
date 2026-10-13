@@ -113,6 +113,20 @@ Mersereau (Oper. Res. 2008), Lagrangian relaxations of weakly coupled dynamic pr
 Smith (Manag. Sci. 2020), index policies and bounds for finite-horizon selection problems;
 Derman, Lieberman and Ross (Manag. Sci. 1972), sequential stochastic assignment (phase order).
 
+## F3. Training a learned code on the channel a scheduler makes (checked 2026-10-13)
+
+| work | what | relation |
+|---|---|---|
+| CFA-JSCC ([2412.08211](https://arxiv.org/html/2412.08211v1)); DRJSCC ([2311.15309](https://arxiv.org/pdf/2311.15309)); euJSCC ([2602.14018](https://arxiv.org/html/2602.14018v1)) | DeepJSCC for SNR that varies within one image (block fading, feedback, re-encoding) | the channel is EXOGENOUS: i.i.d. or physical. Our --snr-chunks training is of this kind |
+| Tian, Chen and Kam, UAV semantic transmission ([2602.10482](https://arxiv.org/abs/2602.10482)) | single link: structure sent over the reliable slots, +5.6 dB | a single-link precursor of "the important part goes into the good slots"; no multi-user scheduler, so no channel made by one (to read in full before citing) |
+| distributed DeepJSCC over a MAC ([2211.09920](https://arxiv.org/pdf/2211.09920)); NOMA JSCC ([2504.03690](https://arxiv.org/pdf/2504.03690)); JSCC resource allocation ([2211.11412](https://arxiv.org/abs/2211.11412)); DD-JSCC ([2507.20467](https://arxiv.org/pdf/2507.20467)); IoV semantic scheduling with Lyapunov control ([PMC13165843](https://pmc.ncbi.nlm.nih.gov/articles/PMC13165843)) | multi-user learned JSCC with allocation or scheduling | code and scheduler designed separately (the code fixed, the allocation optimised, or a joint network without a scheduler); none trains the code on the channel the scheduler induces |
+
+No paper found (two searches, 2026-10-13) that trains a learned code on scheduler-induced channel
+statistics or alternates code training with scheduler re-design. Classical cousins to cite:
+cross-layer joint source-channel coding and scheduling for video (unequal error protection with
+a fixed channel model), and matched training to a deployment SNR distribution (our "blind"
+control, COMMANDS 14).
+
 ## G. Theory anchors
 
 * Successive refinement (Equitz and Cover 1991; Rimoldi 1994): a Gaussian source under MSE is

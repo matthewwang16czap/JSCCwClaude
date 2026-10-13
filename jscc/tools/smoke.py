@@ -494,6 +494,14 @@ def check_schedule():
     ok(abs(k_hat / kappa - 1) < 0.05 and worst < 0.01 and rho_err < 0.01,
        f"utility fit recovers the model: kappa {k_hat:.3f} (true {kappa}), rho within {rho_err:.4f}, "
        f"held-out MAE {worst:.4f} dB")
+    from tools.utility_fit import abstraction_errors
+    ab = abstraction_errors(levels, params, k_hat, grid)
+    mae = {key: float(np.abs(v).mean()) for key, v in ab.items()}
+    ok(mae[("MMSE", "rho")] < 0.05 and mae[("MMSE", "rho")] < mae[("capacity", "rho")] / 3
+       and mae[("MMSE", "rho")] < mae[("MMSE", "equal")] / 3,
+       f"link abstractions: on an additive-MMSE code, sensitivity-weighted MMSE averaging "
+       f"({mae[('MMSE', 'rho')]:.3f} dB) beats capacity averaging (MIESM-like, "
+       f"{mae[('capacity', 'rho')]:.3f}) and equal weights ({mae[('MMSE', 'equal')]:.3f})")
     tg = targets(u, np.arange(4), [3.0, 6.0, 9.0, 12.0], 10, "slope")
     ok(tg.sum() == 10 and tg.max() <= P, f"equal-slope targets spend the slots: {tg.tolist()}")
     summ, base_p, dumped = simulate(u, 4, 10, 60, (0.0, 15.0), "none", (-2.0, 22.0),
@@ -758,6 +766,76 @@ def check_schedule():
        f"clairvoyant optimum (column generation + integer program) = brute force on {len(gaps)} "
        f"small frames (mean PSNR and target, prefix and any phase order); the LP bound is valid "
        f"everywhere, tight in {int(np.sum(gaps[:, 1] < 1e-4))} (largest gap {gaps[:, 1].max():.3f})")
+
+
+def check_codesign(x):
+    """The channel a scheduler makes (tools/codesign.py) and training on it (--snr-profiles)."""
+    import json
+
+    import numpy as np
+
+    from alloc.utility import Utility
+    from engine import sample_profiles
+    from tools.codesign import against, build_bank, stats
+
+    print("[co-design]")
+    rng = np.random.default_rng(0)
+    N, P = 8, 6
+    rho = [(0.5 ** np.arange(L)) / (0.5 ** np.arange(L)).sum() for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)
+    u = Utility(1.8, rho, dsrc, csens, [f"im{i}" for i in range(N)])
+    sa = build_bank(u, "slope_adv", users=4, slots=12, frames=150)
+    bl = build_bank(u, "slope_adv", users=4, slots=12, frames=150, blind=True)
+    tq = build_bank(u, "replan_adv", users=4, slots=12, frames=150, target=30.0)
+    s_sa, s_bl = stats(sa), stats(bl)
+    lift_sa, lift_bl = s_sa["phase"][0]["lift"], s_bl["phase"][0]["lift"]
+    ok(len(sa["histories"]) == 600 and [len(h) for h in sa["histories"]]
+       == [len(h) for h in bl["histories"]] and lift_sa > 1.0 and lift_bl < 0.0,
+       f"bank: every user of every frame; the scheduler puts first phases into fading peaks "
+       f"(lift {lift_sa:+.2f} dB), blindly taken slots of the same lengths do not ({lift_bl:+.2f})")
+    r, same = against(bl, sa), against(sa, sa)
+    ok(r["same_length"] == 1.0 and r["phases_moved"] > 0.9 and same["phases_moved"] == 0.0
+       and against(tq, sa)["same_length"] < 1.0,
+       f"stats --against pairs the users of the same frames: --blind moves "
+       f"{100 * r['phases_moved']:.0f}% of the phases, another policy changes lengths")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "bank_sat.json")    # the QoS scheduler: lengths vary
+        with open(path, "w") as f:
+            json.dump(tq, f)
+        model, cfg = build("vit", "--snr-profiles", path)
+        g = cfg.grid_tokens
+        rows = {tuple(np.float32(v).item() for v in h) for h in tq["histories"] if h}
+        torch.manual_seed(0)
+        draws = [sample_profiles(cfg, 3, torch.device("cpu")) for _ in range(300)]
+        prof, units = draws[0]
+        exact = True
+        for profs, (un,) in draws[:20]:
+            n = un // g
+            for p in profs:                  # phase blocks constant, the phase SNRs a history
+                exact &= tuple(p[:n * g:g].tolist()) in rows and all(
+                    len(set(p[j * g:(j + 1) * g].tolist())) == 1 for j in range(n))
+        want = np.array(stats(tq)["lengths"])
+        got = np.bincount([d[1][0] // g for d in draws], minlength=P + 1)[1:] / len(draws)
+        tv = 0.5 * float(np.abs(got - want).sum())
+        ok(prof.shape == (3, cfg.n_tokens) and units[0] % g == 0 and exact and tv < 0.12
+           and (want > 0.05).sum() >= 3 and "prof-sat" in cfg.run_name,
+           f"--snr-profiles: phase j of every image at its history's j-th SNR, budgets of whole "
+           f"phases with the bank's length distribution ({(want > 0).sum()} lengths, TV "
+           f"{tv:.3f}); run name {cfg.run_name}")
+        model.train()
+        loss = model(x, prof[:2], units=units, want_metrics=False)[1]
+        ok(bool(torch.isfinite(loss)), "a training step on a scheduler's SNR histories")
+        raises(["--backbone", "vit", "--snr-profiles", path, "--snr-chunks", "4"],
+               "--snr-profiles replaces --snr-chunks")
+        raises(["--backbone", "swin", "--snr-profiles", path], "--snr-profiles is refused for swin")
+        raises(["--backbone", "vit", "--cascade", "--snr-profiles", path],
+               "--snr-profiles is refused with --cascade")
+        raises(["--backbone", "vit", "--snr-profiles", path, "--fixed-cbr", "1/8"],
+               "--snr-profiles sets the budgets: --fixed-cbr is refused")
+        raises(["--backbone", "vit", "--snr-profiles", os.path.join(tmp, "none.json")],
+               "a missing bank is refused")
 
 
 def check_eval_seed(x):
@@ -1145,6 +1223,7 @@ def main():
     check_budget_heads(x)
     check_eval_seed(x)
     check_snr_profiles(x)
+    check_codesign(x)
     check_schedule()
     check_perception(x)
     check_allocation(x)

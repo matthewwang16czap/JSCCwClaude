@@ -70,6 +70,50 @@ IEEE Transactions on Wireless Communications (TWC).
    schedulers, codec-agnostic, with encode-once + per-length decoders as the recommended code.
    Owed: CQI errors (the last assumption favouring digital), an equal-training-budget check of
    the codec comparison, theory for the schedulers.
+12. **Is it research or engineering? (2026-10-13)** As packaged so far it reads as engineering:
+   a codec trick, a fitted curve, heuristic schedulers, many baselines. Each part is a modest
+   "first X for Y"; the gains are moderate (+0.46 dB, +11 points); digital is beaten only by
+   small margins; and our own bounds now say the heuristic is near-optimal, so there is no new
+   algorithm that wins big. A TWC reviewer would likely call it incremental. What is new and
+   could carry a story is one finding with consequences: a learned JSCC code admits a link
+   abstraction, and only when trained for it. The story to test, in that order:
+   (a) Abstraction: the slots' qualities add as MMSEs weighted by the decoder's sensitivity
+       (phi(n) = n / (1 + n / kappa) is the MMSE of a Gaussian of variance kappa), not as
+       bits; digital system simulation averages mutual information (MIESM), and that fails
+       here. Test: COMMANDS 13.3f (capacity vs MMSE averaging, equal vs sensitivity weights).
+   (b) Mechanism: to first order the decoder adds sum_j n_j ||J_j||^2 (its Jacobian energy per
+       chunk), so the weights are measurable from the network itself; piecewise-SNR training
+       is what makes the decoder chunk-separable (the constant-SNR decoder obeys another rule
+       or none). Test: 13.3f for s1; a Jacobian probe (to build) against the fitted weights.
+   (c) Consequence: with the abstraction a user's state is two numbers and multi-user deadline
+       scheduling is a restless bandit: Whittle index, the advantage index as its
+       certainty-equivalent form, bounds that certify near-optimality (13.3e).
+   (d) Systems lessons: no SNR-dependent bit rate per slot (bandwidth, the CBR, is allocated;
+       the SNR only sets the noise) means a quality ceiling per channel use (peaks are worth less
+       than to a digital link); encode once and decide lengths after the channel is seen
+       (lost slots, stopping); per-length decoders make encode-once nearly free.
+   If (a)-(b) hold, the paper is "how to abstract and schedule learned codes" with theory at
+   its core; if they fail, the honest frame is a system study, better aimed at a magazine-
+   or letter-length venue.
+13. **A novelty candidate, and its test (2026-10-13).** The abstraction and dynamic-program
+   framings explain why the system works; they do not add a new idea (the slot-varying
+   training is CFA-JSCC's / DRJSCC's / euJSCC's, the fitted model is a link abstraction, the
+   schedulers are near-optimal heuristics). The candidate: in a multi-user system the channel a
+   learned code sees is ENDOGENOUS -- the scheduler decides which slot, hence which SNR, every
+   phase gets, and how many phases each user gets -- so the code should be trained for the
+   channel its scheduler makes, and the scheduler re-planned for the code it gets: two
+   designers, one objective, alternating best responses (docs/PROBLEM.md, section 7). No work
+   found trains a learned code on a scheduler-induced channel (docs/SURVEY.md, F3); our
+   abstraction is what makes each round cheap. It is a claim about learned codes in networks,
+   not a component, and it is falsifiable in one GPU round (COMMANDS.txt section 14: hf / blind
+   / sa / sat, decoded on the same slots). Pre-registered: >= +0.3 dB or >= +3 points over
+   the same-budget control carries the paper; +0.1-0.3 dB supports it; < +0.1 dB kills it.
+   The main risk: wide-SNR training is known to land close to matched training, so the gain
+   may be small; and if blind ~ sa the effect is matched training (an older idea), not the
+   scheduler's selection. Fallbacks if it dies: the system study (C1-C7, CQI errors, per-length
+   decoders) for a lower-tier venue; or a problem where embedded learned codes are uniquely
+   suited, e.g. refine-or-refresh for visual status updates (improve the image a user holds or
+   start a newer one; partial-update age-of-information work exists, to check first).
 
 ## 1. Your four points, checked
 
