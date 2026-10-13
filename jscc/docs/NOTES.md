@@ -740,3 +740,29 @@ smoothly when the reported SNR is off, a digital link backs off or loses blocks.
 measures it (`tools/schedule_sim.py --cqi-error`: decisions on the reports, codes decoded at the
 true SNR; a digital slot sent at its report minus a backoff tuned per policy on other frames,
 lost when its rate exceeds what the slot supported, HARQ ACK to the transmitter).
+
+## Problem P2, round 1 (planned 2026-10-13): the code trained for the channel its scheduler makes
+
+COMMANDS.txt section 14 (section 13 deferred: the story comes first). The question
+(docs/PROBLEM.md, section 7; docs/PAPER.md C8-C10): under a scheduler, the SNR each phase of a
+code sees and the number of phases each user gets are the scheduler's decisions, so the code is
+trained for the wrong channel; does training it on the channel the scheduler makes pay, on the
+same slots and with the same training budget?
+
+Built: `tools/codesign.py bank` (every user's delivered per-phase SNR history under one policy,
+from tools/schedule_sim.py's frames on a code's utility; `--blind` keeps the lengths and draws
+every phase in a blindly taken slot), `codesign.py stats` (length distribution, per-phase SNR and
+lift, mean profile per length; `--against` pairs the users of two banks drawn on the same
+frames: the loop's convergence check), and `main.py --snr-profiles BANK` (each step one prefix
+length from the bank's distribution and per image a history of that length, one SNR per
+phase; replaces --snr-chunks and the rate sampling; run-name suffix prof-<bank>). On the
+stand-in utility (K 8, T 24) the scheduler's first phases sit +3.3 dB above the user's mean SNR,
+blind slots -1.9 dB, and the per-phase SNR falls along the code (10.7 dB at phase 1, 1.1 at 6
+under slope_adv). The CPU smoke test checks the bank, the sampler and the refusals; a tiny CPU
+run checked the whole section-14 chain (bank, training, dumps, decodes, fit, re-planned
+schedules, paired reports).
+
+Arms (snrc4 + 400 epochs each, the FTF recipe): hf (--snr-chunks 4, the control), blind, sa
+(slope_adv's channel), sat (replan_adv's at 30 dB). Each decodes the original system's
+schedules on 150 frames (same slots for every code) and, after its own measurement and fit, its
+own re-planned schedules. Results: to come.

@@ -1,6 +1,7 @@
 """One training epoch, and the evaluation grid."""
 
 import contextlib
+import json
 import time
 from collections import defaultdict
 
@@ -43,6 +44,40 @@ def sample_snr(cfg, batch, device):
     return piecewise_snr(draw(batch, cfg.snr_chunks), cuts.sort(1).values, cfg.n_tokens)
 
 
+class ProfileBank:
+    """--snr-profiles: the per-phase SNR histories of the users a scheduler served
+    (tools/codesign.py bank), the channel the code sees under that scheduler. sample()
+    draws one history to set the step's prefix length L, so lengths follow the bank's
+    distribution, then for every image a history of exactly L phases. Host RNG only."""
+
+    def __init__(self, path, phases):
+        with open(path) as f:
+            hist = [h for h in json.load(f)["histories"] if h]
+        self.lengths = torch.tensor([len(h) for h in hist])
+        self.snrs = torch.tensor([h + [h[-1]] * (phases - len(h)) for h in hist])
+        self.of_length = {int(n): torch.nonzero(self.lengths == n).flatten()
+                          for n in self.lengths.unique()}
+
+    def sample(self, batch):
+        n = int(self.lengths[torch.randint(len(self.lengths), (1,))])
+        pool = self.of_length[n]
+        return self.snrs[pool[torch.randint(len(pool), (batch,))]], n
+
+
+_BANKS = {}
+
+
+def sample_profiles(cfg, batch, device):
+    """(per-token SNR profile (batch, n_tokens), [units]) from --snr-profiles: phase j of
+    the prefix (tokens j * per_phase ...) at the j-th SNR of the image's history."""
+    bank = _BANKS.get(cfg.snr_profiles)
+    if bank is None:
+        bank = _BANKS[cfg.snr_profiles] = ProfileBank(cfg.snr_profiles, cfg.phases)
+    chunks, n = bank.sample(batch)
+    cuts = (torch.arange(1, cfg.phases) * cfg.grid_tokens).expand(batch, -1)
+    return piecewise_snr(chunks.to(device), cuts.to(device), cfg.n_tokens), [n * cfg.grid_tokens]
+
+
 def train_one_epoch(epoch, step, net, model, loader, optimizer, scheduler, cfg, log=None,
                     ema=None):
     """Returns (optimiser steps so far, steps skipped in this epoch).
@@ -60,12 +95,15 @@ def train_one_epoch(epoch, step, net, model, loader, optimizer, scheduler, cfg, 
     skipped, seen, t0 = 0, 0, time.perf_counter()
     for i, x in enumerate(loader):
         x = x.to(cfg.device, non_blocking=True)
-        snr = sample_snr(cfg, x.shape[0], x.device)
+        if cfg.snr_profiles:
+            snr, units = sample_profiles(cfg, x.shape[0], x.device)
+        else:
+            snr, units = sample_snr(cfg, x.shape[0], x.device), None
         boundary = (i + 1) % accum == 0
         verbose = log is not None and boundary and (step + 1) % cfg.print_step == 0
         with (net.no_sync() if ddp and not boundary else contextlib.nullcontext()):
             with autocast(cfg, x.device):
-                _, loss, metrics = net(x, snr, want_metrics=verbose)
+                _, loss, metrics = net(x, snr, units=units, want_metrics=verbose)
             (loss / accum).backward()
         seen += x.shape[0]
         if not boundary:

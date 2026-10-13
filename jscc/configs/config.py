@@ -7,6 +7,7 @@ to `self.warnings`, which main.py logs once the logger exists.
 """
 
 import importlib.util
+import json
 import math
 import os
 from fractions import Fraction
@@ -132,6 +133,7 @@ class Config:
             self._setup_tokens()
         self.cbr_units = [self.units_for_cbr(c) for c in self.cbrs]
         self._setup_rates(args)
+        self._setup_profiles(args)
         self._setup_cascade(args)
 
         # resolution
@@ -256,6 +258,33 @@ class Config:
             if abs(self.cbr_for_units(u) - float(c)) > 1e-12:
                 self.warnings.append(f"eval CBR {c} rounds to {u} units = CBR "
                                      f"{self.cbr_for_units(u):.6f}; results report the latter")
+
+    def _setup_profiles(self, args):
+        """--snr-profiles: train on SNR histories a scheduler delivered (tools/codesign.py)."""
+        self.snr_profiles = getattr(args, "snr_profiles", None)
+        if not self.snr_profiles:
+            return
+        if not self.token or self.cascade:
+            raise ValueError("--snr-profiles sends a token prefix phase by phase: it needs vit or "
+                             "hybrid without --cascade")
+        if self.snr_chunks > 1:
+            raise ValueError("--snr-profiles replaces --snr-chunks: pass one of them")
+        if self.fixed_cbr is not None or self.rates_per_step != 1 or self.top_prob:
+            raise ValueError("--snr-profiles sets every step's budget from the bank: it does not "
+                             "combine with --fixed-cbr, --rates-per-step or --top-prob")
+        if not os.path.isfile(self.snr_profiles):
+            raise ValueError(f"--snr-profiles {self.snr_profiles}: no such file")
+        with open(self.snr_profiles) as f:
+            bank = json.load(f)
+        if bank.get("format") != "snr-bank":
+            raise ValueError(f"--snr-profiles {self.snr_profiles}: not an SNR bank "
+                             f"(tools/codesign.py bank)")
+        longest = max((len(h) for h in bank["histories"]), default=0)
+        if longest == 0:
+            raise ValueError(f"--snr-profiles {self.snr_profiles}: nobody received a phase")
+        if longest > self.phases:
+            raise ValueError(f"--snr-profiles {self.snr_profiles}: histories of {longest} phases, "
+                             f"the model sends {self.phases}")
 
     def _setup_resolution(self):
         mult = 1
@@ -384,6 +413,9 @@ class Config:
             extra.append(f"top{self.top_prob:g}")
         if self.snr_chunks > 1:
             extra.append(f"snrc{self.snr_chunks}")
+        if self.snr_profiles:
+            stem = os.path.splitext(os.path.basename(self.snr_profiles))[0]
+            extra.append("prof-" + (stem[5:] if stem.startswith("bank_") else stem))
         if self.fixed_cbr is not None:
             extra.append(f"fix{self.fixed_cbr.numerator}-{self.fixed_cbr.denominator}")
         if self.freeze != "none":

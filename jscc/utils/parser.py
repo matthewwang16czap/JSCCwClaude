@@ -95,6 +95,12 @@ def create_parser():
                         "SNRs from --snr-range, cut at random token positions (tokens sent "
                         "in slots of a block-fading channel, docs/PROBLEM.md); 1 = one SNR "
                         "per image. Token models, prefix scheme")
+    g.add_argument("--snr-profiles", default=None, metavar="BANK",
+                   help="train on the channel a scheduler makes (tools/codesign.py bank: the "
+                        "per-phase SNRs of the users it served): each step one prefix length "
+                        "from the bank's distribution and per image a history of that length, "
+                        "one SNR per phase. Replaces --snr-chunks and the rate sampling. Token "
+                        "models, prefix scheme")
 
     g = p.add_argument_group("rate")
     g.add_argument("--rate-sampling", default=None, choices=["uniform", "grid", "sandwich"],

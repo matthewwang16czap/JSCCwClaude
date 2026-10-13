@@ -96,6 +96,8 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
                         replay_report.py (decoded replays paired by frame, also across codecs)
                         headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
+                        codesign.py (the channel a scheduler makes, as a bank of SNR histories
+                        that main.py --snr-profiles trains on; bank statistics and convergence)
 docs/NOTES.md           what the previous tree established; open questions
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -162,6 +164,12 @@ reports; JSCC decoded at the true SNR, a digital block lost when its rate exceed
 the digital backoff tuned per policy); `--preempt` loses slots to other traffic; `--fixed-codes`
 schedules one model per CBR, `--length-checkpoints` (mixed_snr) decodes with one per length.
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
+Co-design (`docs/PROBLEM.md`, section 7): `tools/codesign.py bank --utility U --policy
+slope_adv --out results/bank_sa.json` keeps every user's delivered per-phase SNR history under a
+policy (`--blind`: the same lengths, every phase in a blindly taken slot); `main.py
+--snr-profiles results/bank_sa.json` trains on them (each step one prefix length from the
+bank, per image a history of that length; run-name suffix `prof-sa`); `codesign.py stats A B
+--against C` compares banks.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and

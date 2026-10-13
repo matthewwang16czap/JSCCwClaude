@@ -10,7 +10,10 @@ Per policy (tag:policy with --tags): the model's error on the decoded histories,
 mean PSNR, and with a target the share of users at or above it; then every policy minus
 --base per frame (mean PSNR, or the share at the target), 95% bootstrap CI over frames. A
 user who received nothing scores as the empty prefix the model predicts. Files are paired
-only where every frame's users had the same images and mean SNRs in both.
+only where every frame's users had the same images and mean SNRs in both. Raw dumps
+(schedule_sim.py --dump, not decoded) are read the same way and scored by the PSNR their
+utility model predicts: the model's paired comparison across codes, on as many frames as
+the dumps hold.
 """
 
 import argparse
@@ -62,11 +65,14 @@ def main():
         raise SystemExit(f"the files have different targets {sorted(map(str, targets))}: pass --target")
     pols = list(dict.fromkeys(e["policy"] for e in entries))
     rows = [e for e in entries if e.get("actual_psnr") is not None and "predicted_psnr" in e]
+    kind = "decoded" if rows else "predicted"
+    if rows and len(rows) < sum(e.get("snrs") != [] for e in entries):
+        print("note: some files are not decoded; their users score as their model predicts")
     if rows:
         err = np.array([e["predicted_psnr"] - e["actual_psnr"] for e in rows])
         print(f"{len(rows)} decoded histories: predicted - actual PSNR bias {err.mean():+.3f}, "
               f"MAE {np.abs(err).mean():.3f}, p95 {np.percentile(np.abs(err), 95):.3f} dB")
-    print(f"{'policy':24s} {'users':>5s} {'decoded mean PSNR':>17s}"
+    print(f"{'policy':24s} {'users':>5s} {kind + ' mean PSNR':>17s}"
           + (f" {'at ' + format(tgt, 'g') + ' dB':>9s} {'predicted':>9s}" if tgt is not None else ""))
     for p in pols:
         sel = [e for e in entries if e["policy"] == p]
@@ -91,7 +97,7 @@ def main():
         per.setdefault(e["policy"], {}).setdefault(e["frame"], []).append(v)
     what = "share reaching the target" if tgt is not None else "mean PSNR"
     scale, unit = (100.0, " pts") if tgt is not None else (1.0, " dB")
-    print(f"decoded, paired by frame: {what} minus {base}'s, 95% CI over frames")
+    print(f"{kind}, paired by frame: {what} minus {base}'s, 95% CI over frames")
     for p in pols:
         if p == base:
             continue

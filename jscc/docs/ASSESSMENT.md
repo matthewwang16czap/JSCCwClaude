@@ -95,6 +95,25 @@ IEEE Transactions on Wireless Communications (TWC).
    If (a)-(b) hold, the paper is "how to abstract and schedule learned codes" with theory at
    its core; if they fail, the honest frame is a system study, better aimed at a magazine-
    or letter-length venue.
+13. **A novelty candidate, and its test (2026-10-13).** The abstraction and dynamic-program
+   framings explain why the system works; they do not add a new idea (the slot-varying
+   training is CFA-JSCC's / DRJSCC's / euJSCC's, the fitted model is a link abstraction, the
+   schedulers are near-optimal heuristics). The candidate: in a multi-user system the channel a
+   learned code sees is ENDOGENOUS -- the scheduler decides which slot, hence which SNR, every
+   phase gets, and how many phases each user gets -- so the code should be trained for the
+   channel its scheduler makes, and the scheduler re-planned for the code it gets: two
+   designers, one objective, alternating best responses (docs/PROBLEM.md, section 7). No work
+   found trains a learned code on a scheduler-induced channel (docs/SURVEY.md, F3); our
+   abstraction is what makes each round cheap. It is a claim about learned codes in networks,
+   not a component, and it is falsifiable in one GPU round (COMMANDS.txt section 14: hf / blind
+   / sa / sat, decoded on the same slots). Pre-registered: >= +0.3 dB or >= +3 points over
+   the same-budget control carries the paper; +0.1-0.3 dB supports it; < +0.1 dB kills it.
+   The main risk: wide-SNR training is known to land close to matched training, so the gain
+   may be small; and if blind ~ sa the effect is matched training (an older idea), not the
+   scheduler's selection. Fallbacks if it dies: the system study (C1-C7, CQI errors, per-length
+   decoders) for a lower-tier venue; or a problem where embedded learned codes are uniquely
+   suited, e.g. refine-or-refresh for visual status updates (improve the image a user holds or
+   start a newer one; partial-update age-of-information work exists, to check first).
 
 ## 1. Your four points, checked
 

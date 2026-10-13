@@ -179,3 +179,61 @@ the content part of the utility can add, G-C prices the prefix.
   CNN. The scheduling claims are relative (same codec under every policy), but a TWC reviewer
   will ask; the likely fix is data (JSCCformer-f and PADC train on ImageNet, this tree on the
   800 DIV2K images; `--trainset DIV2K Flickr2K CLIC` is the cheap first step).
+
+## 7. The code's channel is made by the scheduler: code-scheduler co-design (2026-10-13)
+
+Everything above designs the scheduler for a GIVEN code. But under a scheduler a code's phases
+never see "the channel": each phase goes out in the slot the scheduler picked for it, so the SNR
+every phase sees, and how many phases every user receives, are decisions of the MAC. The code's
+channel is endogenous. Our index puts the first, most sensitive phases into fading peaks and lets
+the tail take ordinary slots; snrc4 was trained on chunks at i.i.d. SNRs uniform over [-2, 22]
+dB with random cuts and uniform lengths: another channel.
+
+* The object (`tools/codesign.py bank`): the distribution p_pi(L, s_1..s_L) of the number of
+  phases a user receives and the SNR of each, in prefix order, under policy pi, over the frames
+  (users' mean SNRs, fades, images). On the stand-in utility (K 8, T 24, U[0, 15] dB, Rayleigh):
+  slope_adv's first phase sits +3.3 dB above the user's mean SNR, its third +1.8, the tail ~0;
+  blindly taken slots -1.9 dB (the fade's mean, -2.5 dB, less clipping at -2 dB); the per-phase
+  mean SNR falls from 10.7 dB at phase 1 to 1.1 dB at phase 6 (the users who get long prefixes
+  are the weak ones); replan_adv at 30 dB 10.8 -> 4.8 dB. And the profile differs by length:
+  the receiver KNOWS how many phases arrived, so under an opportunistic scheduler the length is
+  side information about the channel (stand-in: users with 2 phases saw ~11 dB on both, users
+  with 6 saw 3.9 dB on the first and 1.1 on the last), which a length-conditioned decoder (FiLM
+  on L) can learn and the transmitter never has to send.
+* Two designers, one objective. The code designer picks the weights theta, the MAC designer the
+  policy pi; both want J(theta, pi) = E[quality at the deadline] (mean PSNR, or the share at a
+  target). The scheduler needs the code only through its utility u_theta (the additive model,
+  measured and calibrated from 2P decodes per image: sections 3 and 5); the code needs the
+  scheduler only through p_pi. Alternating best responses:
+    code:      theta_{r+1} = argmin_theta E_{(L, s) ~ p_{pi_r}} E_x D_theta(x; L, s)
+               (fine-tuning on a bank of pi_r's histories: `main.py --snr-profiles`)
+    scheduler: pi_{r+1} = our policy on u_{theta_{r+1}} (measure, fit, calibrate, re-plan)
+  This is a common-payoff (identical-interest) game; with exact best responses J cannot
+  decrease, J(theta_{r+1}, pi_{r+1}) >= J(theta_{r+1}, pi_r) >= J(theta_r, pi_r), and its fixed
+  points are codes trained for the channel their own scheduler makes. Ours are approximate:
+  the scheduler step is within the certified gaps of section 3 (stand-in: within 0.05-0.19 dB
+  of the best causal policy for the mean) and the model's error (0.03-0.09 dB); the code step
+  is SGD on MSE while J is PSNR (a concave transform: E[PSNR] and -E[MSE] rank codes alike
+  only approximately); and the bank draws histories independently of the training image,
+  where pi decides with the image's own curve (a content-conditioned bank needs a quality
+  predictor for training crops: not built).
+* Why only this tree can close the loop: a round of the loop is cheap because the scheduler runs
+  on the model (a bank of 32,000 histories is a CPU minute, no decoding), and the scheduler can
+  re-plan for a new code from 2P decodes per image. Without a link abstraction every round
+  would need the codec inside the scheduler.
+* The test, round 1 (COMMANDS.txt section 14): four fine-tunes of snrc4 with the same recipe and
+  budget (400 epochs), differing only in the channel: hf (the recipe so far, the control),
+  blind (slope_adv's lengths, every phase in a blindly taken slot: the physical channel at the
+  scheduler's lengths), sa (what slope_adv delivers), sat (what replan_adv delivers at 30 dB).
+  Each decodes the ORIGINAL system's schedules (same users, images and slot SNRs: the code's
+  best response alone), then its own re-planned schedules (the loop closed once). sa - blind
+  isolates the scheduler's slot selection (the claim), blind - hf the lengths and the users'
+  mean SNRs (matched training, the older idea). The scheduler's channel for the retrained
+  codes against the one they trained on (`codesign.py stats --against`) says whether one round
+  is near the fixed point.
+* Theory owed if it passes: (a) the game and its monotone improvement (above), with the two
+  approximation gaps bounded by what section 3 measures; (b) the linear-Gaussian version
+  (analog prefix code of a Gaussian source, per-phase power allocation under a per-phase SNR
+  distribution): the matched allocation, and the loss of the i.i.d.-trained one, in closed form;
+  (c) the information the received length carries about the channel under a given policy,
+  and what an L-conditioned decoder gains from it.
