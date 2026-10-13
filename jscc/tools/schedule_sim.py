@@ -63,6 +63,12 @@ phases left, so every policy can use the whole frame. Policies:
                  need (phases at the mean SNR) that fit in the slots left are served first;
                  spare slots open to all. Content-aware sizing, channel-aware stopping and
                  timing: what only an encode-once prefix code with a mixed-SNR utility allows
+    whittle      (both objectives) the Whittle index of the frame as a restless bandit
+                 (alloc/whittle.py): each user's own dynamic program over (slot, phases
+                 held, accumulated weighted noise) under a slot price; serve the user whose
+                 indifference price for this slot is highest (with --target, a slot nobody
+                 gains from goes to PF). Exact for a --nested utility, an approximation
+                 otherwise
 
 All policies see the same images, mean SNRs and fades (common random numbers). Reported per
 policy: mean PSNR at the deadline, the 5th percentile over users, the worst user of a frame on
@@ -105,9 +111,9 @@ import numpy as np  # noqa: E402
 from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
-                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel")
+                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle")
 TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
-                   "online_pf", "online", "replan_adv")
+                   "online_pf", "online", "replan_adv", "whittle")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
 NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
                 "online", "replan_adv")
@@ -184,6 +190,22 @@ def plan_snr(means, snr, t, offset=0.0, corr=0.0):
 
 
 FILL = "admit"
+_ARMS = {}
+
+
+def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip):
+    """The users' dynamic programs for the whittle policy (alloc/whittle.py), one per user
+    of the frame, cached for the frame (rollouts resume the same frame many times)."""
+    from alloc.whittle import Arm
+    key = (id(belief), tuple(int(i) for i in imgs), tuple(np.round(means, 9)), T, goal, offset,
+           p_avail, tuple(clip))
+    if key not in _ARMS:
+        if len(_ARMS) > 8:
+            _ARMS.clear()
+        _ARMS[key] = [Arm(belief, int(i), float(m) + offset, T, target=goal,
+                          p_lost=1.0 - p_avail, clip=clip) for i, m in zip(imgs, means)]
+    return _ARMS[key]
+
 
 
 def replan_target(belief, imgs, hist, plan, rest, ok, left, P):
@@ -253,7 +275,8 @@ FAILED = -100.0                                               # a lost digital b
 
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
-              t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None):
+              t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None,
+              clip=(-2.0, 22.0)):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame).
@@ -292,6 +315,8 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 tgt[k], left = int(L[k]), left - int(L[k])
         if (fixed_codes or policy.startswith("plan")) and left > 0:   # plan the spare slots
             tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
+    arms = (arms_for(belief, imgs, means, T, goal, offset, p_avail, clip)
+            if policy == "whittle" else None)
     rest = None                                               # online: phases still needed
     if policy in ("stop", "stop_adv", "online_pf", "online", "replan_adv"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
@@ -340,6 +365,15 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                           < replan(belief, imgs, means, hist, int(round((T - t) * p_avail))))
             if below.any():
                 ok = below
+        if arms is not None:                                  # the Whittle index (alloc/whittle.py)
+            idx = np.full(K, -np.inf)
+            for j in np.flatnonzero(ok):
+                n, Y = arms[j].state(hist[j])
+                idx[j] = arms[j].index(t, n, Y, float(g[j]))
+            if np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
+                ok = idx >= idx.max()                         # served below (ties: first)
+            else:
+                ok = has                                      # nobody gains: leftover (PF)
         if not ok.any():
             if fixed_codes and tgt is not None:
                 break                                         # a fixed-length code is complete
@@ -351,7 +385,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             k = next(j for j in order if ok[j])
         elif policy == "maxsnr":
             k = int(np.argmax(np.where(ok, g, -np.inf)))
-        elif policy in PF_TIMING:
+        elif policy in PF_TIMING or policy == "whittle":      # whittle: ok is its choice
             r = rate(g)
             k = int(np.argmax(np.where(ok, r / (served + 1e-3 * r.mean()), -np.inf)))
         else:
@@ -505,7 +539,8 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
             hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg,
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
                              avail, 1.0 - preempt, t_plan, seen,
-                             backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff)
+                             backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
+                             clip=clip)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()

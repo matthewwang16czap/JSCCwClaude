@@ -866,8 +866,10 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
 #   (c) decoded: the per-length-decoder schedules and lost-slot schedules (GPU 5 first, ~40
 #       min), paired across codecs on the same frames (CPU, seconds: tools/replay_report.py).
 #   (d) the per-length decoders at 10% lost slots, 28 dB and K 16 (CPU, minutes).
-#   (e) headroom (CPU, ~20 min in the background, 13.3d): how much ANY scheduler could add over
+#   (e) headroom (CPU, ~40 min in the background, 13.3d): how much ANY scheduler could add over
 #       ours -- the case for (or against) a learned, e.g. reinforcement-learning, policy.
+#   (f) the frame as a restless bandit (CPU, ~45 min, 13.3e): the nested-model gate, the
+#       Whittle index policy and an upper bound on every causal scheduler.
 # Run 13.0, 13.1 (CPU, seconds: the schedules GPU 5 decodes), start 13.2 (GPUs) and 13.3 (CPU,
 # background), do 13.4 while they run, 13.5 when GPU 5 has decoded, 13.6 when training is done.
 
@@ -989,7 +991,7 @@ python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backo
 #        worker; 400 frames x 10 runs ~ 30-40 min with 8 workers
 pip install scipy                      # usually "Requirement already satisfied"
 NW=8                                   # worker processes: at most half the server's cores
-HR="--utility $U $B --frames 400 --workers $NW"
+HR="--utility $U $B --frames 400 --workers $NW --no-whittle --no-causal-bound"
 nohup bash -c "
 python tools/headroom.py $HR --base slope_adv > results/s13_headroom.txt 2>&1 ;
 python tools/headroom.py $HR --base slope_adv --cqi-error 2 >> results/s13_headroom.txt 2>&1 ;
@@ -1001,6 +1003,29 @@ python tools/headroom.py $HR --target 30 --base replan_adv --slots 16 >> results
 python tools/headroom.py $HR --target 30 --base replan_adv --cqi-error 2 >> results/s13_headroom.txt 2>&1 ;
 python tools/headroom.py $HR --target 30 --base replan_adv --preempt 0.25 >> results/s13_headroom.txt 2>&1 ;
 python tools/headroom.py --utility results/utility_hd.json --belief results/belief_hd.json --frames 400 --workers $NW --target 30 --base replan_adv >> results/s13_headroom.txt 2>&1
+" > /dev/null 2>&1 &
+# 13.3e  the frame as a restless bandit (alloc/whittle.py; docs/PROBLEM.md, section 3). First
+#        the gate: does ONE master sensitivity profile serve every prefix length (the "nested"
+#        model)? Then each user's state is two numbers (phases held, accumulated weighted
+#        noise) and the frame decomposes into one small dynamic program per user: the Whittle
+#        index policy, and a Lagrangian upper bound on EVERY causal scheduler. utility_fit
+#        --nested prints its held-out errors next to the free fit's (seconds). Then, on the
+#        nested model, our rules, the rollout, the Whittle policy, the causal bound and the
+#        clairvoyant optimum on the same frames (~45 min, background; NW from 13.3d)
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --nested --out results/utility_snrc4_nested.json \
+  --calib 1 13 --belief-out results/belief_snrc4_nested.json 2>&1 | tee results/s13_nested.txt
+python tools/utility_fit.py --mixed results/p4_full_h48.json results/p4_full_h24.json results/p4_full_h16.json \
+  results/p4_full_h12.json results/p4_full_h5-48.json results/p4_full_h8.json --nested \
+  --out results/utility_hd_nested.json --calib 1 13 --belief-out results/belief_hd_nested.json 2>&1 | tee -a results/s13_nested.txt
+NU="--utility results/utility_snrc4_nested.json --belief results/belief_snrc4_nested.json"
+nohup bash -c "
+python tools/headroom.py $NU --frames 300 --workers $NW --base slope_adv --no-any-order > results/s13_rmab.txt 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --base slope_adv --no-any-order --preempt 0.25 >> results/s13_rmab.txt 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order >> results/s13_rmab.txt 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order --slots 16 >> results/s13_rmab.txt 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order --preempt 0.25 >> results/s13_rmab.txt 2>&1 ;
+python tools/schedule_sim.py $NU --frames 1000 --policies pf fixed_uni slope_adv whittle >> results/s13_rmab.txt 2>&1 ;
+python tools/schedule_sim.py $NU --frames 1000 --target 30 --policies padc_adv online plan_adv replan_adv whittle >> results/s13_rmab.txt 2>&1
 " > /dev/null 2>&1 &
 
 # 13.4 -- CPU, now, ~10 min (foreground)
@@ -1050,6 +1075,7 @@ python tools/schedule_sim.py $HF --preempt 0.25 --target 30 $TQ 2>&1 | tee -a re
 cat results/s13_replays.txt results/s13_hd_more.txt                           # after 13.4-13.5
 cat results/s13_cqi_jscc.txt results/s13_cqi_dig.txt results/s13_cqi_backoff.txt   # 13.3, ~1 h
 cat results/s13_headroom.txt                                                   # 13.3d, ~40 min
+cat results/s13_nested.txt results/s13_rmab.txt                                # 13.3e, ~45 min
 cat results/s13_budget.txt results/s13_hf.txt                                  # after 13.6
 
 # Decision (docs/PAPER.md C5-C7):
@@ -1070,4 +1096,9 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #       online phase-mapping rule (Derman-Lieberman-Ross thresholds) for fixed-quota frames
 #       is worth building; "slot counts ... equals the exact dynamic program in 100%" -> the
 #       greedy quotas are exact on our curves
+#   RMAB (13.3e) nested held-out MAE within ~0.02 dB of the free fit's -> the two-number user
+#       state is exact enough: the restless-bandit formulation frames the paper, and
+#       "causal upper bound" - base is the certified gap of our rule to the best causal
+#       scheduler. whittle = our rule -> the advantage index is the certainty-equivalent
+#       Whittle index and loses nothing; whittle ahead -> adopt it as the method
 #   decoded: hd's and the lost-slot gains hold when the codecs decode the schedules

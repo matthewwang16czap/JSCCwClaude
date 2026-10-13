@@ -15,6 +15,38 @@ prefix encoder with a decoder per received length. The prefix-centred title "Sch
 Encode-Once Deep JSCC Prefixes ..." stays off: per-length decoders close most of the nesting
 penalty at 2-4 phases, not at the ends, and per-CBR codes still win the target with known slots)
 
+## The story as a dynamic program (proposed 2026-10-13)
+
+The learned link-to-system model turns the system into a reward function: a user's PSNR at
+the deadline is a closed-form function of the phases it got and their slot SNRs. The paper
+can then be stated as one stochastic control problem and its solution:
+
+1. Problem: K users, T slots before a deadline, one user per slot, i.i.d. block fading with
+   per-slot CQI (slots possibly lost to other traffic); maximise the expected mean PSNR, or
+   the expected number of users reaching a target. A finite-horizon MDP whose joint state is
+   every user's history: intractable (2K continuous dimensions for the nested model).
+2. Structure: with the nested model each user's state is (n, Y), two numbers; the users are
+   coupled only by "one per slot", so the problem is a finite-horizon restless bandit
+   (weakly coupled DP).
+3. Solution: the Lagrangian (Whittle) decomposition into K single-user DPs on (t, n, Y):
+   an upper bound on every causal scheduler; the Whittle index policy; the advantage index as
+   its certainty-equivalent approximation (why the simple rule works); exact results for the
+   static parts (slot counts by a DP, shortest-first admission for the count) and for
+   perfect foresight (the clairvoyant optimum by column generation, certified).
+4. Results: decoded gains over PF / PADC (unchanged), and the certified optimality gap:
+   our rule against the causal bound and the clairvoyant optimum (stand-in: within 0.2 dB
+   for the mean; 3-6 points left at a 30 dB target, where a better causal policy has room).
+5. Extensions inside the same frame: lost slots, CQI errors (a belief state), per-length
+   decoders, the digital baseline (a step reward), phase order (Derman-Lieberman-Ross).
+
+Not a game: the base station is the only decision maker. The Lagrangian prices read as
+market-clearing slot prices and the index as each user's bid (an auction view of the same
+mathematics); a genuine dynamic game needs strategic users (uplink contention, users
+reporting their own curves) and is a different system, a possible follow-up. Closest prior
+work to distinguish: Hosseini and Panwar's restless bandits for scalable video (digital
+layers, no learned quality model); Yu, Xu and Tong's deadline restless bandits (docs/SURVEY.md
+F2). Gate: COMMANDS 13.3e (the nested model on the real codec, then every bound on it).
+
 ## Claims and their evidence
 
 | # | claim | evidence | status |

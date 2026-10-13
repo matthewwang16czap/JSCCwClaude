@@ -89,14 +89,25 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
      schedule from above, causal or not) and an integer program over the generated columns;
      equal to brute force on small frames, bound - optimum ~0.001 dB at K 8, T 24 on the
      stand-in (certified).
-  3. ONLINE (the real problem: a slot's SNR is known when it starts): the optimal causal
-     policy solves a finite-horizon stochastic dynamic program over every user's history,
-     intractable. The advantage index is a one-step approximation that values a slot not
-     used now as a typical (mean-SNR) slot later; rollout is one policy-improvement step on
-     it; the gradient-scheduler connection (Stolyar; Agrawal and Subramanian: asymptotically
-     optimal for long horizons) is motivation, not a proof for a finite deadline. Gap to state:
-     base <= rollout <= best causal <= clairvoyant optimum <= LP bound, all measured. Stand-in,
-     mean PSNR: rollout +0.06 dB, clairvoyant optimum +0.19; 30 dB: +1.6 / +4.7 points.
+  3. ONLINE (the real problem: a slot's SNR is known when it starts): a finite-horizon
+     restless multi-armed bandit (`alloc/whittle.py`). With the nested model (one master
+     sensitivity profile m for every prefix length, `tools/utility_fit.py --nested`) a
+     user's state is two numbers, n phases held and Y = sum_j m_j phi(n_j), and its quality
+     at the deadline is -10 log10(Dsrc(n) + C(n) Y / sum(m[:n])). The joint program (2K
+     continuous states) is intractable, but the users are coupled only by one user per
+     slot: pricing a slot at lam decomposes it into K single-user programs on (t, n, Y)
+     (Whittle; Hawkins; Adelman and Mersereau), which gives (a) an upper bound on EVERY
+     causal scheduler, (1 - p) T lam + sum_k W_k(lam), minimised over the price; (b) the
+     Whittle index, user k's indifference price for this slot, and the index policy (serve
+     the largest); (c) the advantage index as its certainty-equivalent approximation (the
+     continuation valued at a typical, mean-SNR slot instead of the program's). Checked
+     against exact expectimax on small frames: bound >= best causal >= Whittle. Stand-in,
+     K 8, T 24: the Whittle policy ties our rules (-0.02 dB [-0.04, +0.01] mean PSNR; -0.4
+     points at 30 dB), rollout +0.05 dB / +3.1 points, causal bound +0.20 dB / +5.6 points,
+     clairvoyant optimum +0.19 / +6.3: best causal - our rule is within [+0.05, +0.19] dB
+     for the mean (certified), [+3.1, +5.6] points at 30 dB, where a better causal policy
+     has room. The gradient-scheduler link (Stolyar; Agrawal and Subramanian) stays as the
+     long-horizon motivation.
   4. PHASE ORDER: when a user's slot count is fixed before the frame (fixed quotas, no lost
      slots) the phases need not go in prefix order. For a fixed set of slots the best mapping
      puts the most sensitive phase in the best slot (rearrangement inequality); online, with

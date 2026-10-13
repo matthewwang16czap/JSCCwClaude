@@ -122,11 +122,13 @@ def load_utility(path, **digital):
 
 # -- fitting --------------------------------------------------------------------------
 
-def _fit_level(D, F, fit, iters=60):
+def _fit_level(D, F, fit, iters=60, rho=None):
     """One prefix length: D (N, P) MSEs, F (P, k) phi of each profile's chunks, `fit` the
-    profiles used for fitting. Returns (dsrc (N,), csens (N,), rho (k,))."""
+    profiles used for fitting. Returns (dsrc (N,), csens (N,), rho (k,)); a given `rho` is
+    kept (only dsrc and csens are fitted)."""
     k = F.shape[1]
-    rho = np.full(k, 1.0 / k)
+    fixed = rho is not None
+    rho = np.full(k, 1.0 / k) if rho is None else np.asarray(rho, dtype=np.float64)
     Df, Ff = D[:, fit], F[fit]
     w2 = 1.0 / Df ** 2                                         # relative error ~ PSNR error
     for _ in range(iters):
@@ -138,7 +140,7 @@ def _fit_level(D, F, fit, iters=60):
         c = np.where(safe, (s0 * t1 - s1 * t0) / np.where(safe, det, 1.0), 0.0)
         csens = np.maximum(c, 1e-12)
         dsrc = np.maximum((t0 - csens * s1) / s0, 0.0)
-        if k == 1:
+        if k == 1 or fixed:
             break
         # pooled rho: (D - dsrc) / c ~ F rho, weights c / D, subject to sum(rho) = 1
         Y = (Df - dsrc[:, None]) / csens[:, None]
@@ -158,25 +160,74 @@ def _fit_level(D, F, fit, iters=60):
     return dsrc, csens, rho
 
 
+def nested_rho(master, L):
+    """The NESTED sensitivity model: a prefix of L phases weighs its phases like the first L
+    entries of one master profile (each phase's share relative to the others does not depend
+    on how long the prefix is), so rho_L = master[:L] / sum(master[:L])."""
+    m = np.asarray(master, dtype=np.float64)[:L]
+    return m / m.sum()
+
+
+def _fit_nested(Ds, Fs, masks, iters=40):
+    """Phase levels (level l has l + 1 chunks) under one master profile: alternately every
+    image's dsrc and csens per level, and the master by weighted least squares over all
+    levels (the scale of each level is absorbed by its csens). Returns (master, params)."""
+    P = max(F.shape[1] for F in Fs)
+    longest = int(np.argmax([F.shape[1] for F in Fs]))
+    master = _fit_level(Ds[longest], Fs[longest], masks[longest])[2]
+    for _ in range(iters):
+        params = [_fit_level(D, F, m, rho=nested_rho(master, F.shape[1]))
+                  for D, F, m in zip(Ds, Fs, masks)]
+        rows, rhs = [], []
+        for (d, c, _), D, F, m in zip(params, Ds, Fs, masks):
+            k, S = F.shape[1], master[:F.shape[1]].sum()
+            Df, Ff = D[:, m], F[m]                             # D ~ d + (c / S) F master[:k]
+            W = (c[:, None] / S) / Df                          # relative error weights
+            A = np.zeros((Df.size, P))
+            A[:, :k] = (W[:, :, None] * Ff[None, :, :]).reshape(-1, k)
+            rows.append(A)
+            rhs.append(((Df - d[:, None]) / Df).reshape(-1))
+        A, b = np.concatenate(rows), np.concatenate(rhs)
+        M = np.zeros((P + 1, P + 1))
+        M[:P, :P] = A.T @ A
+        M[:P, P] = M[P, :P] = 1.0
+        new = np.clip(np.linalg.lstsq(M, np.concatenate([A.T @ b, [1.0]]), rcond=None)[0][:P],
+                      1e-9, None)
+        new = new / new.sum()
+        done = np.abs(new - master).max() < 1e-9
+        master = new
+        if done:
+            break
+    params = [_fit_level(D, F, m, rho=nested_rho(master, F.shape[1]))
+              for D, F, m in zip(Ds, Fs, masks)]
+    return master, params
+
+
 def predict_level(dsrc, csens, rho, F):
     """(N, P) predicted MSE of every profile."""
     return dsrc[:, None] + csens[:, None] * (F @ rho)[None, :]
 
 
-def fit(levels, kappas=None):
+def fit(levels, kappas=None, nested=False):
     """levels: [{"key": name, "profiles": (P, k) chunk SNRs, "kinds": [...], "psnr": (N, P)}].
-    Profiles of kind "random" are held out. Returns (kappa, {key: (dsrc, csens, rho)}, report)."""
+    Profiles of kind "random" are held out. Returns (kappa, {key: (dsrc, csens, rho)}, report).
+    nested: one master profile for every level (nested_rho; the levels must be chunked by
+    phase, level with k chunks = the first k phases); the report then holds "master"."""
     if kappas is None:
         kappas = np.logspace(-1, 2, 31)
 
     def run(kappa):
         out, sq, cnt = {}, 0.0, 0
-        for lv in levels:
-            D = 10.0 ** (-np.asarray(lv["psnr"], dtype=np.float64) / 10.0)
-            F = phi(noise(np.asarray(lv["profiles"], dtype=np.float64)), kappa)
-            fit_mask = np.array([kd != "random" for kd in lv["kinds"]])
-            d, c, r = _fit_level(D, F, fit_mask)
-            e = -10 * np.log10(predict_level(d, c, r, F)[:, fit_mask]) + 10 * np.log10(D[:, fit_mask])
+        Ds = [10.0 ** (-np.asarray(lv["psnr"], dtype=np.float64) / 10.0) for lv in levels]
+        Fs = [phi(noise(np.asarray(lv["profiles"], dtype=np.float64)), kappa) for lv in levels]
+        masks = [np.array([kd != "random" for kd in lv["kinds"]]) for lv in levels]
+        if nested:
+            master, params = _fit_nested(Ds, Fs, masks)
+            out["__master__"] = master
+        else:
+            params = [_fit_level(D, F, m) for D, F, m in zip(Ds, Fs, masks)]
+        for lv, D, F, m, (d, c, r) in zip(levels, Ds, Fs, masks, params):
+            e = -10 * np.log10(predict_level(d, c, r, F)[:, m]) + 10 * np.log10(D[:, m])
             sq, cnt = sq + float((e ** 2).sum()), cnt + e.size
             out[lv["key"]] = (d, c, r)
         return np.sqrt(sq / max(cnt, 1)), out
@@ -192,6 +243,7 @@ def fit(levels, kappas=None):
             lo = a
     kappa = 0.5 * (lo + hi)
     rms, params = run(kappa)
+    master = params.pop("__master__", None)
     report = {}
     for lv in levels:
         d, c, r = params[lv["key"]]
@@ -207,4 +259,7 @@ def fit(levels, kappas=None):
                              "p95": float(np.percentile(np.abs(em), 95)), "n": int(em.size)}
         rep["rho"] = r.tolist()
         report[lv["key"]] = rep
-    return kappa, params, {"fit_rms": rms, "levels": report}
+    out = {"fit_rms": rms, "levels": report}
+    if master is not None:
+        out["master"] = master.tolist()
+    return kappa, params, out

@@ -86,7 +86,9 @@ net/modules/            swin.py  transformer.py  rate_mod.py  common.py
 alloc/                  per-image budget policy: core.py (allocation, statistics),
                         sweep.py (curves), predictor.py (the policy), io.py,
                         utility.py (additive noise-sensitivity model of a prefix, for scheduling),
-                        digital.py (separation baseline: codec R-D points + link adaptation)
+                        digital.py (separation baseline: codec R-D points + link adaptation),
+                        whittle.py (the frame as a restless bandit: per-user dynamic programs,
+                        the Whittle index, an upper bound on every causal scheduler)
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
                         mixed_snr.py (prefixes whose chunks arrived at different SNRs)

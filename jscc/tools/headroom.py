@@ -432,6 +432,17 @@ def _work(args):
         sets = [s for _, ss in found for s in ss]
     for lg in (log, rlog):
         sets += [(k, tuple(t for t, kk in lg if kk == k)) for k in range(K)]
+    if o.whittle:                        # the Whittle index policy on the same frame
+        wh = run_frame(util, belief, imgs, means, snr, "whittle", 0.0, o.target, o.margin,
+                       o.plan_offset, avg, 0.0, False, avail, 1.0 - o.preempt, o.t_plan, seen,
+                       clip=tuple(o.snr_clip))
+        res["whittle"] = score(util, imgs, wh, o.target)
+    if o.causal and f < o.bound_frames:  # the Lagrangian bound on every causal scheduler
+        from alloc.whittle import Arm, lagrangian_bound
+        arms = [Arm(util, int(i), float(m), o.slots, target=o.target, p_lost=o.preempt,
+                    clip=tuple(o.snr_clip)) for i, m in zip(imgs, means)]
+        ub, _ = lagrangian_bound(arms, o.slots, o.preempt, per_slot=o.price_steps)
+        res["causal_bound"] = ub / K
     if o.bound and f < o.bound_frames:
         for tag, free in (("", False), ("_any", True))[:2 if o.any_order else 1]:
             lo, up, h = clairvoyant(util, imgs, snr, avail, o.target, free, sets)
@@ -480,6 +491,13 @@ def main():
                     help="the optimum and bound on the first N frames only (default: all)")
     ap.add_argument("--no-any-order", dest="any_order", action="store_false",
                     help="skip the clairvoyant optimum with phases mapped by sensitivity")
+    ap.add_argument("--no-whittle", dest="whittle", action="store_false",
+                    help="skip the Whittle index policy (alloc/whittle.py)")
+    ap.add_argument("--no-causal-bound", dest="causal", action="store_false",
+                    help="skip the Lagrangian upper bound on every causal scheduler")
+    ap.add_argument("--price-steps", type=int, default=0,
+                    help="causal bound: subgradient steps on a price per slot after the best "
+                         "constant price (0: the constant price only)")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     o = ap.parse_args()
@@ -505,6 +523,17 @@ def main():
     if o.bound:
         for L in range(1, util.P + 1):                    # built once, shared by the workers
             combos(o.slots, L)
+    if o.causal or o.whittle:
+        from alloc.whittle import master_profile
+        dev = max(master_profile(util, i)[1] for i in range(len(util.names)))
+        if dev > 1e-6:
+            print(f"note: the utility is not nested (largest rho deviation {dev:.3f}): the "
+                  f"whittle policy and the causal bound use its nested approximation; fit with "
+                  f"tools/utility_fit.py --nested for an exact bound")
+        if o.fade_corr > 0 or o.cqi_error > 0:
+            print("note: the causal bound assumes i.i.d. fading and exact CQI (ignores "
+                  "--fade-corr / --cqi-error): not a bound in that setting")
+            o.causal = False
     frames = list(draw_frames(util, o.users, o.slots, o.frames, o.mean_snr, o.fading, o.snr_clip,
                               o.seed, False, 0.0, belief, o.fade_corr, o.preempt, o.cqi_error))
     _G.update(o=o, util=util)
@@ -531,9 +560,11 @@ def main():
              "optimum": "clairvoyant optimum found", "bound": "clairvoyant upper bound",
              "base_remapped": "base, phases mapped by sensitivity",
              "optimum_any": "clairvoyant optimum, any phase order",
-             "bound_any": "clairvoyant bound, any phase order"}
-    order = ["base", "rollout", "oracle", "optimum", "bound", "base_remapped", "optimum_any",
-             "bound_any"]
+             "bound_any": "clairvoyant bound, any phase order",
+             "whittle": "whittle index policy (causal)",
+             "causal_bound": "causal upper bound (Lagrangian)"}
+    order = ["base", "rollout", "whittle", "causal_bound", "oracle", "optimum", "bound",
+             "base_remapped", "optimum_any", "bound_any"]
     for k in order:
         rows = [r for r in res if k in r]
         if not rows:

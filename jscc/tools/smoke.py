@@ -675,6 +675,65 @@ def check_schedule():
     rl = np.array([3.0, 12.0, 7.0])
     ok(by_sensitivity(u, 0, rl.tolist()) == [12.0, 7.0, 3.0],
        "phases mapped by sensitivity: the best slot to the first (most sensitive) phase")
+    from functools import lru_cache
+    from alloc.utility import fit as fit_u, nested_rho
+    from alloc.whittle import Arm, lagrangian_bound
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    lv = []
+    for L in range(1, P + 1):
+        prof, kinds = make_profiles("full", L, grid, 7.0, 8, rng)
+        F = phi(noise(np.array(prof)), kappa)
+        D = dsrc[:, L - 1:L] + csens[:, L - 1:L] * (F @ nested_rho(master, L))[None, :]
+        lv.append({"key": str(L), "profiles": prof, "kinds": kinds,
+                   "psnr": (-10 * np.log10(D)).tolist()})
+    _, _, nrep = fit_u(lv, nested=True)
+    ok(np.abs(np.array(nrep["master"]) - master).max() < 0.005,
+       f"--nested fit: one master sensitivity profile for every prefix length, recovered "
+       f"({np.round(nrep['master'], 3).tolist()})")
+    fd, fw = np.array([-6.0, 0.0, 4.0]), np.array([0.3, 0.4, 0.3])  # a discrete fading law
+
+    def exact(imgs, means, T, tg, policy=None):
+        """The best causal schedule's expected value (or a policy's), by full expectimax."""
+        K = len(imgs)
+        outs = list(itertools.product(range(len(fd)), repeat=K))
+
+        def U(k, h):
+            q = u.psnr(imgs[k], list(h))
+            return q if tg is None else float(q >= tg)
+
+        @lru_cache(maxsize=None)
+        def V(t, hs):
+            if t == T:
+                return sum(U(k, h) for k, h in enumerate(hs))
+            tot = 0.0
+            for o in outs:
+                pr = float(np.prod([fw[b] for b in o]))
+                gs = [float(np.clip(means[k] + fd[o[k]], -2, 22)) for k in range(K)]
+                nxt = [tuple(h + (gs[k],) if j == k else h for j, h in enumerate(hs))
+                       for k in range(K) if len(hs[k]) < P]
+                if policy is None:
+                    tot += pr * max([V(t + 1, hs)] + [V(t + 1, h2) for h2 in nxt])
+                else:
+                    w = [policy[k].index(t, *policy[k].state(list(hs[k])), gs[k]) for k in range(K)]
+                    k = int(np.argmax(w))
+                    tot += pr * V(t + 1, tuple(h + (gs[k],) if j == k else h
+                                               for j, h in enumerate(hs)))
+            return tot
+        return V(0, tuple(() for _ in range(K)))
+
+    one = Arm(u, 1, 6.0, 3, ny=3000, fade_db=fd, fade_w=fw)
+    rows = []
+    for imgs, means, T, tg in (([0, 3], [3.0, 9.0], 3, None), ([1, 4, 5], [2.0, 8.0, 13.0], 3, None),
+                               ([0, 3], [3.0, 9.0], 3, 30.0)):
+        arms = [Arm(u, i, m, T, target=tg, ny=1500, fade_db=fd, fade_w=fw) for i, m in zip(imgs, means)]
+        ub, _ = lagrangian_bound(arms, T)
+        rows.append((ub, exact(imgs, means, T, tg), exact(imgs, means, T, tg, arms)))
+    rows = np.array(rows)
+    ok(abs(one.value(0.0) - exact([1], [6.0], 3, None)) < 1e-4
+       and np.all(rows[:, 0] >= rows[:, 1] - 1e-4) and np.all(rows[:, 1] >= rows[:, 2] - 1e-9),
+       f"restless bandit (alloc/whittle.py): a user's program = exact expectimax; Lagrangian bound "
+       f">= best causal schedule >= Whittle index policy (exact, small frames; policy within "
+       f"{(rows[:, 1] - rows[:, 2]).max():.3f}, bound within {(rows[:, 0] - rows[:, 1]).max():.3f})")
     if importlib.util.find_spec("scipy") is None:
         print("    --  clairvoyant optimum: skipped (pip install scipy)")
         return

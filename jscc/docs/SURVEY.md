@@ -97,6 +97,22 @@ curves, so the margin of the rule itself is measured. What is less common: a
 single prefix code fine enough (one token = 4 complex symbols per 256 px tile) that the
 allocation is exact with time-sharing and needs no side information.
 
+## F2. Scheduling as a restless bandit (checked 2026-10-13)
+
+| work | what | relation |
+|---|---|---|
+| Hosseini and Panwar, "Restless Video Bandits: Optimal SVC Streaming in a Multi-user Wireless Network" ([1612.03985](https://arxiv.org/abs/1612.03985)) | scalable (layered) video users with deadlines scheduled as a restless bandit, solved as an LP, scales with users; up to 2x users admitted at a quality | **the closest precedent** for a layered code + restless bandit: to cite and distinguish. Their layers are digital (a layer decodes or not, link adaptation per layer); ours is a deep JSCC prefix whose every phase degrades smoothly with its slot's SNR, with a learned, calibrated per-image quality model as the reward, a QoS target, and lost slots |
+| Yu, Xu and Tong, "Deadline Scheduling as Restless Bandits," IEEE TAC 2018 ([1610.00399](https://arxiv.org/abs/1610.00399)) | jobs with deadlines as a restless bandit; indexable, closed-form Whittle index for constant costs; gap bound vanishing with scale | the deadline-RMAB template (finite horizon, time-dependent index, asymptotic optimality) |
+| Borkar, Kasbekar, Pattathil and Shetty, "Opportunistic Scheduling as Restless Bandits," IEEE TCNS 2018 ([1706.09778](https://arxiv.org/abs/1706.09778)) | opportunistic multi-user scheduling over fading as a restless bandit with Whittle indices | fading + Whittle index precedent (queues and energy, not content quality) |
+| NeurWIN (NeurIPS 2021); outcome-fair deadline RMABs ([2607.23772](https://arxiv.org/abs/2607.23772)); uncertainty-of-information RMAB ([2102.06384](https://arxiv.org/abs/2102.06384)); significance-driven semantic communication ([2608.28441](https://arxiv.org/abs/2608.28441)) | learned Whittle indices; fairness; information-centric rewards; RMAB named for semantic resource allocation | if the index has to be learned (CQI errors, correlated fading), the learned-index route; semantic RMABs so far use abstract rewards, not a decoded image-quality model |
+
+No paper found (searches of 2026-10-13) schedules a deep JSCC code with a learned image-quality
+reward as a restless bandit. Anchors for the theory: Whittle (J. Appl. Probab. 1988); Weber and
+Weiss (J. Appl. Probab. 1990, asymptotic optimality); Hawkins (MIT thesis 2003) and Adelman and
+Mersereau (Oper. Res. 2008), Lagrangian relaxations of weakly coupled dynamic programs; Brown and
+Smith (Manag. Sci. 2020), index policies and bounds for finite-horizon selection problems;
+Derman, Lieberman and Ross (Manag. Sci. 1972), sequential stochastic assignment (phase order).
+
 ## G. Theory anchors
 
 * Successive refinement (Equitz and Cover 1991; Rimoldi 1994): a Gaussian source under MSE is
