@@ -1,11 +1,10 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-14. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-14 (b). Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 17, at the end: every section-13 command, written out in full, each one
-skipped if its output already exists (so whatever 16 already ran is not repeated). Sections
-0-16 are the record; 13's text stays for reference, run nothing from it.
+WHAT TO RUN: NOTHING YET (section 18). Everything through section 17 is done and recorded in
+docs/NOTES.md; the next runs wait for the choice of next steps (docs/PAPER.md, "Still owed").
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -29,8 +28,8 @@ skipped if its output already exists (so whatever 16 already ran is not repeated
      (round 2: specialist, shuffle, K 16, PF)
   16 section 13 + seed replicates of sa and   replicates done (docs/NOTES.md "P2, round 2");
      fs16                                     its section-13 part moved to 17
-  17 section 13's measurements, in full       TO RUN NOW (~4 h GPU if FS12/FS24 are not done,
-                                              ~2 h CPU)
+  17 section 13's measurements, in full       done (docs/NOTES.md "P1, step 8")
+  18 (nothing yet)                            TO RUN NOW: nothing; waiting for the next choice
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -1582,7 +1581,7 @@ cat results/s16_seeds.txt
 # (C5-C7, RL, ABS, RMAB) are in its own block.
 
 ================================================================================
- 17. TO RUN NOW -- section 13's measurements, written out in full (docs/PAPER.md C5-C7)
+ 17. SECTION 13'S MEASUREMENTS, IN FULL -- DONE (docs/NOTES.md "P1, step 8"; PAPER C5-C7, C12-C13)
 ================================================================================
 # Why: these are the paper's anchors. 17.4 (link abstractions) decides the main claim, that a
 # learned code's slots add as sensitivity-weighted MMSEs and not as bits (capacity averaging,
@@ -1789,3 +1788,10 @@ cat results/s13_budget.txt                                                     #
 #   same name; `ls results/s13_*.tmp` lists the ones not finished)
 
 # Decision: section 13's block (C5, C6, C7, RL, ABS, RMAB) -- unchanged.
+
+================================================================================
+ 18. TO RUN NOW -- nothing yet
+================================================================================
+# Sections 14-17 are done and recorded. The next runs depend on which of the owed items comes
+# next (docs/PAPER.md, "Still owed": an online phase-to-slot mapping rule, CPU; a second test
+# set and a perceptual metric, GPU; the writing). Nothing to launch until then.
