@@ -129,6 +129,19 @@ IEEE Transactions on Wireless Communications (TWC).
    channel's SNR range is centred where the scheduler's is (10 dB), and a 3-phase specialist
    recovers most of the 1/16 nesting penalty (+0.17 dB over snrc4 in section 10) -- so a
    strong TWC headline is not yet in hand; the next round says whether it is.
+15. **Round 2 (2026-10-14, COMMANDS 15): the idea is real and small.** Of the +0.28 dB the
+   scheduler-trained code gains on the same slots, +0.16 is the one length slope_adv's quotas
+   give (a 3-phase specialist on the generic channel gets it too) and +0.12 the scheduler's
+   channel; the slots' order is a third of that; with 16 users +0.15. What is genuinely new
+   and clean is the mechanism: training on the physical channel loses to generic training,
+   and each code learns its scheduler (kappa tracks how rare deep fades are, the phase weights
+   move to the phase the scheduler favours: an automatic unequal error protection). A tenth of
+   a dB will not carry a TWC paper as its headline, and I would not spin it as one. The honest
+   paper is "the code-scheduler interface", both directions (docs/PAPER.md): the utility the
+   scheduler needs (the MMSE abstraction, the restless bandit, certified near-optimal index:
+   the larger gains) and the channel the code sees (selection-biased; train for it; it learns
+   it). If you and your supervisor want a single bigger new idea instead, it has to be a new
+   problem (e.g. refine-or-refresh for status updates), not more of this one.
 
 ## 1. Your four points, checked
 

@@ -821,3 +821,70 @@ whether sa's +0.28 over hf is the scheduler's channel or the one length it train
 specialist on the generic channel, FS16, is the control), whether the code uses which phase
 gets the good slot (a shuffled bank), and whether the gain grows with the number of users
 (more selection): COMMANDS section 15.
+
+## Problem P2, round 2 (2026-10-14): the scheduler's channel, or one prefix length?
+
+COMMANDS.txt section 15. Four more fine-tunes at the same recipe and budget: fs16 (snrc4 + 400
+epochs at 1/16 on the usual chunk SNRs: a 3-phase specialist on the generic channel), shuf
+(sa's histories with each user's phases permuted over its own slots), k16 (slope_adv's channel
+with 16 users, 48 slots), pf (PF's channel).
+
+**Section 14's slots** (K 8, 150 frames, the same users, images and slot SNRs for every code;
+decoded mean PSNR, dB):
+
+| code | slope_adv | minus fs16 | pf slots | minus hf (pf slots) |
+|---|---|---|---|---|
+| snrc4 | 31.512 | -0.255 | 31.036 | -0.103 |
+| hf | 31.607 | -0.160 | 31.139 | 0 |
+| blind | 31.563 | -0.204 | 30.779 | -0.360 |
+| fs16 (3-phase specialist, generic channel) | 31.767 | 0 | 30.252 | -0.888 |
+| sat | 31.688 | -0.079 | 31.161 | +0.021 |
+| pf (PF's channel) | 31.722 | -0.045 | **31.319** | **+0.180** |
+| shuf | 31.843 | +0.076 | 31.194 | +0.055 |
+| sa | 31.885 | **+0.118** [0.110, 0.124] | 31.228 | +0.089 |
+| k16 | **31.899** | +0.132 | 31.282 | +0.143 |
+
+**16 users, 48 slots** (150 frames): fs16 31.970, sa 32.099 (+0.129 [0.119, 0.142] over fs16),
+k16 32.122 (+0.151 [0.141, 0.164]); over hf: fs16 +0.163, sa +0.292, k16 +0.314.
+
+**The selection the code trains for** (slope_adv's lift of phases 1 / 2 / 3 over the user's
+mean SNR, dB): K 2 +0.60 / -0.46 / -0.96; K 4 +2.16 / +1.28 / +0.40; K 8 +3.21 / +2.66 / +1.83;
+K 16 +3.92 / +3.63 / +2.99; K 24 +4.29 / +4.10 / +3.57 (it grows like an order statistic of the
+users' fades). PF's channel is the other way round: 2-4 phases (70% get 3), lifts +1.26 /
++2.07 / +2.70 / +3.65 rising along the code (a user is served when its rate ratio is high,
+which comes after its average has fallen).
+
+**What each code learned** (fit; kappa, then rho at 1/16):
+
+| code | its channel | kappa | rho (phase 1 / 2 / 3) |
+|---|---|---|---|
+| blind | blind slots, -1.8 dB lift, many deep fades | 1.60 | 0.416 / 0.316 / 0.269 |
+| hf | i.i.d. chunks over [-2, 22] dB | 1.73 | 0.565 / 0.266 / 0.169 |
+| fs16 | the same, 3 phases | 1.88 | 0.440 / 0.282 / 0.278 |
+| pf | PF: later phases in better slots | 1.96 | 0.366 / **0.418** / 0.216 |
+| sat | replan_adv | 2.43 | 0.619 / 0.237 / 0.145 |
+| shuf | sa's slots, order shuffled (+2.6 dB each) | 2.55 | 0.504 / 0.291 / 0.205 |
+| sa | slope_adv: +3.2 / +2.7 / +1.8 dB | 2.78 | 0.566 / 0.267 / 0.167 |
+| k16 | slope_adv, 16 users: +3.9 / +3.6 / +3.0 dB | 3.06 | 0.543 / 0.285 / 0.172 |
+
+Two regularities. The noise saturation kappa rises as the channel's deep fades get rarer
+(blind < generic < PF < the selected channels, highest at K 16): the code gives up robustness
+to noise its scheduler never delivers. The phase weights follow which phase the scheduler
+favours: the PF code makes phase 2 its most sensitive phase, slope_adv's codes phase 1; with the
+order shuffled the profile flattens. A learned code does unequal error protection by itself,
+matched to its scheduler.
+
+**Constant SNR at 1/16** (Kodak, mean over 1-13 dB, against fs16): hf -0.164, sa +0.043, shuf
++0.030, k16 +0.048, blind -0.143. Every scheduler-trained code collapses at lengths its
+scheduler never gives (fs16 -7.4 dB at 1-2 phases, pf -5.6 at 1, shuf -3.9 at 1, k16 -1.9 at 1).
+sat, the only one trained on all lengths, costs nothing anywhere (+0.045 over hf on average).
+
+**Verdict** (COMMANDS 15): D1 sa - fs16 +0.118 dB, between the bars: of sa's +0.28 over hf,
++0.16 is training for the one length slope_adv's quotas give, +0.12 the scheduler's channel --
+real (tight CI, +0.13 / +0.15 again with 16 users) but small. D2 the order is a third of it
+(sa - shuf +0.042), the SNR levels the rest. D3 it grows a little with the users' number
+(+0.118 at K 8, +0.151 at K 16), as the lift does. D4 holds both ways (the PF code +0.09 over sa
+under PF slots, sa +0.16 over it under slope_adv). The mechanism is clean and the training
+distribution clearly matters (training on the physical channel loses 0.2-0.3 dB), but beyond
+the length the decoded value is about a tenth of a dB: a contribution, not a headline. Open: a
+seed replicate of sa and fs16 (COMMANDS 16), since the frame CIs do not cover training noise.
