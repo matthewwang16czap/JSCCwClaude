@@ -888,3 +888,13 @@ under PF slots, sa +0.16 over it under slope_adv). The mechanism is clean and th
 distribution clearly matters (training on the physical channel loses 0.2-0.3 dB), but beyond
 the length the decoded value is about a tenth of a dB: a contribution, not a headline. Open: a
 seed replicate of sa and fs16 (COMMANDS 16), since the frame CIs do not cover training noise.
+
+**Seed replicates** (COMMANDS 16.4; sa and fs16 trained again with --seed 2, decoded on the same
+K 8 slots): fs16b - fs16 +0.001 dB [-0.001, +0.002] (the specialist is seed-stable); sa - fs16
++0.118, sa - fs16b +0.117, sab - fs16 +0.079 [0.071, 0.086], sab - fs16b +0.079; sab - sa -0.039.
+At constant SNR (1/16, mean over 1-13 dB) sa's +0.043 over fs16 does not replicate (sab +0.002,
+fs16b -0.003). So the scheduler's channel is worth +0.08 to +0.12 dB beyond the length (mean
++0.10, seed spread 0.04) ON THE SCHEDULED SLOTS, and about nothing at constant SNR: the second
+seed's code is no better a 3-phase code in general, only on the channel it trained for. The
+pre-registered rule (all four >= +0.08) is met to within 0.001 dB: report C8 as "+0.10 dB
+[+0.08, +0.12] across seeds, specific to the scheduler's channel".

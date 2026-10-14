@@ -3,9 +3,9 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 16, at the end. It runs section 13 (deferred until now: 16 points into
-it block by block) and two seed replicates of section 15's decisive pair. Sections 0-12, 14
-and 15 are the record.
+WHAT TO RUN: SECTION 17, at the end: every section-13 command, written out in full, each one
+skipped if its output already exists (so whatever 16 already ran is not repeated). Sections
+0-16 are the record; 13's text stays for reference, run nothing from it.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -27,8 +27,10 @@ and 15 are the record.
                                               (15.0 re-runs 14.3c)
   15 the scheduler's channel or one length?   done (docs/NOTES.md "P2, round 2")
      (round 2: specialist, shuffle, K 16, PF)
-  16 section 13 + seed replicates of sa and   TO RUN NOW (~5 h on GPUs 2-5, ~2 h CPU)
-     fs16
+  16 section 13 + seed replicates of sa and   replicates done (docs/NOTES.md "P2, round 2");
+     fs16                                     its section-13 part moved to 17
+  17 section 13's measurements, in full       TO RUN NOW (~4 h GPU if FS12/FS24 are not done,
+                                              ~2 h CPU)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -854,7 +856,7 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
 #   decoded: the per-CBR and replan_adv gains hold when the codecs decode the schedules
 
 ================================================================================
- 13. NOT RUN YET -- runs as part of section 16 (16.0 and 16.2 replace 13.0 and 13.2)
+ 13. REFERENCE ONLY -- every command of it is in section 17 (run 17, not this)
      (docs/NOTES.md "P1, step 7"; docs/PAPER.md C5-C7)
 ================================================================================
 # Section 12: with the same slot planner, one model per CBR still leads the prefix code by
@@ -1461,7 +1463,7 @@ cat results/s15_const.txt results/s15_fits.txt              # 15.3c
 #   cost  15.3c: the price of each code at constant SNR (1/16 and all lengths)
 
 ================================================================================
- 16. TO RUN NOW -- section 13 (not run yet) and two seed replicates of section 15's pair
+ 16. SEED REPLICATES OF SECTION 15'S PAIR -- DONE; its section-13 part is section 17
      (docs/NOTES.md "P2, round 2"; docs/PAPER.md C5-C11; ~5 h on GPUs 2-5, ~2 h CPU)
 ================================================================================
 # Section 15, decoded on section 14's slots (K 8): sa - fs16 = +0.118 dB [0.110, 0.124] -- of
@@ -1578,3 +1580,212 @@ cat results/s16_seeds.txt
 # (state it with the seed spread). Any of them <= +0.03: seed noise is the size of the effect;
 # report C8 as "length specialisation plus at most a few hundredths". Section 13's decisions
 # (C5-C7, RL, ABS, RMAB) are in its own block.
+
+================================================================================
+ 17. TO RUN NOW -- section 13's measurements, written out in full (docs/PAPER.md C5-C7)
+================================================================================
+# Why: these are the paper's anchors. 17.4 (link abstractions) decides the main claim, that a
+# learned code's slots add as sensitivity-weighted MMSEs and not as bits (capacity averaging,
+# the MIESM of digital system simulation); 17.3a decides whether JSCC pulls ahead of digital
+# with 1-3 dB CQI errors; 17.3b-c say how close our scheduler is to the best possible one.
+# Everything is skipped if its output file already exists ([ -s FILE ] || ...), so it is safe
+# to run all of it even if parts of section 16 ran. Order: 17.0, 17.1, start 17.2 (GPUs) and
+# 17.3 (CPU, background), do 17.4 while they run, then 17.5 when the GPUs are done.
+
+# 17.0 -- setup and status, ~5 min CPU -----------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+pip install scipy                              # usually "Requirement already satisfied"
+mkdir -p results logs_s13 logs_s17
+nvidia-smi -i 2,3,4,5
+cat > logs_s17/env.sh <<'ENV'
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+SIM="--utility $U --frames 2000"
+HDB="--utility results/utility_hd.json --belief results/belief_hd.json"
+HD="$HDB --frames 2000"
+PCB="--utility results/utility_percbr.json --belief results/belief_percbr.json --fixed-codes"
+PC="$PCB --frames 2000"
+DH6="--utility results/rd_heic.json --frames 2000 --digital-max-phases 6"
+REPF="--img-size 256 --channel-type awgn --amp --testset Kodak --design file --backbone vit"
+SPEC="${VT}_snrc4_fix1-48_s1/models/last.pt ${VT}_snrc4_fix1-24_s1/models/last.pt \
+  ${VT}_snrc4_fix1-16_s1/models/last.pt ${VT}_snrc4_fix1-12_s1/models/last.pt \
+  ${VT}_snrc4_fix5-48_s1/models/last.pt ${VT}_snrc4_fix1-8_s1/models/last.pt"
+HDEC="${VT}_snrc4_fix1-48_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-24_frz-enc_h1/models/last.pt \
+  ${VT}_snrc4_fix1-16_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-12_frz-enc_h1/models/last.pt \
+  ${VT}_snrc4_fix5-48_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-8_frz-enc_h1/models/last.pt"
+# full fine-tunes of snrc4_s1 (encoder AND decoder), its recipe otherwise: the same start and
+# the same 400 epochs as the per-length decoders of sections 11-12
+FTF="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag f1 --snr-chunks 4 --backbone vit --pretrained $SNRC4"
+MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --design full --chunks phase --random-profiles 10 --backbone vit"
+ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
+TQ="--policies padc_adv plan_adv online replan_adv"
+NW=8
+HR="--utility $U $B --frames 400 --workers $NW --no-whittle --no-causal-bound"
+NU="--utility results/utility_snrc4_nested.json --belief results/belief_snrc4_nested.json"
+HF="--utility results/utility_hf.json --belief results/belief_hf.json --frames 2000"
+ENV
+. logs_s17/env.sh
+#   what exists already (anything listed here is skipped below):
+ls -l results/s13_* ${VT}_snrc4_fix1-12_f1/logs/test_per_image.json   ${VT}_snrc4_fix1-24_f1/logs/test_per_image.json 2>&1 | grep -v "No such file" | cut -c30-
+#   inputs that must exist (all from earlier sections; send me any line saying "No such file"):
+ls results/utility_hd.json results/belief_hd.json results/utility_percbr.json   results/belief_percbr.json results/rd_heic.json results/p2_full_snrc4.json results/p2_full_s1.json   results/p4_full_h48.json results/p3_full_fix1.json results/s12_dec_percbr_tgt.json   results/s12_dec_prefix_tgt.json results/s12_dec_percbr_mean.json results/utility_hf.json > /dev/null
+
+# 17.1 -- CPU, ~1 min: the 60-frame schedules GPU 5 decodes (section 12's seed and frames, so
+#   every file holds the same frames and the codecs pair frame by frame)
+. logs_s17/env.sh
+[ -s results/s13_rep_prefix_mean_histories.json ] || python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --policies fixed_uni slope_adv --out results/s13_rep_prefix_mean.json
+[ -s results/s13_rep_hd_mean_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --policies fixed_uni slope_adv --out results/s13_rep_hd_mean.json
+[ -s results/s13_rep_hd_tgt_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --target 30 --margin 0.3 $TQ --out results/s13_rep_hd_tgt.json
+[ -s results/s13_rep_hd_lostm_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --preempt 0.25 --policies slope_adv --out results/s13_rep_hd_lostm.json
+[ -s results/s13_rep_percbr_lostm_histories.json ] || python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.1 --policies slope_adv --out results/s13_rep_percbr_lostm.json
+[ -s results/s13_rep_hd_lost_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --preempt 0.25 --target 30 --margin 0.3 --policies online replan_adv --out results/s13_rep_hd_lost.json
+[ -s results/s13_rep_percbr_lost_histories.json ] || python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.25 --target 30 --margin 0.3 --policies padc_adv --out results/s13_rep_percbr_lost.json
+ls results/s13_rep_*_histories.json | wc -l    # 7
+
+# 17.2 -- GPUs 2, 3, 5: the equal-budget specialists FS12 / FS24 (~4 h each, skipped if their
+#   test already ran) and the seven decodes of 17.1's schedules (~40 min). GPU 4 is free
+. logs_s17/env.sh
+nohup bash -c "
+[ -s ${VT}_snrc4_fix1-12_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s ${VT}_snrc4_fix1-24_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s13_dec_prefix_mean.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
+[ -s results/s13_dec_hd_mean.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
+[ -s results/s13_dec_hd_tgt.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
+[ -s results/s13_dec_hd_lostm.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
+[ -s results/s13_dec_hd_lost.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
+[ -s results/s13_dec_percbr_lostm.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
+[ -s results/s13_dec_percbr_lost.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1
+" > /dev/null 2>&1 &
+sleep 60; tail -n 2 logs_s13/*.out; ls results/s13_dec_*.txt 2>/dev/null
+
+# 17.3 -- CPU, in the background (~1-1.5 h, four chains; 17.3b-c use NW=8 workers each: lower NW
+#   in logs_s17/env.sh if the server has fewer than ~32 cores)
+. logs_s17/env.sh
+# 17.3a  CQI errors of sd 0 / 1 / 2 / 3 dB, the same frames at every sd: JSCC (prefix, a decoder
+#        per length, one model per CBR) and digital (HEIC, 6 slots; the LTE CQI table and a 3 dB-
+#        gap code, each policy at its best backoff, tuned on 300 other frames), then fixed backoffs
+nohup bash -c "
+[ -s results/s13_cqi_jscc.txt ] || {
+python tools/schedule_sim.py $SIM $B --policies pf fixed_uni slope_adv --cqi-error 0 1 2 3 > results/s13_cqi_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --policies pf fixed_uni slope_adv --cqi-error 0 1 2 3 >> results/s13_cqi_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $PC --policies fixed_uni slope_adv --cqi-error 0 1 2 3 >> results/s13_cqi_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $SIM $B --target 30 --policies online plan_adv replan_adv --cqi-error 0 1 2 3 >> results/s13_cqi_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --policies online plan_adv replan_adv --cqi-error 0 1 2 3 >> results/s13_cqi_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $PC --target 30 --policies padc_adv --cqi-error 0 1 2 3 >> results/s13_cqi_jscc.tmp 2>&1 ;
+mv results/s13_cqi_jscc.tmp results/s13_cqi_jscc.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s13_cqi_backoff.txt ] || {
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 0 1 2 3 > results/s13_cqi_dig.txt 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --link shannon --gap-db 3 --cqi-error 0 1 2 3 >> results/s13_cqi_dig.txt 2>&1 ;
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-error 0 1 2 3 >> results/s13_cqi_dig.txt 2>&1 ;
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --link shannon --gap-db 3 --cqi-error 0 1 2 3 >> results/s13_cqi_dig.txt 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 0 > results/s13_cqi_backoff.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 1 >> results/s13_cqi_backoff.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 2 >> results/s13_cqi_backoff.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 3 >> results/s13_cqi_backoff.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 2 --cqi-backoff 4 >> results/s13_cqi_backoff.tmp 2>&1 ;
+mv results/s13_cqi_backoff.tmp results/s13_cqi_backoff.txt ; }
+" > /dev/null 2>&1 &
+# 17.3b  headroom: rollout (what a better causal rule, a trained RL one included, could add at
+#        least) and the clairvoyant optimum with its certificate (what nothing can beat)
+nohup bash -c "
+[ -s results/s13_headroom.txt ] || {
+python tools/headroom.py $HR --base slope_adv > results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --cqi-error 2 >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --fade-corr 0.9 --plan conditional >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --base slope_adv --preempt 0.25 >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --target 30 --base plan_adv >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --slots 16 >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --cqi-error 2 >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py $HR --target 30 --base replan_adv --preempt 0.25 >> results/s13_headroom.tmp 2>&1 ;
+python tools/headroom.py --utility results/utility_hd.json --belief results/belief_hd.json --frames 400 --workers $NW --target 30 --base replan_adv >> results/s13_headroom.tmp 2>&1 ;
+mv results/s13_headroom.tmp results/s13_headroom.txt ; }
+" > /dev/null 2>&1 &
+# 17.3c  the restless bandit: first the nested-model gate (seconds, foreground), then our rules,
+#        the Whittle policy, the causal upper bound and the clairvoyant optimum on it
+[ -s results/s13_nested.txt ] || {
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --nested --out results/utility_snrc4_nested.json   --calib 1 13 --belief-out results/belief_snrc4_nested.json 2>&1 | tee results/s13_nested.tmp ;
+python tools/utility_fit.py --mixed results/p4_full_h48.json results/p4_full_h24.json results/p4_full_h16.json   results/p4_full_h12.json results/p4_full_h5-48.json results/p4_full_h8.json --nested   --out results/utility_hd_nested.json --calib 1 13 --belief-out results/belief_hd_nested.json 2>&1 | tee -a results/s13_nested.tmp ;
+mv results/s13_nested.tmp results/s13_nested.txt ; }
+nohup bash -c "
+[ -s results/s13_rmab.txt ] || {
+python tools/headroom.py $NU --frames 300 --workers $NW --base slope_adv --no-any-order > results/s13_rmab.tmp 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --base slope_adv --no-any-order --preempt 0.25 >> results/s13_rmab.tmp 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order >> results/s13_rmab.tmp 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order --slots 16 >> results/s13_rmab.tmp 2>&1 ;
+python tools/headroom.py $NU --frames 300 --workers $NW --target 30 --base replan_adv --no-any-order --preempt 0.25 >> results/s13_rmab.tmp 2>&1 ;
+python tools/schedule_sim.py $NU --frames 1000 --policies pf fixed_uni slope_adv whittle >> results/s13_rmab.tmp 2>&1 ;
+python tools/schedule_sim.py $NU --frames 1000 --target 30 --policies padc_adv online plan_adv replan_adv whittle >> results/s13_rmab.tmp 2>&1 ;
+mv results/s13_rmab.tmp results/s13_rmab.txt ; }
+" > /dev/null 2>&1 &
+
+# 17.4 -- CPU, foreground, ~10 min, while 17.2-17.3 run
+. logs_s17/env.sh
+# 17.4a  THE ANCHOR: which link abstraction a learned code obeys -- held-out profiles mapped to
+#        one effective SNR by mean dB / noise / capacity (MIESM) / EESM / MMSE averaging, equal or
+#        sensitivity weights: piecewise-trained snrc4, constant-SNR s1, per-length decoders,
+#        per-CBR codes
+python tools/utility_fit.py --mixed results/p2_full_snrc4.json --compare-abstractions 2>&1 | tee results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p2_full_s1.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p4_full_h48.json results/p4_full_h24.json results/p4_full_h16.json   results/p4_full_h12.json results/p4_full_h5-48.json results/p4_full_h8.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+python tools/utility_fit.py --mixed results/p3_full_fix1.json results/p3_full_fix2.json results/p3_full_fix3.json   results/p3_full_fix4.json results/p3_full_fix5.json results/p3_full_fix6.json --compare-abstractions 2>&1 | tee -a results/s13_abstractions.txt
+# 17.4b  section 12's decoded replays, paired (per-CBR vs prefix on the same 60 frames)
+python tools/replay_report.py results/s12_dec_percbr_tgt.json results/s12_dec_prefix_tgt.json   --tags percbr prefix --base prefix:replan_adv 2>&1 | tee results/s13_replays.txt
+python tools/replay_report.py results/s12_dec_percbr_mean.json --base fixed_uni 2>&1 | tee -a results/s13_replays.txt
+# 17.4c  the per-length decoders at 10% lost slots, 28 dB and K 16
+python tools/schedule_sim.py $HD --preempt 0.1 --policies pf fixed_uni slope_adv 2>&1 | tee results/s13_hd_more.txt
+python tools/schedule_sim.py $HD --preempt 0.1 --target 30 $TQ 2>&1 | tee -a results/s13_hd_more.txt
+python tools/schedule_sim.py $HD --target 28 $TQ 2>&1 | tee -a results/s13_hd_more.txt
+python tools/schedule_sim.py $HD --target 30 --users 16 --slots 48 $TQ 2>&1 | tee -a results/s13_hd_more.txt
+# 17.4d  HF (the prefix code with the extra 400 epochs; fitted in 14.2) as a utility, scheduled
+python tools/schedule_sim.py $HF --policies pf fixed_uni slope_adv 2>&1 | tee results/s13_hf.txt
+python tools/schedule_sim.py $HF --target 30 $TQ 2>&1 | tee -a results/s13_hf.txt
+python tools/schedule_sim.py $HF --target 30 --slots 16 $TQ 2>&1 | tee -a results/s13_hf.txt
+python tools/schedule_sim.py $HF --target 32 $TQ 2>&1 | tee -a results/s13_hf.txt
+python tools/schedule_sim.py $HF --preempt 0.25 --policies pf fixed_uni slope_adv 2>&1 | tee -a results/s13_hf.txt
+python tools/schedule_sim.py $HF --preempt 0.25 --target 30 $TQ 2>&1 | tee -a results/s13_hf.txt
+
+# 17.5 -- CPU, seconds, when 17.2 is done (seven results/s13_dec_*.json; FS12 / FS24 logs end)
+. logs_s17/env.sh
+# 17.5a  the decoded per-length-decoder and lost-slot schedules, paired across codecs
+python tools/replay_report.py results/s12_dec_percbr_mean.json results/s13_dec_prefix_mean.json   results/s13_dec_hd_mean.json --tags percbr prefix hd --base prefix:slope_adv 2>&1 | tee -a results/s13_replays.txt
+python tools/replay_report.py results/s12_dec_percbr_tgt.json results/s12_dec_prefix_tgt.json   results/s13_dec_hd_tgt.json --tags percbr prefix hd --base hd:replan_adv 2>&1 | tee -a results/s13_replays.txt
+python tools/replay_report.py results/s13_dec_percbr_lostm.json results/s13_dec_hd_lostm.json   --tags percbr hd --base percbr:slope_adv 2>&1 | tee -a results/s13_replays.txt
+python tools/replay_report.py results/s13_dec_percbr_lost.json results/s13_dec_hd_lost.json   --tags percbr hd --base percbr:padc_adv 2>&1 | tee -a results/s13_replays.txt
+# 17.5b  where the nesting penalty lives at equal budget, at the three lengths schedules use:
+#        snrc4 / HC (decoder, all CBRs) / HF (both, all CBRs) / H (decoder, one CBR) /
+#        FS (both, one CBR) -- the last four all snrc4 + 400 epochs -- / the section-10 specialist
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_f1 ${VT}_snrc4_fix1-24_frz-enc_h1   ${VT}_snrc4_fix1-24_f1 ${VT}_snrc4_fix1-24_s1 --cbrs 1/24 2>&1 | tee results/s13_budget.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_f1 ${VT}_snrc4_fix1-16_frz-enc_h1   ${VT}_snrc4_fix1-16_f1 ${VT}_snrc4_fix1-16_s1 --cbrs 1/16 2>&1 | tee -a results/s13_budget.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_f1 ${VT}_snrc4_fix1-12_frz-enc_h1   ${VT}_snrc4_fix1-12_f1 ${VT}_snrc4_fix1-12_s1 --cbrs 1/12 2>&1 | tee -a results/s13_budget.txt
+python tools/paired.py ${VT}_snrc4_s1 ${VT}_snrc4_frz-enc_h1 ${VT}_snrc4_f1 2>&1 | tee -a results/s13_budget.txt
+
+# --- reading section 17 (send back everything it prints) ----------------------------
+cat results/s13_abstractions.txt                                               # 17.4a: first
+cat results/s13_cqi_jscc.txt results/s13_cqi_dig.txt results/s13_cqi_backoff.txt   # 17.3a
+cat results/s13_headroom.txt results/s13_nested.txt results/s13_rmab.txt       # 17.3b-c
+cat results/s13_replays.txt results/s13_hd_more.txt results/s13_hf.txt         # 17.4-17.5a
+cat results/s13_budget.txt                                                     # 17.5b
+#   (a chain still running shows as a missing file: its partial output is the .tmp of the
+#   same name; `ls results/s13_*.tmp` lists the ones not finished)
+
+# Decision: section 13's block (C5, C6, C7, RL, ABS, RMAB) -- unchanged.
