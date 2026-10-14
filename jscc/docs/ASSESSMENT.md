@@ -114,6 +114,21 @@ IEEE Transactions on Wireless Communications (TWC).
    decoders) for a lower-tier venue; or a problem where embedded learned codes are uniquely
    suited, e.g. refine-or-refresh for visual status updates (improve the image a user holds or
    start a newer one; partial-update age-of-information work exists, to check first).
+14. **The test, round 1 (2026-10-14, COMMANDS 14).** Half of it holds. On the same slots, the
+   code trained on the channel slope_adv makes is +0.28 dB over the same-budget control and
+   +0.32 over the code trained on the physical channel at the same lengths (which is even below
+   generic training); its lead shrinks to +0.09 under PF slots; with its own scheduler it is
+   +0.35 dB over the original system. The QoS half fails (+0.2 points at 30 dB), and one round
+   reaches the fixed point (the scheduler's channel barely moves after retraining), so the
+   "co-design game" is shallow: what survives is MAC-aware training. One confound decides it:
+   slope_adv gives every user exactly 3 phases, so the winning code is also a 3-phase
+   specialist, and specialists beat prefix codes anyway (C6). Section 15 trains that
+   specialist on the generic channel (fs16): sa - fs16 >= +0.15 dB keeps the story (and k16
+   tests whether it grows with the number of users, where it would become a scaling result);
+   <= +0.05 dB ends it. My read before section 15: likely between the two -- the generic
+   channel's SNR range is centred where the scheduler's is (10 dB), and a 3-phase specialist
+   recovers most of the 1/16 nesting penalty (+0.17 dB over snrc4 in section 10) -- so a
+   strong TWC headline is not yet in hand; the next round says whether it is.
 
 ## 1. Your four points, checked
 

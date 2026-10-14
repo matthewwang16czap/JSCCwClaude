@@ -1,11 +1,11 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-13. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-14. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 14, at the end -- the story test: the code trained for the channel the
-scheduler makes. Section 13 is DEFERRED: not run yet, it comes after 14 (its HF fine-tune
-moved into 14). Sections 0-12 are the record: nothing in them needs to be run again.
+WHAT TO RUN: SECTION 15, at the end -- round 2 of the story test: is the gain the scheduler's
+channel or one prefix length? Section 13 is DEFERRED: not run yet, it comes after 15 (its HF
+ran in 14, its FS16 runs in 15). Sections 0-12 and 14 are the record.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -19,11 +19,14 @@ moved into 14). Sections 0-12 are the record: nothing in them needs to be run ag
      decoder heads
   12 the same planner on both codes, a        done (docs/NOTES.md "P1, step 7")
      decoder per length, digital at 6 slots
-  13 CQI errors, equal training budget,       DEFERRED until 14 is done (HF moved to 14)
-     decoded per-length-decoder schedules,
+  13 CQI errors, equal training budget,       DEFERRED until 15 is done (HF ran in 14, FS16
+     decoded per-length-decoder schedules,    runs in 15)
      headroom for a learned policy
-  14 the code trained for the channel the     TO RUN NOW (~6 h: four fine-tunes on GPUs 2-5)
-     scheduler makes (co-design, round 1)
+  14 the code trained for the channel the     done (docs/NOTES.md "P2, round 1"); 14.3c and
+     scheduler makes (co-design, round 1)     14.4a's target half ran without 14.0's variables
+                                              (15.0 re-runs 14.3c)
+  15 the scheduler's channel or one length?   TO RUN NOW (~5 h: four fine-tunes on GPUs 2-5)
+     (round 2: specialist, shuffle, K 16, PF)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -934,16 +937,13 @@ python tools/schedule_sim.py $HDB --frames 60 --dump 60 --preempt 0.25 --target 
 python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.25 \
   --target 30 --margin 0.3 --policies padc_adv --out results/s13_rep_percbr_lost.json
 
-# 13.2 -- GPUs 2-5. GPU 5 decodes the 13.1 schedules (~40 min); GPUs 2-4 each train one full
-#   fine-tune at one CBR (~4 h, like the specialists). HF (all CBRs) is section 14's (14.2)
+# 13.2 -- GPUs 2-5. GPU 5 decodes the 13.1 schedules (~40 min); GPUs 2-3 each train one full
+#   fine-tune at one CBR (~4 h, like the specialists). HF (all CBRs) ran in 14.2, FS16 is 15.2's
 nohup bash -c "
 CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
 CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
-" > /dev/null 2>&1 &
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FTF --fixed-cbr 1/16 > logs_s13/gpu4_FS16.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
 CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
@@ -1063,7 +1063,7 @@ python tools/replay_report.py results/s13_dec_percbr_lostm.json results/s13_dec_
 python tools/replay_report.py results/s13_dec_percbr_lost.json results/s13_dec_hd_lost.json \
   --tags percbr hd --base percbr:padc_adv 2>&1 | tee -a results/s13_replays.txt
 
-# 13.6 -- CPU, when ALL of 13.2 is done (the FS24 / FS16 / FS12 logs end) and section 14 too
+# 13.6 -- CPU, when ALL of 13.2 is done (the FS24 / FS12 logs end) and sections 14-15 too
 # 13.6a  where the penalty lives at equal budget, paired at the three lengths schedules use:
 #        snrc4 / HC (decoder, all CBRs) / HF (both, all CBRs) / H (decoder, one CBR) /
 #        FS (both, one CBR) -- the last four all snrc4 + 400 epochs -- / the section-10 specialist
@@ -1121,8 +1121,10 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #   decoded: hd's and the lost-slot gains hold when the codecs decode the schedules
 
 ================================================================================
- 14. TO RUN NOW -- the story test: the code trained for the channel the scheduler makes
-     (docs/PROBLEM.md, section 7; docs/PAPER.md, "The story"; ~6 h on GPUs 2-5)
+ 14. THE STORY TEST, ROUND 1: the code trained for the channel the scheduler makes -- DONE
+     (results: docs/NOTES.md "P2, round 1"; docs/PROBLEM.md, section 7; docs/PAPER.md C8-C10)
+     14.3c and the target half of 14.4a were run in a new shell without 14.0's variables
+     (VT, B, MP, TP empty): 15.0 re-runs 14.3c; 14.4a's model view is not needed
 ================================================================================
 # Under a scheduler a code's phases never see "the channel": each goes out in the slot the
 # scheduler picked for it, so the SNR every phase sees and the number of phases every user gets
@@ -1321,3 +1323,153 @@ grep -A 26 "test on" logs_s14/gpu*.out | grep "snr  *7.0"   # each run's constan
 #   CD5  the loop (14.4b): >= ~90% of users keep their length and the phase SNRs barely move ->
 #        one round is near the fixed point; otherwise a second round on bank_*_r1 is the next run
 #   cost (14.3c): sa / sat - hf at constant SNR, the price of specialising (expected <= 0)
+
+================================================================================
+ 15. TO RUN NOW -- the scheduler's channel, or one prefix length? (story test, round 2)
+     (docs/NOTES.md "P2, round 1"; docs/PAPER.md C8-C11; ~5 h on GPUs 2-5)
+================================================================================
+# Section 14, decoded on the same slots: the code trained on slope_adv's channel (sa) beats the
+# same-budget control (hf) by +0.28 dB [0.27, 0.28] and the code trained on the physical channel
+# at the same lengths (blind) by +0.32; under PF slots its lead is +0.09; with its own scheduler
+# it is +0.35 dB over the original system. At 30 dB nothing: sat - hf +0.2 points. But slope_adv
+# gives 99.9% of users exactly 3 phases, so sa is also a 3-phase (1/16) specialist -- and
+# specialists beat a prefix code anyway (the nesting penalty, C6). Four fine-tunes, the same
+# recipe and budget as section 14, decide what the +0.28 is:
+#   fs16   snrc4 + 400 epochs at 1/16 on the usual chunk SNRs (= section 13's FS16): a 3-phase
+#          specialist on the generic channel. sa - fs16 = the scheduler's channel alone
+#   shuf   sa's histories with every user's phases permuted over its own slots: the same SNR
+#          levels, but the first phase no longer in the best slot. sa - shuf: does the code use
+#          WHICH phase the scheduler favours, or only the SNR levels?
+#   k16    slope_adv's channel with 16 users and 48 slots: more users, more selection (stand-in
+#          first-phase lift +2.2 / +3.3 / +4.0 dB at K 4 / 8 / 16). Does the gain grow with K?
+#   pf     PF's channel: a code per scheduler, the symmetric specificity check
+# Every block starts by reading the variables of 15.0 (logs_s15/env.sh): safe in a new shell.
+
+# 15.0 -- setup, ~5 min CPU --------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s15
+nvidia-smi -i 2,3,4,5
+cat > logs_s15/env.sh <<'ENV'
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 --backbone vit --pretrained $SNRC4"
+REPF="--img-size 256 --channel-type awgn --amp --testset Kodak --design file --backbone vit"
+MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 --design full --chunks phase --random-profiles 10 --backbone vit"
+ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
+MP="--policies pf slope_adv"
+K16="--users 16 --slots 48"
+CK_HF=${VT}_snrc4_f1/models/last.pt
+CK_SA=${VT}_prof-sa/models/last.pt
+CK_FS16=${VT}_snrc4_fix1-16_f1/models/last.pt
+CK_SH=${VT}_prof-sa_shuf/models/last.pt
+CK_K16=${VT}_prof-sa_k16/models/last.pt
+CK_PF=${VT}_prof-pf/models/last.pt
+ENV
+. logs_s15/env.sh
+# section 14's constant-SNR comparison, which ran without VT (14.3c): paired over Kodak, vs hf
+python tools/paired.py ${VT}_snrc4_f1 ${VT}_snrc4_s1 ${VT}_prof-blind ${VT}_prof-sa ${VT}_prof-sat \
+  2>&1 | tee results/s14_const.txt
+
+# 15.1 -- CPU, ~5 min: the new channels (seed 1000, not the scored frames), the selection
+#   against the number of users, and the K 16 slots the codes are scored on (seed 0)
+. logs_s15/env.sh
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --shuffle-phases \
+  --out results/bank_sa_shuf.json
+python tools/codesign.py bank --utility $U $B --policy slope_adv $K16 --frames 2000 \
+  --out results/bank_sa_k16.json
+python tools/codesign.py bank --utility $U $B --policy pf --frames 4000 --out results/bank_pf.json
+python tools/codesign.py stats results/bank_sa_shuf.json results/bank_sa_k16.json results/bank_pf.json \
+  2>&1 | tee results/s15_banks.txt
+python tools/codesign.py bank --utility $U $B --policy slope_adv --users 2 --slots 6 --frames 1000 --out results/bank_lift_k2.json > /dev/null
+python tools/codesign.py bank --utility $U $B --policy slope_adv --users 4 --slots 12 --frames 1000 --out results/bank_lift_k4.json > /dev/null
+python tools/codesign.py bank --utility $U $B --policy slope_adv --users 24 --slots 72 --frames 1000 --out results/bank_lift_k24.json > /dev/null
+python tools/codesign.py stats results/bank_lift_k2.json results/bank_lift_k4.json results/bank_sa.json \
+  results/bank_sa_k16.json results/bank_lift_k24.json 2>&1 | grep -E "^bank|lift" | tee results/s15_lift.txt
+python tools/schedule_sim.py --utility $U $B $K16 --frames 150 --dump 150 $MP --out results/s15_s0_k16.json
+
+# 15.2 -- GPUs 2-5, ~5 h each: train, decode section 14's slots (K 8) and/or the K 16 slots, then
+#   measure the code per phase. GPUs 2, 3 and 5 first decode the K 16 slots with snrc4 / hf / sa
+. logs_s15/env.sh
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_snrc4.json > results/s15_dec_k16_snrc4.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 > logs_s15/gpu2_fs16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_fs16.json > results/s15_dec_s0_mean_fs16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_fs16.json > results/s15_dec_k16_fs16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_FS16 --out results/p6_full_fs16.json > results/p6_full_fs16.txt 2>&1 ;
+python tools/utility_fit.py --mixed results/p6_full_fs16.json > results/s15_fit_fs16.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_hf.json > results/s15_dec_k16_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_sa_shuf.json > logs_s15/gpu3_shuf.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SH --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_shuf.json > results/s15_dec_s0_mean_shuf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SH --out results/p6_full_shuf.json > results/p6_full_shuf.txt 2>&1 ;
+python tools/utility_fit.py --mixed results/p6_full_shuf.json > results/s15_fit_shuf.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sa_k16.json > logs_s15/gpu4_k16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_k16.json > results/s15_dec_k16_k16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_k16.json > results/s15_dec_s0_mean_k16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_K16 --out results/p6_full_k16.json > results/p6_full_k16.txt 2>&1 ;
+python tools/utility_fit.py --mixed results/p6_full_k16.json > results/s15_fit_k16.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_sa.json > results/s15_dec_k16_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT --snr-profiles results/bank_pf.json > logs_s15/gpu5_pf.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_PF --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_pf.json > results/s15_dec_s0_mean_pf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_PF --out results/p6_full_pf.json > results/p6_full_pf.txt 2>&1 ;
+python tools/utility_fit.py --mixed results/p6_full_pf.json > results/s15_fit_pf.txt 2>&1
+" > /dev/null 2>&1 &
+sleep 90; grep -h "loaded\|parameters, effective batch" logs_s15/*.out; tail -n 2 logs_s15/*.out
+
+# 15.3 -- CPU, seconds, when all four chains are done (ls results/s15_fit_*.txt: four)
+. logs_s15/env.sh
+# 15.3a  section 14's slots (K 8, the same users, images and slot SNRs for every code)
+K8="results/s14_dec_s0_mean_snrc4.json results/s14_dec_s0_mean_hf.json results/s14_dec_s0_mean_blind.json \
+  results/s14_dec_s0_mean_sa.json results/s14_dec_s0_mean_sat.json results/s15_dec_s0_mean_fs16.json \
+  results/s15_dec_s0_mean_shuf.json results/s15_dec_s0_mean_k16.json results/s15_dec_s0_mean_pf.json"
+T8="--tags snrc4 hf blind sa sat fs16 shuf k16 pf"
+python tools/replay_report.py $K8 $T8 --base fs16:slope_adv 2>&1 | tee results/s15_k8.txt
+python tools/replay_report.py $K8 $T8 --base sa:slope_adv 2>&1 | tail -n 18 | tee -a results/s15_k8.txt
+python tools/replay_report.py $K8 $T8 --base hf:pf 2>&1 | tail -n 18 | tee -a results/s15_k8.txt
+# 15.3b  the K 16 slots
+K16F="results/s15_dec_k16_snrc4.json results/s15_dec_k16_hf.json results/s15_dec_k16_sa.json \
+  results/s15_dec_k16_fs16.json results/s15_dec_k16_k16.json"
+python tools/replay_report.py $K16F --tags snrc4 hf sa fs16 k16 --base fs16:slope_adv 2>&1 | tee results/s15_k16.txt
+python tools/replay_report.py $K16F --tags snrc4 hf sa fs16 k16 --base hf:slope_adv 2>&1 | tail -n 10 | tee -a results/s15_k16.txt
+# 15.3c  constant SNR at 3 phases (the length all of them serve), paired over Kodak, vs fs16;
+#        then all lengths against hf; and where each code put its noise sensitivity
+python tools/paired.py ${VT}_snrc4_fix1-16_f1 ${VT}_snrc4_f1 ${VT}_prof-sa ${VT}_prof-sa_shuf \
+  ${VT}_prof-sa_k16 ${VT}_prof-blind --cbrs 1/16 2>&1 | tee results/s15_const.txt
+python tools/paired.py ${VT}_snrc4_f1 ${VT}_snrc4_fix1-16_f1 ${VT}_prof-sa_shuf ${VT}_prof-sa_k16 \
+  ${VT}_prof-pf 2>&1 | tee -a results/s15_const.txt
+grep -A 8 "noise response" results/s15_fit_fs16.txt results/s15_fit_shuf.txt results/s15_fit_k16.txt \
+  results/s15_fit_pf.txt 2>&1 | tee results/s15_fits.txt
+
+# --- reading section 15 (send back everything it prints) ----------------------------
+cat results/s14_const.txt                                   # 15.0
+cat results/s15_banks.txt results/s15_lift.txt              # 15.1
+cat results/s15_k8.txt results/s15_k16.txt                  # 15.3a-b: THE test
+cat results/s15_const.txt results/s15_fits.txt              # 15.3c
+
+# Decision (docs/PAPER.md C8-C11), decoded on the same slots:
+#   D1  sa - fs16 under slope_adv (K 8) >= +0.15 dB: the scheduler's channel matters beyond
+#       training for the one length the scheduler gives; the story stands (C8, C9 hold).
+#       <= +0.05: the +0.28 was length specialisation (the nesting penalty, C6, known): the
+#       co-design story is dead; the fallbacks of docs/ASSESSMENT.md 13 apply
+#   D2  sa - shuf >= +0.1 dB: the code uses WHICH phase the scheduler favours (position);
+#       ~0: it adapts to the SNR levels the scheduler gives, not their order
+#   D3  k16 - fs16 on the K 16 slots > sa - fs16 on the K 8 slots: the gain grows with the
+#       users' number (multi-user diversity: the selection lift, 15.1's s15_lift.txt); with
+#       the lift's order-statistics form this is the paper's scaling law
+#   D4  pf - hf under pf slots > sa - hf under pf slots (+0.09), and sa > pf under slope_adv:
+#       each scheduler needs its own code
+#   cost  15.3c: the price of each code at constant SNR (1/16 and all lengths)

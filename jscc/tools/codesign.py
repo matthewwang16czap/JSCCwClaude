@@ -22,7 +22,9 @@ is trained on are not the frames it is scored on.
 without looking at the channel: the user's mean SNR plus a fresh Rayleigh fade. That is the
 physical channel at the scheduler's lengths, the control that separates what the
 scheduler's slot SELECTION does to the code's channel from what its lengths and the users'
-mean SNRs do.
+mean SNRs do. --shuffle-phases keeps every history's slots and permutes which phase went out
+in which: the same SNR levels per user, but the first phase no longer gets the best slot
+(the control for the code using WHICH phase the scheduler favours).
 
 `stats` prints each bank's length distribution, per-phase SNR (mean, sd, lift over the
 user's mean) and mean profile per length, next to what --snr-chunks training assumes.
@@ -46,7 +48,8 @@ from tools.schedule_sim import NEEDS_TARGET, POLICIES, fades, simulate  # noqa: 
 
 def build_bank(util, policy, users=8, slots=24, frames=4000, mean_snr=(0.0, 15.0),
                fading="rayleigh", clip=(-2.0, 22.0), seed=1000, belief=None, target=None,
-               margin=0.0, offset=0.0, fade_corr=0.0, plan="mean", preempt=0.0, blind=False):
+               margin=0.0, offset=0.0, fade_corr=0.0, plan="mean", preempt=0.0, blind=False,
+               shuffle=False):
     """Every user's delivered history under `policy` on `frames` frames: a bank (dict)."""
     summary, _, dumped = simulate(util, users, slots, frames, tuple(mean_snr), fading,
                                   tuple(clip), [policy], seed, dump=frames, target=target,
@@ -58,8 +61,12 @@ def build_bank(util, policy, users=8, slots=24, frames=4000, mean_snr=(0.0, 15.0
         rng = np.random.default_rng([seed, 2])
         hist = [np.clip(m + fades(rng, 1, len(h), fading)[0], clip[0], clip[1]).tolist()
                 if h else [] for h, m in zip(hist, means)]
+    if shuffle:                                  # the same slots, phases in random order
+        rng = np.random.default_rng([seed, 3])
+        hist = [[h[j] for j in rng.permutation(len(h))] for h in hist]
     return {"format": "snr-bank", "phases": int(util.P), "policy": policy, "target": target,
-            "margin": margin, "blind": bool(blind), "seed": seed, "users": users,
+            "margin": margin, "blind": bool(blind), "shuffled": bool(shuffle), "seed": seed,
+            "users": users,
             "slots": slots, "frames": frames, "mean_snr": list(mean_snr), "fading": fading,
             "fade_corr": fade_corr, "snr_clip": list(clip), "summary": summary[policy],
             "frame": [int(e["frame"]) for e in dumped], "user": [int(e["user"]) for e in dumped],
@@ -105,7 +112,8 @@ def stats(bank):
 def print_stats(name, bank, s):
     P = bank["phases"]
     what = (f"{bank['policy']}" + (f" at {bank['target']:g} dB" if bank.get("target") is not None
-                                   else "") + (", slots taken blindly" if bank["blind"] else ""))
+                                   else "") + (", slots taken blindly" if bank["blind"] else "")
+            + (", phase order shuffled" if bank.get("shuffled") else ""))
     print(f"{name}: {what}; {s['users']} users ({bank['frames']} frames x {bank['users']}, "
           f"{bank['slots']} slots), {100 * s['empty']:.1f}% received nothing")
     print("  phases received (users with any): " + "  ".join(
@@ -168,6 +176,8 @@ def main():
                    help="frames to train on: not the evaluation's (schedule_sim.py: 0)")
     b.add_argument("--blind", action="store_true",
                    help="keep the lengths, redraw every phase's SNR as a blindly taken slot")
+    b.add_argument("--shuffle-phases", action="store_true",
+                   help="keep every history's slots, permute which phase went out in which")
     b.add_argument("--out", required=True)
     s = sub.add_parser("stats", help="what the banks look like")
     s.add_argument("banks", nargs="+")
@@ -184,7 +194,7 @@ def main():
         belief = load_utility(a.belief) if a.belief else None
         bank = build_bank(util, a.policy, a.users, a.slots, a.frames, a.mean_snr, a.fading,
                           a.snr_clip, a.seed, belief, a.target, a.margin, a.plan_offset,
-                          a.fade_corr, a.plan, a.preempt, a.blind)
+                          a.fade_corr, a.plan, a.preempt, a.blind, a.shuffle_phases)
         bank.update(utility=a.utility, belief=a.belief)
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:

@@ -54,6 +54,16 @@ Schedulers".
 
 If it fails (C8 < +0.1 dB and < +1 point), docs/ASSESSMENT.md 13 lists the fallbacks.
 
+Section 14 (2026-10-14, docs/NOTES.md "P2, round 1"): the mean-PSNR half holds (+0.28 dB on
+the same slots over the same-budget control, +0.32 over training on the physical channel, which
+loses to generic training; specific to the scheduler; +0.35 dB over the original system with
+its own scheduler), the QoS half does not (+0.2 points), and the loop converges in one round,
+so "a game" overstates it: the honest name is MAC-aware training of learned codes. Whether the
+mean-PSNR gain is the scheduler's channel or the single length its quotas give is section 15's
+question; if it is the channel and it grows with the number of users, the story is "multi-user
+selection reshapes the channel a learned code sees: train for the selection-biased channel"
+(with the order-statistics form of the lift as its theory), not a co-design game.
+
 ## The story, if 13.3f / the Jacobian probe confirm it (proposed 2026-10-13)
 
 "A slot's SNR buys bits in a digital link. What does it buy a learned JSCC code?" Both
@@ -130,9 +140,10 @@ F2). Gate: COMMANDS 13.3e (the nested model on the real codec, then every bound 
 | C5 | Against separation (HEIC intra + error-free CQI link adaptation, the same schedulers, the same 6-slot cap per user): ahead by small margins -- mean PSNR +0.14 dB (prefix) / +0.34 (a decoder per length) / +0.29 (per CBR); target +0.5 to +10.5 points with per-length decoders (largest in tight frames), the prefix code alone -1.6 at 32 dB; a 3 dB-gap code is 0.5-0.7 dB ahead. Under CQI errors (sd 1-3 dB; digital with its best backoff per policy) the gap is expected to open: to measure | P1 steps 6-7; section 13 (`--cqi-error`) | done at ideal CQI; CQI errors owed |
 | C6 | Against one model per CBR (six piecewise-trained specialists): nesting penalty 0.17-0.47 dB; a decoder per received length behind the one encoder recovers 79-101% of it at 2-4 phases (49-65% at 1, 5, 6). Encode once + per-length decoders is the best JSCC system on mean PSNR (31.63 vs 31.58 dB) and when slots can be lost (+0.73 dB, +2.8 points at 25%); per-CBR codes keep +0.9 to +1.4 points at the target with known slots. The model and the schedulers work on all three (codec-agnostic) | P1 steps 5-7; section 13 (equal training budget) | done, equal-budget check owed |
 | C7 | Which QoS policy when: plan_adv (shortest-first admission + slots planned before the frame + advantage timing) with known slots; replan_adv (the same re-planned every slot from what users hold, with stopping) when slots are tight, lost or (to measure) the CQI is noisy; online when mean PSNR matters too | P1 step 7 (decoded: replan_adv 77.7, plan_adv 76.7, online 76.5, padc_adv 67.7%) | done; CQI errors owed |
-| C8 | Trained on the channel its scheduler makes (a bank of the scheduler's per-phase SNR histories), the code beats the same-budget fine-tune on the usual i.i.d. channel ON THE SAME SLOTS, decoded: >= +0.3 dB mean PSNR under slope_adv, or >= +3 points at 30 dB under replan_adv, carries the paper | section 14 (14.3a) | to measure |
-| C9 | It is the scheduler's slot SELECTION the code adapts to, not only its lengths and the users' SNR range: sa - blind >= half of sa - hf | section 14 (14.3a) | to measure |
-| C10 | Specific to the scheduler: the lead shrinks under PF slots; the QoS-trained code leads at the target, the mean-trained one on mean PSNR; the loop closed once (each code under its re-planned scheduler) beats the original system, and the induced channel barely moves after one round | section 14 (14.3a-b, 14.4b) | to measure |
+| C8 | Trained on the channel its scheduler makes, the code beats the same-budget fine-tune on the usual i.i.d. channel ON THE SAME SLOTS, decoded | section 14: +0.28 dB [0.27, 0.28] under slope_adv (bar +0.3); +0.2 points at 30 dB (nothing). Confound: slope_adv gives everyone 3 phases, so the sa code is also a 1/16 specialist; section 15's fs16 separates the two | mean: supporting, confounded; QoS: fails |
+| C9 | It is the scheduler's slot SELECTION the code adapts to: training on the physical channel at the same lengths does worse, even worse than generic training | section 14: sa - blind +0.32 dB, blind - hf -0.04 (same 3-phase lengths). Section 15: which phase gets the good slot (shuffle) | holds at equal lengths |
+| C10 | Specific to its scheduler, and one round reaches the fixed point | section 14: sa's lead +0.09 under PF slots (+0.28 under slope_adv); closed loop +0.35 dB over the original system, +0.25 over hf's; re-banked on sa's utility 99.7% of users keep their length, lifts move <= 0.14 dB. Section 15: a PF-trained code | holds; the loop is shallow |
+| C11 | The gain grows with multi-user diversity (the selection lift grows with K: stand-in +2.2 / +3.3 / +4.0 dB at K 4 / 8 / 16) | section 15 (k16) | to measure |
 
 ## Outline
 
@@ -172,7 +183,9 @@ F2). Gate: COMMANDS 13.3e (the nested model on the real codec, then every bound 
 
 ## Still owed, in order
 
-0. Section 14 (GPUs 2-5, ~6 h): C8-C10, the story test. Everything below waits for it.
+0. Section 15 (GPUs 2-5, ~5 h): is section 14's +0.28 dB the scheduler's channel or the one
+   length slope_adv gives (fs16), does the code use the phase order (shuffle), does it grow
+   with K (k16), a code per scheduler (pf). Decides whether C8-C11 carry the paper.
 1. CQI errors (section 13, CPU): JSCC (prefix, per-length decoders, per-CBR) against HEIC with
    its best backoff, sd 1-3 dB. Decides whether C5 is "on par" or "ahead under realistic CSI".
 2. Equal training budget (section 13, GPUs): the prefix code and per-CBR codes with the same
