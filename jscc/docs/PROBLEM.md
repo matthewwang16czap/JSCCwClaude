@@ -231,6 +231,14 @@ dB with random cuts and uniform lengths: another channel.
   mean SNRs (matched training, the older idea). The scheduler's channel for the retrained
   codes against the one they trained on (`codesign.py stats --against`) says whether one round
   is near the fixed point.
+* Round 1 measured (2026-10-14, docs/NOTES.md "P2, round 1"): on the real utility slope_adv's
+  quotas give every user 3 phases at +3.2 / +2.7 / +1.8 dB over its mean SNR (blind slots
+  -1.8); the code trained on that channel decodes the same slots +0.28 dB better than the
+  same-budget control and +0.32 better than the code trained on blind slots, +0.09 under PF
+  slots; at 30 dB nothing. Re-banked on the retrained code's utility the channel barely moves
+  (99.7% of users keep their length): the fixed point is reached in one round, so the loop's
+  second step adds nothing measurable. Round 2 (COMMANDS 15): a 3-phase specialist on the
+  generic channel, a shuffled bank, 16 users, a PF-trained code.
 * Theory owed if it passes: (a) the game and its monotone improvement (above), with the two
   approximation gaps bounded by what section 3 measures; (b) the linear-Gaussian version
   (analog prefix code of a Gaussian source, per-phase power allocation under a per-phase SNR

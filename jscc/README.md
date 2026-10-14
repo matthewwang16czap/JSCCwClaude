@@ -166,7 +166,8 @@ schedules one model per CBR, `--length-checkpoints` (mixed_snr) decodes with one
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 Co-design (`docs/PROBLEM.md`, section 7): `tools/codesign.py bank --utility U --policy
 slope_adv --out results/bank_sa.json` keeps every user's delivered per-phase SNR history under a
-policy (`--blind`: the same lengths, every phase in a blindly taken slot); `main.py
+policy (`--blind`: the same lengths, every phase in a blindly taken slot; `--shuffle-phases`:
+the same slots, phases permuted over them); `main.py
 --snr-profiles results/bank_sa.json` trains on them (each step one prefix length from the
 bank, per image a history of that length; run-name suffix `prof-sa`); `codesign.py stats A B
 --against C` compares banks.

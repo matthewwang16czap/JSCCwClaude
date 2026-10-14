@@ -741,7 +741,7 @@ measures it (`tools/schedule_sim.py --cqi-error`: decisions on the reports, code
 true SNR; a digital slot sent at its report minus a backoff tuned per policy on other frames,
 lost when its rate exceeds what the slot supported, HARQ ACK to the transmitter).
 
-## Problem P2, round 1 (planned 2026-10-13): the code trained for the channel its scheduler makes
+## Problem P2, round 1 (2026-10-14): the code trained for the channel its scheduler makes
 
 COMMANDS.txt section 14 (section 13 deferred: the story comes first). The question
 (docs/PROBLEM.md, section 7; docs/PAPER.md C8-C10): under a scheduler, the SNR each phase of a
@@ -765,4 +765,59 @@ schedules, paired reports).
 Arms (snrc4 + 400 epochs each, the FTF recipe): hf (--snr-chunks 4, the control), blind, sa
 (slope_adv's channel), sat (replan_adv's at 30 dB). Each decodes the original system's
 schedules on 150 frames (same slots for every code) and, after its own measurement and fit, its
-own re-planned schedules. Results: to come.
+own re-planned schedules.
+
+**The channel the scheduler makes** (real snrc4 utility, calibrated transmitter, 4000 frames):
+
+| bank | phases received | SNR of phase 1 / 2 / 3 ... (dB) | lift over the user's mean |
+|---|---|---|---|
+| sa (slope_adv) | 3 for 99.9% of users | 10.68 / 10.13 / 9.31 (sd 4.6) | +3.21 / +2.66 / +1.83 |
+| blind (same lengths, slots taken blindly) | 3 for 99.9% | 5.67 / 5.67 / 5.74 (sd 5.7) | -1.80 each |
+| sat (replan_adv, 30 dB) | 1-6: 13 / 36 / 20 / 7 / 4 / 19%, 3.3% nothing | 10.61 / 9.88 / 9.11 / 7.31 / 5.87 / 5.43 | +3.06 ... -1.25 |
+| snrc4's training | uniform CBR | i.i.d. 10.0 (sd 6.9), random cuts | - |
+
+With equal-slope quotas on the real curves every user gets exactly 3 phases, so sa is also a
+3-phase training set: sa (and blind) are 1/16 specialists of sorts.
+
+**Same slots** (the original system's schedules, 150 frames, every code decoding the same
+users, images and slot SNRs; mean PSNR in dB, share at 30 dB in %):
+
+| code | pf | slope_adv | online | plan_adv | replan_adv |
+|---|---|---|---|---|---|
+| snrc4 (original) | 31.036 | 31.512 | 74.7 | 74.8 | 76.1 |
+| hf (control, +400 epochs) | 31.139 | 31.607 | 75.4 | 76.2 | 76.9 |
+| blind | 30.779 | 31.563 | 29.3 | 35.0 | 29.5 |
+| sa | 31.228 | **31.885** | 62.7 | 66.1 | 62.9 |
+| sat | 31.161 | 31.688 | 75.7 | 76.9 | **77.1** |
+
+Paired by frame: sa - hf under slope_adv +0.278 dB [0.273, 0.284]; sa - blind +0.32; blind -
+hf -0.044 (training on the physical channel LOSES to generic training); under PF slots sa - hf
++0.089 [0.072, 0.106] (the lead is specific to the scheduler it trained for). At 30 dB sat - hf
++0.17 points [0.00, 0.42] (replan_adv), +0.67 (plan_adv), +0.25 (online): nothing. sa and blind,
+trained on 3 phases only, collapse under the QoS schedulers (1-6 phases).
+
+**The loop closed once** (each code measured, fitted, and scheduled by its own model; the
+model's error on these schedules 0.07 / 0.055 dB MAE): slope_adv sa 31.859 vs snrc4 31.512
+(+0.347 [0.331, 0.363]) and hf 31.610 (+0.249 [0.232, 0.265]); 30 dB replan_adv sat 77.2% vs
+snrc4 76.1 (+1.1 [0.4, 1.8]) and hf 77.1 (+0.1 [-0.5, 0.7]): at the target all of the gain
+over the original system is the extra training. Re-planning for sa added nothing over the
+original schedules (31.859 vs 31.885 decoded), and the channel barely moves: re-banked on
+sa's own utility, 99.7% of users keep their length, the lifts change by <= 0.14 dB (sat: 79.6%
+keep their length, lifts within 0.3 dB). One round is the fixed point; the "game" is shallow.
+
+**Mechanism** (fits): kappa hf 1.73, blind 1.60, sa 2.78, sat 2.43; rho at 1/16 hf 0.565 /
+0.266 / 0.169, sa the same (0.566 / 0.267 / 0.167), blind flatter (0.416 / 0.316 / 0.269), sat
+steeper (0.619 / 0.237 / 0.145). sa keeps the phase weights and gives up robustness to deep
+noise (a larger kappa: its distortion keeps growing where hf's saturates), which its scheduler
+never asks of it. Constant SNR at 7 dB (Kodak, 1/48 ... 1/8): hf 27.23 / 29.51 / 30.91 / 31.52
+/ 32.03; sa 25.75 / 29.06 / **31.16** / 31.61 / 32.01 (-1.5 dB at 1 phase, +0.25 at 3); sat
+27.39 / 29.65 / 30.97 / 31.55 / 32.07 (no cost); blind 20.22 / 26.86 / 30.90 / 31.28 / 31.56.
+
+Verdict against the pre-registered rules (COMMANDS 14): CD1 mean +0.28 dB, just under the
++0.3 bar ("supporting" band), QoS +0.2 points ("dead" for the target); CD2 passes (sa - blind
++0.32 at the same lengths); CD3 passes (+0.09 under PF, the cross table); CD4 +0.35 dB over the
+original system on mean PSNR, nothing beyond extra training at the target; CD5 passes. Open:
+whether sa's +0.28 over hf is the scheduler's channel or the one length it trains (a 3-phase
+specialist on the generic channel, FS16, is the control), whether the code uses which phase
+gets the good slot (a shuffled bank), and whether the gain grows with the number of users
+(more selection): COMMANDS section 15.

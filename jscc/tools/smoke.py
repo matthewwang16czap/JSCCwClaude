@@ -795,6 +795,12 @@ def check_codesign(x):
        == [len(h) for h in bl["histories"]] and lift_sa > 1.0 and lift_bl < 0.0,
        f"bank: every user of every frame; the scheduler puts first phases into fading peaks "
        f"(lift {lift_sa:+.2f} dB), blindly taken slots of the same lengths do not ({lift_bl:+.2f})")
+    sh = build_bank(u, "slope_adv", users=4, slots=12, frames=150, shuffle=True)
+    lifts = [p["lift"] for p in stats(sh)["phase"][:3]]
+    ok(all(sorted(a) == sorted(b) for a, b in zip(sh["histories"], sa["histories"]))
+       and max(lifts) - min(lifts) < 0.5 * (s_sa["phase"][0]["lift"] - s_sa["phase"][2]["lift"]),
+       f"--shuffle-phases: the same slots per user, the lift no longer falls along the code "
+       f"({' '.join(f'{v:+.2f}' for v in lifts)} dB)")
     r, same = against(bl, sa), against(sa, sa)
     ok(r["same_length"] == 1.0 and r["phases_moved"] > 0.9 and same["phases_moved"] == 0.0
        and against(tq, sa)["same_length"] < 1.0,
