@@ -27,8 +27,8 @@ and 15 are the record.
                                               (15.0 re-runs 14.3c)
   15 the scheduler's channel or one length?   done (docs/NOTES.md "P2, round 2")
      (round 2: specialist, shuffle, K 16, PF)
-  16 section 13 + seed replicates of sa and   TO RUN NOW (~5 h on GPUs 2-5, ~2 h CPU)
-     fs16
+  16 section 13 + seed replicates of sa and   TO RUN NOW: the replicates are done (docs/NOTES.md
+     fs16                                     "P2, round 2"); section 13's blocks still to send
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
