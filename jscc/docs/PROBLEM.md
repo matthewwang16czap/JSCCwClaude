@@ -239,6 +239,11 @@ dB with random cuts and uniform lengths: another channel.
   (99.7% of users keep their length): the fixed point is reached in one round, so the loop's
   second step adds nothing measurable. Round 2 (COMMANDS 15): a 3-phase specialist on the
   generic channel, a shuffled bank, 16 users, a PF-trained code.
+* Round 2 measured (2026-10-14, COMMANDS 15): against a 3-phase specialist trained on the
+  generic channel (the length slope_adv's quotas give everyone), the scheduler-trained code
+  keeps +0.12 dB on the same slots (+0.15 with 16 users); permuting each user's phases over its
+  own slots keeps two thirds of it. The codes learn their schedulers: kappa rises as deep fades
+  get rarer, and the phase weights move to the phase the scheduler favours (PF: phase 2).
 * Theory owed if it passes: (a) the game and its monotone improvement (above), with the two
   approximation gaps bounded by what section 3 measures; (b) the linear-Gaussian version
   (analog prefix code of a Gaussian source, per-phase power allocation under a per-phase SNR

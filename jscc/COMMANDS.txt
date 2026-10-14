@@ -3,9 +3,9 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 15, at the end -- round 2 of the story test: is the gain the scheduler's
-channel or one prefix length? Section 13 is DEFERRED: not run yet, it comes after 15 (its HF
-ran in 14, its FS16 runs in 15). Sections 0-12 and 14 are the record.
+WHAT TO RUN: SECTION 16, at the end. It runs section 13 (deferred until now: 16 points into
+it block by block) and two seed replicates of section 15's decisive pair. Sections 0-12, 14
+and 15 are the record.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -19,14 +19,16 @@ ran in 14, its FS16 runs in 15). Sections 0-12 and 14 are the record.
      decoder heads
   12 the same planner on both codes, a        done (docs/NOTES.md "P1, step 7")
      decoder per length, digital at 6 slots
-  13 CQI errors, equal training budget,       DEFERRED until 15 is done (HF ran in 14, FS16
-     decoded per-length-decoder schedules,    runs in 15)
+  13 CQI errors, equal training budget,       not run yet: run it as part of 16 (16 replaces
+     decoded per-length-decoder schedules,    its 13.0 and 13.2; HF ran in 14, FS16 in 15)
      headroom for a learned policy
   14 the code trained for the channel the     done (docs/NOTES.md "P2, round 1"); 14.3c and
      scheduler makes (co-design, round 1)     14.4a's target half ran without 14.0's variables
                                               (15.0 re-runs 14.3c)
-  15 the scheduler's channel or one length?   TO RUN NOW (~5 h: four fine-tunes on GPUs 2-5)
+  15 the scheduler's channel or one length?   done (docs/NOTES.md "P2, round 2")
      (round 2: specialist, shuffle, K 16, PF)
+  16 section 13 + seed replicates of sa and   TO RUN NOW (~5 h on GPUs 2-5, ~2 h CPU)
+     fs16
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -852,7 +854,7 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
 #   decoded: the per-CBR and replan_adv gains hold when the codecs decode the schedules
 
 ================================================================================
- 13. DEFERRED -- run after section 14 (none of it has run; its HF fine-tune is 14.2's)
+ 13. NOT RUN YET -- runs as part of section 16 (16.0 and 16.2 replace 13.0 and 13.2)
      (docs/NOTES.md "P1, step 7"; docs/PAPER.md C5-C7)
 ================================================================================
 # Section 12: with the same slot planner, one model per CBR still leads the prefix code by
@@ -937,24 +939,8 @@ python tools/schedule_sim.py $HDB --frames 60 --dump 60 --preempt 0.25 --target 
 python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.25 \
   --target 30 --margin 0.3 --policies padc_adv --out results/s13_rep_percbr_lost.json
 
-# 13.2 -- GPUs 2-5. GPU 5 decodes the 13.1 schedules (~40 min); GPUs 2-3 each train one full
-#   fine-tune at one CBR (~4 h, like the specialists). HF (all CBRs) ran in 14.2, FS16 is 15.2's
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
-" > /dev/null 2>&1 &
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
-" > /dev/null 2>&1 &
-nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1
-" > /dev/null 2>&1 &
-sleep 60; grep -h "loaded\|parameters, effective batch" logs_s13/*.out; tail -n 2 logs_s13/*.out
+# 13.2 -- REPLACED BY 16.2 (the same chains -- FS12 on GPU 2, FS24 on GPU 3, the seven decodes
+#   of the 13.1 schedules on GPU 5 -- plus two seed replicates). Launch 16.2, not this.
 
 # 13.3 -- CPU, in the background (~1 h; two chains): CQI errors of sd 0 / 1 / 2 / 3 dB, the
 #   same frames at every sd. JSCC: prefix code, a decoder per length (hd), one model per CBR.
@@ -1325,8 +1311,8 @@ grep -A 26 "test on" logs_s14/gpu*.out | grep "snr  *7.0"   # each run's constan
 #   cost (14.3c): sa / sat - hf at constant SNR, the price of specialising (expected <= 0)
 
 ================================================================================
- 15. TO RUN NOW -- the scheduler's channel, or one prefix length? (story test, round 2)
-     (docs/NOTES.md "P2, round 1"; docs/PAPER.md C8-C11; ~5 h on GPUs 2-5)
+ 15. THE STORY TEST, ROUND 2: the scheduler's channel, or one prefix length? -- DONE
+     (results: docs/NOTES.md "P2, round 2"; docs/PAPER.md C8-C11)
 ================================================================================
 # Section 14, decoded on the same slots: the code trained on slope_adv's channel (sa) beats the
 # same-budget control (hf) by +0.28 dB [0.27, 0.28] and the code trained on the physical channel
@@ -1473,3 +1459,122 @@ cat results/s15_const.txt results/s15_fits.txt              # 15.3c
 #   D4  pf - hf under pf slots > sa - hf under pf slots (+0.09), and sa > pf under slope_adv:
 #       each scheduler needs its own code
 #   cost  15.3c: the price of each code at constant SNR (1/16 and all lengths)
+
+================================================================================
+ 16. TO RUN NOW -- section 13 (not run yet) and two seed replicates of section 15's pair
+     (docs/NOTES.md "P2, round 2"; docs/PAPER.md C5-C11; ~5 h on GPUs 2-5, ~2 h CPU)
+================================================================================
+# Section 15, decoded on section 14's slots (K 8): sa - fs16 = +0.118 dB [0.110, 0.124] -- of
+# sa's +0.28 over hf, +0.16 is training for the one length slope_adv's quotas give (3 phases)
+# and +0.12 the scheduler's channel; sa - shuf +0.042 (the phase order is a third of that);
+# with 16 users k16 - fs16 +0.151 (the gain grows a little with the selection); a PF-trained
+# code leads under PF slots (+0.18 over hf, sa +0.09) and trails sa under slope_adv (-0.16):
+# a code per scheduler. The CIs cover frames and images, not training noise, and +0.12 dB is
+# the number the claim rests on: 16.2 trains sa and fs16 again with --seed 2. The rest is the
+# paper's owed evidence, unchanged: section 13 (CQI errors, the equal budget at 1/24 and 1/12,
+# decoded per-length-decoder schedules, headroom, the restless bandit, link abstractions).
+# Every block reads logs_s16/env.sh first (13.0's variables plus FT and the checkpoints).
+
+# 16.0 -- setup, ~5 min CPU (replaces 13.0) ------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s13 logs_s16
+nvidia-smi -i 2,3,4,5
+cat > logs_s16/env.sh <<'ENV'
+VT=history/vit_p8d768x10s4_awgn_DIV2K_256
+SNRC4=${VT}_snrc4_s1/models/last.pt
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+SIM="--utility $U --frames 2000"
+HDB="--utility results/utility_hd.json --belief results/belief_hd.json"
+HD="$HDB --frames 2000"
+PCB="--utility results/utility_percbr.json --belief results/belief_percbr.json --fixed-codes"
+PC="$PCB --frames 2000"
+DH6="--utility results/rd_heic.json --frames 2000 --digital-max-phases 6"
+REPF="--img-size 256 --channel-type awgn --amp --testset Kodak --design file --backbone vit"
+SPEC="${VT}_snrc4_fix1-48_s1/models/last.pt ${VT}_snrc4_fix1-24_s1/models/last.pt \
+  ${VT}_snrc4_fix1-16_s1/models/last.pt ${VT}_snrc4_fix1-12_s1/models/last.pt \
+  ${VT}_snrc4_fix5-48_s1/models/last.pt ${VT}_snrc4_fix1-8_s1/models/last.pt"
+HDEC="${VT}_snrc4_fix1-48_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-24_frz-enc_h1/models/last.pt \
+  ${VT}_snrc4_fix1-16_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-12_frz-enc_h1/models/last.pt \
+  ${VT}_snrc4_fix5-48_frz-enc_h1/models/last.pt ${VT}_snrc4_fix1-8_frz-enc_h1/models/last.pt"
+# full fine-tunes of snrc4_s1 (encoder AND decoder), its recipe otherwise: the same start and
+# the same 400 epochs as the per-length decoders of sections 11-12
+FTF="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
+  --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 \
+  --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 \
+  --tag f1 --snr-chunks 4 --backbone vit --pretrained $SNRC4"
+MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
+  --design full --chunks phase --random-profiles 10 --backbone vit"
+ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
+TQ="--policies padc_adv plan_adv online replan_adv"
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 --backbone vit --pretrained $SNRC4"
+CK_SA2=${VT}_prof-sa_s2/models/last.pt
+CK_FS2=${VT}_snrc4_fix1-16_s2_f1/models/last.pt
+ENV
+. logs_s16/env.sh
+
+# 16.1 -- CPU, seconds: section 13.1 as written (the 60-frame schedules GPU 5 decodes)
+. logs_s16/env.sh
+#   -> run the seven schedule_sim.py lines of 13.1
+
+# 16.2 -- GPUs 2-5 (replaces 13.2): FS12 and FS24 (section 13's equal budget), the replicate of
+#   sa on GPU 4, and on GPU 5 section 13's decodes (~40 min), then the replicate of fs16. Each
+#   replicate then decodes section 14's slots (~15 min)
+. logs_s16/env.sh
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sa.json --seed 2 > logs_s16/gpu4_sa_s2.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_sa2.json > results/s16_dec_s0_mean_sa2.txt 2>&1
+" > /dev/null 2>&1 &
+nohup bash -c "
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 --seed 2 > logs_s16/gpu5_fs16_s2.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_FS2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_fs2.json > results/s16_dec_s0_mean_fs2.txt 2>&1
+" > /dev/null 2>&1 &
+sleep 60; grep -h "loaded\|parameters, effective batch" logs_s13/*.out logs_s16/*.out; tail -n 2 logs_s13/*.out logs_s16/*.out
+
+# 16.3 -- CPU, while the GPUs run (~2 h, mostly in the background): section 13's CPU blocks
+#   as written -- 13.3 (CQI errors), 13.3d (headroom), 13.3e (restless bandit), 13.3f (link
+#   abstractions), 13.4 (replays, the per-length decoders at lost slots / 28 dB / K 16) --
+#   each after
+. logs_s16/env.sh
+#   and 13.5 when GPU 5's decodes are done (ls results/s13_dec_*.json: seven files)
+
+# 16.4 -- CPU, when ALL of 16.2 is done: section 13.6 as written (after . logs_s16/env.sh), then
+#   the replicates against the first runs, on the same slots and at constant SNR (1/16)
+. logs_s16/env.sh
+R16="results/s14_dec_s0_mean_hf.json results/s15_dec_s0_mean_fs16.json results/s16_dec_s0_mean_fs2.json \
+  results/s14_dec_s0_mean_sa.json results/s16_dec_s0_mean_sa2.json"
+python tools/replay_report.py $R16 --tags hf fs16 fs16b sa sab --base fs16:slope_adv 2>&1 | tee results/s16_seeds.txt
+python tools/replay_report.py $R16 --tags hf fs16 fs16b sa sab --base fs16b:slope_adv 2>&1 | tail -n 10 | tee -a results/s16_seeds.txt
+python tools/paired.py ${VT}_snrc4_fix1-16_f1 ${VT}_snrc4_fix1-16_s2_f1 ${VT}_prof-sa ${VT}_prof-sa_s2 \
+  --cbrs 1/16 2>&1 | tee -a results/s16_seeds.txt
+
+# --- reading section 16 (send back everything it prints) ----------------------------
+#   section 13's reading block (its seven cat lines), then
+cat results/s16_seeds.txt
+
+# Decision (docs/PAPER.md C8): the four paired differences sa - fs16, sa - fs16b, sab - fs16,
+# sab - fs16b under slope_adv all >= +0.08 dB, and fs16b - fs16 and sab - sa within +-0.04:
+# the scheduler's channel is worth ~+0.1 dB beyond the length, robust to the training seed
+# (state it with the seed spread). Any of them <= +0.03: seed noise is the size of the effect;
+# report C8 as "length specialisation plus at most a few hundredths". Section 13's decisions
+# (C5-C7, RL, ABS, RMAB) are in its own block.
