@@ -98,13 +98,13 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
                         codesign.py (the channel a scheduler makes, as a bank of SNR histories
                         that main.py --snr-profiles trains on; bank statistics and convergence)
-docs/NOTES.md           what the previous tree established; open questions
+docs/NOTES.md           results by topic, condensed (the full chronological notes: git ec9cc68)
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
 docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token communication,
                         adaptive tokenizers, allocation; the novelty matrix
 docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
-docs/PAPER.md           the paper plan: claims and their evidence, outline, figures, what is owed
+docs/PAPER.md           the paper plan: story, contributions and evidence, outline, what is owed
 ```
 
 ## Defaults and the knobs worth knowing
