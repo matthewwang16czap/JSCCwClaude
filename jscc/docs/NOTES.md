@@ -898,3 +898,73 @@ fs16b -0.003). So the scheduler's channel is worth +0.08 to +0.12 dB beyond the 
 seed's code is no better a 3-phase code in general, only on the channel it trained for. The
 pre-registered rule (all four >= +0.08) is met to within 0.001 dB: report C8 as "+0.10 dB
 [+0.08, +0.12] across seeds, specific to the scheduler's channel".
+
+## Problem P1, step 8 (2026-10-14): section 13's measurements (run as COMMANDS 17)
+
+**Link abstraction** (held-out profiles, one effective SNR on each image's own constant curve;
+MAE dB). The anchor result:
+
+| code | MIESM (capacity, equal weights) | capacity, sensitivity weights | EESM | noise variance | **MMSE, sensitivity weights** | additive model |
+|---|---|---|---|---|---|---|
+| snrc4 (piecewise-trained prefix) | 0.487 | 0.337 | 0.194 | 0.133 | **0.055** | 0.034-0.069 |
+| s1 (constant-SNR-trained) | 0.721 | 0.614 | 0.214 | **0.150** | 0.222 | 0.12-0.29 |
+| a decoder per length (hd) | 0.499 | 0.270 | 0.182 | 0.173 | **0.089** | 0.048-0.093 |
+| one model per CBR | 0.410 | 0.293 | 0.182 | 0.204 | **0.110** | 0.077-0.089 |
+
+(EESM and noise with sensitivity weights.) For all three piecewise-trained code families the
+slots add as MMSEs weighted by the decoder's sensitivity: 2.5-6x more accurate than any other
+rule, and ~9x more accurate than MIESM, digital system simulation's standard. The constant-SNR-
+trained code obeys no rule well (best: noise averaging, 0.150) and the additive model fits it
+2-4x worse: the training decides the abstraction. ABS passes.
+
+**CQI errors** (decisions on reports off by N(0, sd^2) dB; JSCC decoded at the true SNR;
+digital at its best backoff per policy, blocks lost when the slot could not carry them; best
+policy each; 2000 frames):
+
+| sd (dB) | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| mean PSNR: prefix / hd / per-CBR (slope_adv) | 31.43 / 31.63 / 31.58 | 31.39 / 31.59 / 31.54 | 31.28 / 31.48 / 31.43 | 31.13 / 31.33 / 31.28 |
+| mean PSNR: HEIC + CQI table / 3 dB-gap code (greedy) | 31.29 / 32.13 | 30.59 / 31.12 | 29.84 / 30.26 | 29.02 / 29.44 |
+| hd minus HEIC + CQI / minus the gap-3 code | +0.34 / -0.50 | +1.00 / +0.48 | **+1.64 / +1.22** | +2.31 / +1.88 |
+| 30 dB: prefix / hd (plan_adv) / per-CBR (padc_adv) | 74.9 / 77.2 / 78.1 | 74.6 / 76.9 / 77.7 | 73.4 / 75.6 / 76.6 | 71.0 / 73.2 / 74.4 |
+| 30 dB: HEIC + CQI / gap-3 (online_pf) | 74.4 / 80.4 | 67.7 / 71.7 | 61.1 / 63.9 | 54.3 / 56.7 |
+| hd minus HEIC / minus gap-3 (points) | +2.8 / -3.2 | +9.2 / +5.2 | **+14.5 / +11.7** | +18.9 / +16.5 |
+
+JSCC loses 0.3 dB / 4 points from sd 0 to 3; digital 2.3-2.7 dB / 20-24 points (it must back
+off 1-6 dB and still loses 2-17% of its blocks; fixed backoffs confirm the tuning). C5 passes:
+with 1 dB of CQI error JSCC is ahead of even a 3 dB-gap code. Among QoS policies plan_adv is the
+robust one (-3.9 points at sd 3), online and replan_adv lose 13 (they stop users on reported
+SNRs): C7 revised.
+
+**Headroom** (400 frames): mean PSNR -- rollout +0.041 dB (+0.043 at sd 2, +0.006 with slot
+correlation 0.9, +0.031 with 25% lost); the clairvoyant optimum +0.23 to +0.43 (certified, bound
+- optimum <= 0.001 dB); greedy quotas = the exact DP in 100% of frames. 30 dB -- rollout +2.0
+points (replan_adv), +0.7 (plan_adv), +0.5 (T 16), -0.9 (sd 2), +0.6 (25% lost); clairvoyant
++4.7 to +12.7. **Phases mapped by sensitivity** on our own slots (ex post): +0.13 dB, +3.0 to
++4.2 points at 30 dB -- the largest item a causal rule could still take (a sequential-
+assignment, Derman-Lieberman-Ross, rule for fixed-quota frames).
+
+**Restless bandit**: the nested model costs <= 0.007 dB held-out (snrc4) and <= 0.004 (hd): the
+two-number user state is exact enough. Whittle = our rule for the mean (+0.005 dB), +0.146 dB
+[0.106, 0.188] with 25% lost slots; -0.8 / -0.1 / +0.9 points at 30 dB. Causal upper bound
+(Lagrangian): +0.26 dB over our rule (mean; +0.29 with lost slots): our rule is certified within
+0.26 dB of the best causal scheduler, rollout shows at least 0.045 is reachable. At 30 dB the
+bound is +5.5 to +7.9 points, looser than the clairvoyant one at T 16 and with lost slots.
+
+**Decoded** (60 frames, paired): mean PSNR hd 31.815, per-CBR 31.762, prefix 31.586 (hd - per-CBR
++0.05); 30 dB hd plan_adv 80.8 / replan_adv 80.2 vs per-CBR padc_adv 81.0 (+0.8 [-0.2, +2.1]
+for per-CBR: a tie); 25% lost: hd +0.78 dB [0.64, 0.91] and +1.9 points [0.0, 3.8] over per-CBR.
+Model MAE 0.05-0.08 dB on every decoded set. HF (the prefix code with the same extra training)
+as a utility: 31.52 dB, 75.8% at 30 dB -- hd is +0.11 dB / +1.4 points over it.
+
+**Equal budget** (all snrc4 + 400 epochs, Kodak, paired, dB over snrc4):
+
+| length | HF (both, all CBRs) | HC (decoder, all) | H (decoder, one CBR) | FS (both, one CBR) | H's share of FS - HF |
+|---|---|---|---|---|---|
+| 1/24 | +0.080 | +0.095 | +0.147 | +0.232 | 44% |
+| 1/16 | +0.082 | +0.118 | +0.168 | +0.246 | 52% |
+| 1/12 | +0.112 | +0.131 | +0.200 | +0.314 | 44% |
+
+At equal budget the nesting penalty at 2-4 phases is 0.15-0.20 dB and a decoder per length
+recovers about half of it; the encoder holds 0.08-0.11 dB. Section 12's "79-101%" compared with
+specialists trained 400 epochs less: corrected (C6).

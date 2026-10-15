@@ -142,6 +142,18 @@ IEEE Transactions on Wireless Communications (TWC).
    the larger gains) and the channel the code sees (selection-biased; train for it; it learns
    it). If you and your supervisor want a single bigger new idea instead, it has to be a new
    problem (e.g. refine-or-refresh for status updates), not more of this one.
+16. **Section 13's measurements (2026-10-14): the paper is there.** The anchor holds: a
+   piecewise-trained learned code admits its own link abstraction -- slots add as
+   sensitivity-weighted MMSEs, 0.055 dB held-out, ~9x more accurate than MIESM -- across three
+   code families, and a constant-SNR-trained code obeys none (C12). Under realistic CSI the
+   separation comparison turns decisive: with 2 dB CQI errors JSCC is +1.6 dB and +15 points
+   ahead of HEIC with tuned link adaptation, ahead of a 3 dB-gap code from 1 dB of error on
+   (C5). The scheduler is certified within 0.26 dB of the best causal policy for the mean, with
+   a clean Whittle/restless-bandit account (C13); per-length decoders tie per-CBR codes at the
+   target and win under lost slots (C6, corrected to "about half the penalty" at equal
+   budget). Together with MAC-aware training (C8-C11) this is a coherent TWC paper: "the
+   code-scheduler interface". Remaining risks: one test set, PSNR only, the codec ~0.8 dB
+   behind the best published one.
 
 ## 1. Your four points, checked
 
