@@ -127,6 +127,22 @@ cross-layer joint source-channel coding and scheduling for video (unequal error 
 a fixed channel model), and matched training to a deployment SNR distribution (our "blind"
 control, COMMANDS 14).
 
+## F4. Precedents for the abstraction, the mapping and the scheduling (checked 2026-10-16)
+
+| work | what | relation |
+|---|---|---|
+| SoftCast (Jakubczak and Katabi, HotNets 2009 / MobiCom 2011); ParCast / ParCast+ ([MSR](https://www.microsoft.com/en-us/research/?p=168037)); Supcast ([1812.06713](https://arxiv.org/pdf/1812.06713)) | LINEAR analog video: transform coefficients sent as real values, LLSE decoder, power allocated per chunk; ParCast puts high-energy components on high-gain subchannels; Supcast schedules chunks over NOMA multicast | **the precedent for our abstraction's form**: for a linear analog code the distortion is, by construction, a sum of per-component MMSE errors, and matching important components to good subchannels is ParCast's rule (our "phases mapped by sensitivity", ex post). What is new here: a learned NONLINEAR code obeys the same form, only when trained for slot-varying SNR, with weights measured per image; and the matching is done online, over time, across many users with causal CQI. Cite and position, do not claim the form |
+| Importance-aware MIMO-OFDM semantic communication with a ViT ([2508.07696](https://arxiv.org/pdf/2508.07696)); FAST, feature allocation over space and time ([2401.14614](https://www.arxiv.org/pdf/2401.14614)); DeepStream ([2509.05971](https://arxiv.org/html/2509.05971v1)) | single-user: important features onto better subchannels / slots, given the CSI of the transmission | the single-link version of "the head goes into the good slots"; no multi-user scheduler, no deadline |
+| Yan, Qin et al., resource allocation for text semantic communications ([2201.06023](https://ar5iv.labs.arxiv.org/html/2201.06023)); JSCC capacity resource allocation ([2211.11412](https://arxiv.org/pdf/2211.11412)); oracle PSNR + constrained Bayesian optimisation ([2604.10931](https://arxiv.org/pdf/2604.10931)); performance evaluator for adaptive CSI feedback ([2302.13477](https://arxiv.org/pdf/2302.13477)) | multi-user semantic / JSCC allocation from a quality-vs-SNR curve (lookup table, polynomial, predictor): channel assignment, RBs, power, compression ratio | **static** allocation, one SNR per user and transmission: the abstraction is a constant-SNR curve, which is our "mean dB" rule and fails when a code spans slots of different SNRs. The best static allocation on our curves is in our baselines (equal-slope counts = the exact DP), so these methods are covered in principle |
+| DRL scheduling for IRS-assisted semantic communication ([2504.07498](https://ar5iv.labs.arxiv.org/html/2504.07498), [2603.21097](https://arxiv.org/pdf/2603.21097)) | user scheduling + beamforming + compression by deep RL, semantic throughput / energy efficiency | learned schedulers without a quality model of slot-split codes; our causal upper bound caps what any such policy could add on our problem (+0.26 dB mean) |
+| PSNR-aware OFDMA video scheduling ([PMC4764368](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4764368/)); SVC scheduling over OFDM (Ji et al.); OLM layered multicast | digital video: quality as a function of delivered bits, deadlines, multi-user diversity | the digital counterpart of our scheduler; our digital baseline runs the same schedulers on HEIC |
+| DeepJSCC vs separation over OFDM ([2101.03909](https://arxiv.org/pdf/2101.03909), [2109.05194](https://arxiv.org/pdf/2109.05194)); DeepJSCC-Q, D2-JSCC, compatibility surveys ([2412.18876](https://arxiv.org/pdf/2412.18876), [2403.07338](https://ar5iv.labs.arxiv.org/html/2403.07338)) | single-link comparisons with BPG + LDPC at the best fixed MCS; digital-compatible JSCC | no CQI-driven link adaptation loop with report errors, no multi-user scheduling: our CSI-error comparison (C5) is new in kind |
+
+Searches of 2026-10-16 (deep JSCC + scheduling + fading downlink; link abstraction for semantic
+communication; restless bandits for semantic scheduling; JSCC vs separation under link
+adaptation) found no paper that schedules deep JSCC codes slot by slot over a fading multi-user
+downlink, nor a link-to-system abstraction for codes whose symbols span slots of different SNRs.
+
 ## G. Theory anchors
 
 * Successive refinement (Equitz and Cover 1991; Rimoldi 1994): a Gaussian source under MSE is

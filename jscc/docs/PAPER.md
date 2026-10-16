@@ -49,6 +49,25 @@ codec itself decoding the schedules.
 | 4. System verdicts | C6 | Encode once + a decoder per length is the JSCC system to use | best on mean PSNR and with lost slots (+0.78 dB, +1.9 points decoded vs per-CBR), ties per-CBR at the target; at equal budget a decoder per length recovers about half of the nesting penalty | 4 | done |
 | | C5 | Against digital under realistic CSI | on par with error-free CQI; at 1 / 2 / 3 dB CQI error +1.0 / +1.6 / +2.3 dB and +9 / +15 / +19 points over HEIC; ahead of a 3 dB-gap code from 1 dB on | 5 | done |
 
+## Prior work: what is known and what is new (docs/SURVEY.md, F-F4)
+
+* Known: the Gaussian MMSE; for LINEAR analog codes (SoftCast) the distortion is a sum of
+  per-component MMSE errors by construction, and ParCast puts important components on good
+  subchannels; digital link abstraction by EESM / MIESM; single-link adaptive DeepJSCC (PADC,
+  JSCCformer-f, DRJSCC); static multi-user semantic allocation from a constant-SNR quality curve;
+  PF, gradient and restless-bandit scheduling of digital (layered) video.
+* New: a learned NONLINEAR code behaves at the system level like a linear analog code with
+  learned per-phase weights, and only when trained for slot-varying SNR (C12) -- which explains
+  why MIESM fails for it; that abstraction makes deadline scheduling of learned codes a tractable
+  restless bandit with a certified index policy (C13); the scheduler-made channel (C8-C10); and a
+  comparison with digital under a CQI-driven link-adaptation loop with report errors (C5). No
+  paper found schedules deep JSCC codes slot by slot over a fading multi-user downlink.
+* Baselines in the paper: RR, max-SNR, PF (the LTE/NR default), PADC's per-image rule (TWC 2023),
+  the exact optimum of the static allocation problem (what static semantic-allocation papers
+  solve), fixed-rate codes per CBR, encode once with per-length decoders, HEIC with LTE CQI link
+  adaptation and tuned backoff, a 3 dB-gap code and capacity; for the abstraction mean dB,
+  noise, MIESM, EESM; above all of them the causal upper bound and the clairvoyant optimum.
+
 ## Why it is a TWC paper now (and was not on 10-13)
 
 TWC wants a wireless problem that matters, a non-obvious contribution backed by analysis, and a
@@ -107,9 +126,12 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    leaves (+0.13 dB / +3-4 points ex post). CPU; I build it.
 2. Second test set (CLIC) and a perceptual metric (MS-SSIM / LPIPS) for the main tables. GPU,
    about a day, if CLIC is on the server.
-3. Optional: a Jacobian probe (the first-order mechanism behind section 4); a better codec
+3. HARQ with soft combining in the digital baseline: today a block the slot could not carry is
+   lost (the transmitter learns it); real NR retransmits and combines. It narrows C5 somewhat
+   (likely tenths of a dB at 2 dB CQI error); CPU, I add it.
+4. Optional: a Jacobian probe (the first-order mechanism behind section 4); a better codec
    (more data) for the absolute numbers.
-4. Writing and figures.
+5. Writing and figures.
 
 ## Expected reviewer objections
 
@@ -119,4 +141,6 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | The codec is ~0.8 dB behind the best published one | every claim is relative; the abstraction and the schedulers hold on three code families |
 | Gains are moderate | the claims are the abstraction, certified optimality and the CSI verdict, not a single gain |
 | The digital baseline is weak | HEIC with tuned backoff, lost blocks counted, plus a 3 dB-gap code and capacity; ideal-CQI results reported too |
-| TDMA, one user per slot | OFDMA adds a dimension to the same index; discussed as an extension |
+| TDMA, one user per slot | a slot is any resource unit (a group of RBs over a TTI); OFDMA gives more, smaller units per TTI to the same index; discussed as an extension |
+| "The MMSE form is SoftCast's" | yes for linear analog codes, by construction; the finding is that a learned nonlinear code obeys it only when trained for it, and that this, not MIESM, is the abstraction for scheduling learned codes |
+| Analog symbols are not NR-compatible | a 6G mode (as all DeepJSCC work assumes); the scheduler and abstraction need only per-slot noise, so they carry over to quantised (DeepJSCC-Q-style) codes, to measure |
