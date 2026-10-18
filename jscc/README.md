@@ -88,7 +88,9 @@ alloc/                  per-image budget policy: core.py (allocation, statistics
                         utility.py (additive noise-sensitivity model of a prefix, for scheduling),
                         digital.py (separation baseline: codec R-D points + link adaptation),
                         whittle.py (the frame as a restless bandit: per-user dynamic programs,
-                        the Whittle index, an upper bound on every causal scheduler)
+                        the Whittle and Lagrangian indices, an upper bound on every causal
+                        scheduler; programs that decide on stale reports),
+                        csi.py (outdated channel reports: posterior, kernel, aware decisions)
 tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  probe.py
                         fetch_models.py  toy_nesting.py  alloc_sweep.py  alloc_policy.py  frontier.py
                         mixed_snr.py (prefixes whose chunks arrived at different SNRs)
@@ -98,6 +100,8 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
                         codesign.py (the channel a scheduler makes, as a bank of SNR histories
                         that main.py --snr-profiles trains on; bank statistics and convergence)
+                        rmab_scale.py (index policies against the bound as the cell grows:
+                        K users, B = K/8 resource units per slot)
 docs/NOTES.md           results by topic, condensed (the full chronological notes: git ec9cc68)
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -171,6 +175,13 @@ the same slots, phases permuted over them); `main.py
 --snr-profiles results/bank_sa.json` trains on them (each step one prefix length from the
 bank, per image a history of that length; run-name suffix `prof-sa`); `codesign.py stats A B
 --against C` compares banks.
+Stale reports (`alloc/csi.py`): `schedule_sim.py --cqi-corr 1 0.9 0.6 0` gives every slot a
+report of correlation r with its channel (r = J0(2 pi f_D tau)), the true slots unchanged;
+policies take reports as exact unless `--cqi-aware` (decisions on each slot's posterior; the
+whittle policy's programs decide on the report). `tools/rmab_scale.py --users 8 16 32 64 128`
+runs PF, our rule, the Whittle and Lagrangian indices, the ID-guided policy of the restless-
+bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8 units
+per slot (`--cqi-corr`, `--target`, `--preempt` too).
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and

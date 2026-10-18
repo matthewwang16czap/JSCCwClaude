@@ -1,10 +1,10 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-14 (b). Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-18. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: NOTHING YET (section 18). Everything through section 17 is done and recorded in
-docs/NOTES.md; the next runs wait for the choice of next steps (docs/PAPER.md, "Still owed").
+WHAT TO RUN: SECTION 18 (CPU only, ~3 h in three background chains). Everything through
+section 17 is done and recorded in docs/NOTES.md.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -29,7 +29,9 @@ docs/NOTES.md; the next runs wait for the choice of next steps (docs/PAPER.md, "
   16 section 13 + seed replicates of sa and   replicates done (docs/NOTES.md "P2, round 2");
      fs16                                     its section-13 part moved to 17
   17 section 13's measurements, in full       done (docs/NOTES.md "P1, step 8")
-  18 (nothing yet)                            TO RUN NOW: nothing; waiting for the next choice
+  18 the scheduler as a restless bandit,      TO RUN NOW (CPU only)
+     re-examined: stale reports (Doppler x
+     delay) and many users per slot
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -1790,8 +1792,141 @@ cat results/s13_budget.txt                                                     #
 # Decision: section 13's block (C5, C6, C7, RL, ABS, RMAB) -- unchanged.
 
 ================================================================================
- 18. TO RUN NOW -- nothing yet
+ 18. TO RUN NOW -- the scheduler as a restless bandit, re-examined (CPU only, ~3 h)
 ================================================================================
-# Sections 14-17 are done and recorded. The next runs depend on which of the owed items comes
-# next (docs/PAPER.md, "Still owed": an online phase-to-slot mapping rule, CPU; a second test
-# set and a perceptual metric, GPU; the writing). Nothing to launch until then.
+# Why (docs/PROBLEM.md section 3; docs/SURVEY.md F5): two assumptions of our restless-bandit
+# frame are tested against what the restless-bandit literature says. (1) The scheduler is
+# told each slot's channel exactly. Real reports are stale (feedback delay x Doppler): the
+# report's correlation with the slot is r = |J0(2 pi f_D tau)|; at 3.5 GHz with 5 ms-old
+# reports ~0.98 at 3 km/h, 0.76 at 10, 0.50 at 15, ~0 at 24 (below 0.3 beyond); with 1 ms-old
+# reports 0.91 at 30 km/h, 0.66 at 60. Grunewalder and Khaleghi (JMLR 2019): what a
+# policy gains by switching between arms is bounded by how much its information says about
+# the current pay-off; the same bound says the channel a scheduler makes (section 14-15) is
+# only as lifted as its reports are fresh. Measured here: the opportunistic part of every
+# gain, the lift, JSCC vs digital, and the bound, as r falls (alloc/csi.py, --cqi-corr).
+# (2) One user per slot, 8 users: the index-policy theory (Hu and Frazier 2017, Brown and
+# Smith 2020, Zhang and Frazier 2021, Gast, Gaujal and Yan 2023) is asymptotic in the number
+# of users with a fixed share served per slot; there the gap of a Lagrangian index policy to
+# the bound vanishes like 1/sqrt(K) or faster, without indexability. Measured here: B = K/8
+# resource units per slot, K = 8 ... 128 (tools/rmab_scale.py). No GPU work in this section.
+# Everything is skipped if its output exists. Order: 18.0, then 18.1-18.3 in the background
+# (three chains), then 18.4 when they are done.
+
+# 18.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s18
+cat > logs_s18/env.sh <<'ENV'
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+NU="--utility results/utility_snrc4_nested.json --belief results/belief_snrc4_nested.json"
+HD="--utility results/utility_hd.json --belief results/belief_hd.json --frames 2000"
+DH6="--utility results/rd_heic.json --frames 2000 --digital-max-phases 6"
+R="1 0.95 0.9 0.8 0.6 0.4 0"
+NW=8
+ENV
+. logs_s18/env.sh
+#   inputs that must exist (all from sections 12-17; send me any line saying "No such file"):
+ls results/utility_snrc4.json results/belief_snrc4.json results/utility_snrc4_nested.json   results/belief_snrc4_nested.json results/utility_hd.json results/belief_hd.json   results/rd_heic.json results/bank_sa.json > /dev/null
+
+# 18.1 -- CPU, background, ~1-1.5 h: stale reports, r = 1 (fresh) ... 0 (useless), the same
+#   frames and true slots at every r. "naive": every policy takes the reports as exact (what
+#   schedulers do today); "aware": it knows r and decides on each slot's posterior (JSCC: the
+#   expected distortion; digital: the rate of best expected goodput, instead of a backoff).
+#   18.1a JSCC (a decoder per length): rr / pf (no content) and fixed_uni / fixed_slope /
+#   slope_adv (content; the last two: the same quotas, PF vs advantage timing), so
+#   "static" = fixed_slope - fixed_uni and "opportunistic" = slope_adv - fixed_slope at each r.
+#   18.1b digital (HEIC, 6 slots; LTE CQI table with the backoff tuned per r and policy, as in
+#   17.3a; the 3 dB-gap code), naive and aware.
+. logs_s18/env.sh
+nohup bash -c "
+[ -s results/s18_stale_jscc.txt ] || {
+python tools/schedule_sim.py $HD --policies rr pf fixed_uni fixed_slope slope_adv --cqi-corr $R > results/s18_stale_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --policies rr pf fixed_uni fixed_slope slope_adv --cqi-corr $R --cqi-aware >> results/s18_stale_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --policies pf padc padc_adv online plan_adv replan_adv --cqi-corr $R >> results/s18_stale_jscc.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --policies pf padc padc_adv online plan_adv replan_adv --cqi-corr $R --cqi-aware >> results/s18_stale_jscc.tmp 2>&1 ;
+mv results/s18_stale_jscc.tmp results/s18_stale_jscc.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s18_stale_dig.txt ] || {
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr $R > results/s18_stale_dig.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr $R --cqi-aware >> results/s18_stale_dig.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --link shannon --gap-db 3 --cqi-corr $R >> results/s18_stale_dig.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-corr $R >> results/s18_stale_dig.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-corr $R --cqi-aware >> results/s18_stale_dig.tmp 2>&1 ;
+mv results/s18_stale_dig.tmp results/s18_stale_dig.txt ; }
+" > /dev/null 2>&1 &
+
+# 18.2 -- CPU, background, ~40 min: (a) the channel the scheduler makes, as the reports go
+#   stale (section 14's bank recipe: slope_adv, 4000 frames, seed 1000; the bank holds the
+#   slots' TRUE SNRs), per-phase lift against the fresh bank_sa.json; (b) the restless bandit
+#   on stale reports at K = 8: our rule, the Whittle and Lagrangian indices (programs that
+#   decide on the report) and the bound, which stays a bound on every scheduler seeing only
+#   such reports; one naive line at r = 0.7
+. logs_s18/env.sh
+nohup bash -c "
+[ -s results/s18_bank_stale.txt ] || {
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --cqi-corr 0.95 --out results/bank_sa_cqi95.json > /dev/null 2>&1 ;
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --cqi-corr 0.8 --out results/bank_sa_cqi80.json > /dev/null 2>&1 ;
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --cqi-corr 0.6 --out results/bank_sa_cqi60.json > /dev/null 2>&1 ;
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --cqi-corr 0.3 --out results/bank_sa_cqi30.json > /dev/null 2>&1 ;
+python tools/codesign.py bank --utility $U $B --policy slope_adv --frames 4000 --cqi-corr 0 --out results/bank_sa_cqi0.json > /dev/null 2>&1 ;
+python tools/codesign.py stats results/bank_sa.json results/bank_sa_cqi95.json results/bank_sa_cqi80.json results/bank_sa_cqi60.json results/bank_sa_cqi30.json results/bank_sa_cqi0.json --against results/bank_sa.json > results/s18_bank_stale.tmp 2>&1 ;
+mv results/s18_bank_stale.tmp results/s18_bank_stale.txt ; }
+[ -s results/s18_rmab_stale.txt ] || {
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW > results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --cqi-corr 0.9 >> results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --cqi-corr 0.7 >> results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --cqi-corr 0.7 --cqi-naive >> results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --cqi-corr 0.4 >> results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --target 30 >> results/s18_rmab_stale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --target 30 --cqi-corr 0.7 >> results/s18_rmab_stale.tmp 2>&1 ;
+mv results/s18_rmab_stale.tmp results/s18_rmab_stale.txt ; }
+" > /dev/null 2>&1 &
+
+# 18.3 -- CPU, background, ~1.5 h: many users, the index theory's regime. K = 8 ... 128 users,
+#   B = K/8 units per slot (each one phase, a user at most one per slot), 24 slots: every user
+#   gets 3 phases on average at every K, as in the main frame. Per K: pf, our rule (adv), the
+#   Whittle index, the Lagrangian index, the CMU blog's ID-guided policy and its random-order
+#   baseline (each user's ideal action from its program at the bound's prices; conflicts in a
+#   fixed order per frame / a fresh random order per slot), the Lagrangian bound (price per
+#   slot), the gap per user and the gap x sqrt(K), and an indexability check of 8 programs.
+#   Mean PSNR, the 30 dB target, and 25% of units lost
+. logs_s18/env.sh
+nohup bash -c "
+[ -s results/s18_scale.txt ] || {
+python tools/rmab_scale.py $NU --users 8 16 32 64 128 --frames 100 --workers $NW --out results/s18_scale_mean.json > results/s18_scale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 16 32 64 128 --frames 100 --workers $NW --target 30 --out results/s18_scale_tgt.json >> results/s18_scale.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 32 128 --frames 100 --workers $NW --preempt 0.25 --out results/s18_scale_lost.json >> results/s18_scale.tmp 2>&1 ;
+mv results/s18_scale.tmp results/s18_scale.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s18_*.tmp
+
+# 18.4 -- reading (send back everything it prints) ------------------------------------------
+cat results/s18_stale_jscc.txt results/s18_stale_dig.txt          # 18.1
+cat results/s18_bank_stale.txt results/s18_rmab_stale.txt          # 18.2
+cat results/s18_scale.txt                                          # 18.3
+#   (a chain still running shows as a missing file: its partial output is the .tmp of the
+#   same name; `ls results/s18_*.tmp` lists the ones not finished)
+
+# Decision (what the results would change; docs/PAPER.md):
+#   18.1  the opportunistic part falls to ~0 as r -> 0 while the static (content) part stays:
+#         the index degrades gracefully to the best static allocation, and the gain splits
+#         cleanly into "what the content is worth" and "what fresh reports are worth" (C3).
+#         JSCC's lead over digital growing as r falls: C5 gets a physical axis (speed x CSI
+#         delay) instead of a dB error. "aware" ~ "naive": staleness costs information, which
+#         no transmitter logic recovers.
+#   18.2  the lift shrinking with r: the scheduler-made channel (C8-C10) is a low-mobility,
+#         fresh-report effect -- the caveat the paper states, with the measured curve.
+#   18.3  id_guided above rand_guided at the 30 dB target and the index policies above both
+#         for the mean: conflicts must be resolved by persistency where rewards are all-or-
+#         nothing and by value where they are smooth (the blog's lesson, in our setting).
+#         gap x sqrt(K) flat or falling: the theory's regime holds for learned codes; our
+#         K = 8, one-unit frame is its hardest point, and the certified gap shrinks with the
+#         cell (answers "TDMA, one user per slot"). Indexability ~0%: the Whittle index is
+#         well defined on our programs; the Lagrangian index needs no indexability anyway.

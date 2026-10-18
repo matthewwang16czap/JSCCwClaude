@@ -119,6 +119,65 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
      lengths or lost slots the prefix order is what keeps a cut-short code decodable.
   5. The price of prefix coding is the nesting penalty (0.17-0.47 dB, mostly recoverable at
      2-4 phases by a decoder per length), which the scheduling gain has to exceed.
+  6. Re-examined against the restless-bandit literature (2026-10-18; `docs/SURVEY.md` F5;
+     COMMANDS 18). Our frame is a PLANNING restless bandit (known dynamics, every arm's state
+     observed): every user reports its channel whatever is scheduled, and the quality model is
+     calibrated at the transmitter. The learning-RMAB papers (unknown pay-off processes, only
+     the played arm observed: Grunewalder and Khaleghi, JMLR 2019; Gornet and Sinopoli 2024)
+     answer a question we do not have, but they point at the two assumptions that matter:
+     a. STALE REPORTS. A report is taken before the slot: h_rep = r h + sqrt(1 - r^2) e,
+        r = |J0(2 pi f_D tau)| (3.5 GHz, 5 ms-old reports: 0.98 at 3 km/h, 0.76 at 10, 0.50
+        at 15, ~0 at 24, below 0.3 beyond; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). The arm is
+        then partially observed, but nothing else changes: given the
+        report, h ~ CN(r h_rep, 1 - r^2) (the Kalman predictor of a Gauss-Markov channel), so
+        the user's program decides on the report's fading bin and draws the slot's true gain
+        from a report-to-channel kernel (`alloc/csi.py`, `Arm(cqi_corr=r)`, checked against
+        simulation: the program's value matches the simulated value at r = 1 / 0.8 / 0.4).
+        The decomposition and the bound survive: (1 - p) T lam + sum_k W_k(lam; r) bounds
+        every scheduler that sees only such reports (the user's program may even know its
+        own true Y). What a scheduler gains by switching between users is bounded by what its
+        information says about the current slot (Grunewalder and Khaleghi, Prop. 9), so as r
+        falls the opportunistic part of every gain and the lift of the channel the scheduler
+        makes must vanish, and only the static, content part (how many phases each user
+        gets) remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR
+        of its expected distortion, exact for the additive model's MSE; digital: the rate of
+        best expected goodput); a "naive" one takes the reports as exact, as schedulers do
+        today. Measured in COMMANDS 18.1-18.2 (stand-in: the lift falls from +1.3 dB at r = 1
+        to -2.0 at r = 0, i.e. no selection; aware ~ naive, as information lost is lost).
+     b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and
+        Smith 2020; Zhang and Frazier 2021; Gast, Gaujal and Yan 2023) is asymptotic in the
+        number of arms with a fixed share served per period: there, Lagrangian (LP-priority)
+        index policies lose O(1/sqrt(N)) per arm against the Lagrangian bound, without
+        indexability. A downlink TTI has many resource units (subband groups): B units per
+        slot, each one phase, a user at most one per slot, is exactly that regime, with the
+        bound's supply term (1 - p) B T lam. Our K 8, one-unit frame is its hardest point.
+        `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with
+        B = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's
+        gain at the bound's per-slot prices, ties broken by the Whittle index).
+     c. THE INDEX WHERE NOW AND LATER ARE ALIKE. When a later slot is as good as this one
+        (useless reports, or no deadline pressure yet) taking and leaving the slot are worth
+        the same over a whole range of prices and the indifference price is not unique; the
+        index is defined as the top of that range (the largest price at which taking it is
+        still optimal), located by the gain's slope -1 past it. At r = 0 it is then the
+        user's expected marginal gain, falling with the phases held (what a static
+        allocation needs); with fresh reports nothing changes (identical to the previous
+        definition on the exact small frames). Taking the bottom of the range, as a plain
+        sign test does, lets the programs' interpolation error pick the users (seen on the
+        stand-in: very unequal counts, -0.5 dB).
+     d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
+        SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
+        an ideal action (take or leave this slot at the price lambda*_t), and a rule decides
+        who is served when more users want the slot than it has units. Whittle / Lagrangian
+        indices rank by value; our rule ranks by its certainty-equivalent value among users
+        below their quotas; the blog's ID policy takes the wanting users in a fixed order
+        (persistency), which it proves near-optimal for average reward without the global
+        attractor index policies need. In our finite-horizon frame no attractor condition is
+        needed for index policies, but the blog's lesson still applies where rewards are
+        all-or-nothing: at a quality target, spreading slots over too many users wastes them
+        (its random tie-breaking failure), which our admission rules (shortest need first)
+        already prevent. `tools/rmab_scale.py` runs the ID-guided policy and its random-order
+        baseline beside the indices (COMMANDS 18.3). Stand-in, K 16, 4 frames: ID beats random
+        by 9 points [6, 16] at 30 dB; for the mean the index policies beat both by ~0.15 dB.
 
 ## 4. Baselines
 
@@ -244,6 +303,13 @@ dB with random cuts and uniform lengths: another channel.
   keeps +0.12 dB on the same slots (+0.15 with 16 users); permuting each user's phases over its
   own slots keeps two thirds of it. The codes learn their schedulers: kappa rises as deep fades
   get rarer, and the phase weights move to the phase the scheduler favours (PF: phase 2).
+* How fresh the reports must be (2026-10-18; section 3, item 6a; COMMANDS 18.2): the channel a
+  scheduler makes exists only as far as the scheduler sees the channel. With stale reports of
+  correlation r the lift of every phase must shrink towards the blind channel (Grunewalder and
+  Khaleghi: a policy's sampling times bias what it samples only through the dependence between
+  its information and the pay-off). Stand-in: the served-SNR lift falls from +1.3 dB (r = 1) to
+  -0.8 (r = 0.7) and -2.0 (r = 0: blind). So scheduler-aware training is a low-mobility, fresh-
+  report effect; COMMANDS 18.2 measures the per-phase lift against r on the real utility.
 * Theory owed if it passes: (a) the game and its monotone improvement (above), with the two
   approximation gaps bounded by what section 3 measures; (b) the linear-Gaussian version
   (analog prefix code of a Gaussian source, per-phase power allocation under a per-phase SNR
