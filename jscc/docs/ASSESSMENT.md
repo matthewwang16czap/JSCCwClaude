@@ -175,6 +175,18 @@ IEEE Transactions on Wireless Communications (TWC).
    and its lesson (the rule decides near-optimality) is now tested: ID-ordered and random-
    ordered guided policies run beside the indices in 18.3. The story's spine is unchanged; the
    scheduling claim is restated as relaxation + conflict rule with its regime (PAPER.md).
+18. **Delay (2026-10-18, COMMANDS 19).** Would delay advantages make the paper more convincing?
+   Yes, read the right way. In a frame the deadline is the delay, so the gains become a shorter
+   latency budget for the same quality (stand-in: 11% fewer slots than PF, 24% fewer than PADC
+   at 30 dB): robust, and in the units a systems reviewer uses. Within the frame and under
+   continuous traffic (a new simulator; the frame is its special case, exactly), the claim is
+   the reliability-latency curve: more images at the target within every delay d, and more load
+   carried at a given reliability, because the slots saved by stopping and peak timing serve
+   other requests. What is not in our favour is to be stated, not hidden: the first coarse image
+   comes later and early quality is lower (the deadline objective does not reward them), and on
+   the requests both rules serve, ours can be slower (it waits for peaks; PF rushes new
+   arrivals). Risk: if the codec's curves cross, C14 shrinks to the latency budget and the
+   reliability at the deadline.
 
 ## 1. Your four points, checked
 

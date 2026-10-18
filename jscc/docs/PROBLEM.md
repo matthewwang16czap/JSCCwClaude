@@ -178,6 +178,54 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         already prevent. `tools/rmab_scale.py` runs the ID-guided policy and its random-order
         baseline beside the indices (COMMANDS 18.3). Stand-in, K 16, 4 frames: ID beats random
         by 9 points [6, 16] at 30 dB; for the mean the index policies beat both by ~0.15 dB.
+  7. DELAY (2026-10-18; COMMANDS 19). A frame has one deadline, so delay can mean three things,
+     and they do not all favour the same rule. Stand-in numbers below (the smoke utility, NOT
+     the codec; direction only):
+     a. THE LATENCY BUDGET: the shortest frame that reaches a quality (`tools/latency.py`: each
+        policy's quality against T, inverted). The cleanest delay claim, the same quality with a
+        shorter deadline. Stand-in, K 8: PF needs 27.0 slots [26.6, 27.5] for slope_adv's mean
+        PSNR at 24 (ours: 11% fewer slots); PADC needs 21.0 [20.0, 21.8] for online's share at
+        30 dB at 16 (24% fewer); 80% of users at 30 dB takes online 18.1 slots, PADC 23.7, PF 29.4.
+     b. TIME TO THE TARGET within a frame (`schedule_sim.py --delay`): the share of users at the
+        target by every slot, a CDF over all users (a miss never counts). Stand-in, K 8, T 24:
+        online 15 / 42 / 72 / 89% by slots 6 / 12 / 18 / 24, PADC 12 / 41 / 69 / 81, PF
+        12 / 31 / 56 / 71; online's mean slot (misses at T + 1) 0.5 earlier than PADC's
+        [0.3, 0.8], and on the users both bring to the target no slower (+0.1 [-0.1, +0.4];
+        PF +1.6 slower). The mean slot over the users who get there is NOT the comparison: ours
+        brings more, and harder, users there. The WHITTLE INDEX is far earlier at the same
+        success (stand-in, 40 frames: 36 / 63 / 82 / 88% by slots 6 / 12 / 18 / 24; 3.5 slots
+        [2.9, 4.1] ahead of PADC on the same users, online +0.4): with the target reward, the
+        index of a user with n phases to go is about its success gain per remaining phase (the
+        top of its indifference range), so it serves the shortest remaining need first, weighted
+        by the channel -- shortest-remaining-processing-time, the rule that minimises completion
+        times, which the closed form (this slot against a typical one) does not know.
+     c. CONTINUOUS TRAFFIC (`tools/stream_sim.py`): requests arrive over time (Poisson), each
+        with an image, a mean SNR and its own deadline D; a request leaves as soon as its rule
+        is done with it, so the slots a rule saves (online stopping, peak timing) serve other
+        requests; with one deadline for all it is the frame exactly (checked slot by slot). This
+        is Yu, Xu and Tong's deadline restless bandit (SURVEY F2) with our quality reward. The
+        measures: the share of requests at the target within d slots of arriving, for every d
+        up to D (the reliability-latency curve of URLLC); the capacity, the arrival rate at which
+        a given share still reach the target (Hosseini and Panwar count users admitted at a
+        quality); and the delay on the requests two rules both bring there. Stand-in, D 24, 0.3
+        requests per slot: online 85% at 30 dB, PADC 52%, pf_len 56%; ahead at every d
+        (42 vs 36% within D/4); but on the requests both serve, 1.9 slots [0.9, 2.8] SLOWER than
+        PADC: its deadline guard lets requests wait until their slack runs out (p90 delay = the
+        deadline) and it does not rush new arrivals, which PF timing serves first. The WHITTLE
+        INDEX does not have this flaw: each request's program (horizon = its own deadline) weighs
+        how urgent it is against how good its slot is. Stand-in, D 24, 0.35 requests per slot,
+        3000 slots: whittle 85.0% at 30 dB (online 84.9, PADC 53.0), 58.5% within D/4 (online
+        36.1, PADC 31.7), mean delay 5.9 slots (online 10.0), and 1.7 slots [1.3, 2.2] FASTER
+        than PADC on the same requests. With one deadline for all (a frame) the two tie; with
+        deadlines that differ, the program's index is what delivers the delay advantage, at the
+        cost of one table per image and mean-SNR class (computed once).
+     What does not favour our rule, and is reported with the rest: the first decodable image
+     comes later (round robin and PF serve every user once first, slot (K + 1) / 2 on average;
+     slope_adv 1.6 slots later on the stand-in), and the PSNR averaged over the frame's slots
+     (a progressive display) is lower (-0.9 dB against PF): the deadline objective does not
+     reward early coarse images. If an application does, the users' programs take a per-slot
+     reward (the quality shown after each slot, or 1 per slot spent at the target), which gives
+     a delay-aware Whittle index and its bound by the same decomposition (not implemented).
 
 ## 4. Baselines
 

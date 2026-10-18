@@ -87,6 +87,11 @@ probability p, unknown in advance: the case for codes whose length is not fixed 
 encoded), --pred-noise (the transmitter's curves are off: log-normal errors on each
 image's noise-free MSE and sensitivity), --belief FILE (the transmitter decides on its own
 calibrated curves, tools/utility_fit.py --calib; users are scored on --utility).
+--delay adds the timing of the deliveries (tools/latency.py and tools/stream_sim.py go further):
+the slot of each user's first decodable phase, its PSNR averaged over the frame's slots (as
+decoded after each slot), and with --target the share of users at the target by every slot (a
+CDF over all users), the slot each user reaches it, and that slot compared on the users two
+policies both bring to the target.
 --utility may also be a digital baseline (tools/digital_rd.py, alloc/digital.py: an image
 codec's R-D points over the same slots with ideal link adaptation; --link, --gap-db,
 --digital-mode, --digital-max-phases override the file). --cqi-error s: the reported slot
@@ -292,6 +297,35 @@ def fill(belief, imgs, plan, goal, tgt, spare, P, rule="admit", delta=1.0):
 
 
 FAILED = -100.0                                               # a lost digital block (no bits)
+
+
+def delay_times(util, imgs, hist, log, T, target=None, whole=False):
+    """The timing of one frame's deliveries, per user: the slot (1-based) of its first
+    decodable phase (T + 1: none), its PSNR averaged over the frame's T slots (as decoded
+    after each slot; before any phase, the empty image) and, with a target, the slot at which
+    its decoded PSNR first reaches it (inf: never). `log`: run_frame's (slot, user) pairs.
+    whole: a code decodes only once complete (one model per CBR, --fixed-codes; run_frame
+    returns nothing for an incomplete one)."""
+    when = [[] for _ in hist]
+    for t, k in log:
+        when[k].append(t)
+    first, tavg, reach = [], [], []
+    for k, (i, h) in enumerate(zip(imgs, hist)):
+        i, n = int(i), len(h)
+        w = when[k][:n] if n == len(when[k]) else []     # an incomplete fixed code: nothing
+        n = len(w)
+        q = [util.psnr(i, h[:j]) for j in range(n + 1)]
+        if whole and n:
+            q = [q[0]] * n + [q[n]]
+        qs = np.full(T, q[0])
+        for j, t in enumerate(w):
+            qs[t:] = q[j + 1]
+        first.append((w[-1] if whole else w[0]) + 1 if n else T + 1)
+        tavg.append(float(qs.mean()))
+        if target is not None:
+            hit = [j for j in range(1, n + 1) if q[j] >= target]
+            reach.append(float(w[hit[0] - 1] + 1) if hit else np.inf)
+    return first, tavg, reach
 
 
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
@@ -573,14 +607,17 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
              offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
              preempt=0.0, preempt_quantile=None, cqi_error=0.0, backoff=0.0, cqi_corr=1.0,
-             cqi_aware=False):
+             cqi_aware=False, delay=False, keep_frames=False):
     """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
     on it, users are scored on `util`. cqi_error: sd (dB) of the error of the reported slot
     SNRs; backoff: a digital link's MCS backoff (dB), or one per policy {policy: dB};
-    cqi_corr: stale reports (alloc/csi.py), cqi_aware: the transmitter knows they are."""
+    cqi_corr: stale reports (alloc/csi.py), cqi_aware: the transmitter knows they are.
+    delay: the timing of the deliveries (delay_times); keep_frames: each policy's per-frame
+    objective in its summary ("frames": frame mean PSNR, or share at the target)."""
     t_plan = planned_slots(slots, preempt, preempt_quantile)
     res = {p: {"psnr": [], "frame_mean": [], "frame_min": [], "deep": [], "served": [],
-               "lift": [], "sat": [], "frame_sat": [], "failed": []} for p in policies}
+               "lift": [], "sat": [], "frame_sat": [], "failed": [], "first": [], "tavg": [],
+               "reach": [], "frame_reach": []} for p in policies}
     dumped = []
     frame_iter = draw_frames(util, users, slots, frames, mean_snr, fading, clip, seed, same_image,
                              pred_noise, belief_util, fade_corr, preempt, cqi_error, cqi_corr)
@@ -588,11 +625,12 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
     for f, (imgs, means, snr, belief, avail, seen) in enumerate(frame_iter):
         avg = belief.average() if target is not None else None
         for p in policies:
+            lg = [] if delay else None
             hist = run_frame(util, belief, imgs, means, snr, p, alpha, target, margin, offset, avg,
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
                              avail, 1.0 - preempt, t_plan, seen,
                              backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
-                             clip=clip, aware=aware)
+                             log=lg, clip=clip, aware=aware)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -608,6 +646,13 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                 ok = q >= target
                 r["sat"] += ok.tolist()
                 r["frame_sat"].append(float(ok.mean()))
+            if delay:
+                fi, ta, re = delay_times(util, imgs, hist, lg, slots, target, fixed_codes)
+                r["first"] += fi
+                r["tavg"] += ta
+                if target is not None:
+                    r["reach"] += re
+                    r["frame_reach"].append(float(np.mean(np.minimum(re, slots + 1))))
             if f < dump:
                 for k, (i, h) in enumerate(zip(imgs, hist)):
                     dumped.append({"frame": f, "policy": p, "user": k,
@@ -634,7 +679,40 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                 e = np.array(r[key]) - np.array(res["padc"][key])
                 summary[p]["vs_padc"] = float(e.mean())
                 summary[p]["vs_padc_ci"] = list(bootstrap(e, seed=seed))
+        if keep_frames:
+            summary[p]["frames"] = list(r[key])
+        if delay:
+            summary[p].update(delay_summary(res, p, base, policies, users, slots, target, seed))
     return summary, base, dumped
+
+
+def delay_summary(res, p, base, policies, K, T, target, seed):
+    """simulate --delay: the timing measures of policy p (against `base`, and padc if run)."""
+    r = res[p]
+    out = {"first_slot": float(np.mean(r["first"])), "time_avg_psnr": float(np.mean(r["tavg"]))}
+    if target is None:
+        return out
+    tt = np.array(r["reach"], dtype=np.float64)
+    got = tt[np.isfinite(tt)]
+    out["at_target_by"] = [float(np.mean(tt <= t)) for t in range(1, T + 1)]
+    out["reach_slot"] = float(got.mean()) if len(got) else None
+    out["reach_p90"] = float(np.percentile(got, 90)) if len(got) else None
+    out["reach_all"] = float(np.mean(np.minimum(tt, T + 1)))
+    for ref in dict.fromkeys([base] + (["padc"] if "padc" in policies else [])):
+        d = np.array(r["frame_reach"]) - np.array(res[ref]["frame_reach"])
+        out[f"reach_all_vs_{ref}"] = float(d.mean())
+        out[f"reach_all_vs_{ref}_ci"] = list(bootstrap(d, seed=seed))
+        u = np.array(res[ref]["reach"], dtype=np.float64)          # the same users, both reach
+        both = np.isfinite(tt) & np.isfinite(u)
+        per_f = []
+        for f in range(len(tt) // K):
+            b = both[f * K:(f + 1) * K]
+            if b.any():
+                per_f.append(float((tt[f * K:(f + 1) * K][b] - u[f * K:(f + 1) * K][b]).mean()))
+        out[f"same_users_vs_{ref}"] = float(np.mean(per_f)) if per_f else None
+        out[f"same_users_vs_{ref}_ci"] = list(bootstrap(per_f, seed=seed)) if len(per_f) > 1 else None
+        out[f"same_users_vs_{ref}_n"] = int(both.sum())
+    return out
 
 
 def main():
@@ -704,6 +782,9 @@ def main():
                     help="sd of the log-normal error of the transmitter's curves")
     ap.add_argument("--alpha", type=float, default=0.0, help="greedy: alpha-fair weighting")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--delay", action="store_true",
+                    help="also the timing of the deliveries: first phase, PSNR over the frame, "
+                         "and with --target the slot each user reaches it (a CDF by slot)")
     ap.add_argument("--dump", type=int, default=0, help="histories of the first N frames")
     ap.add_argument("--dump-out", default=None)
     ap.add_argument("--out", default=None)
@@ -750,8 +831,10 @@ def main():
                                          a.pred_noise, a.alpha, a.dump, a.target, a.margin,
                                          a.plan_offset, belief, a.fade_corr, a.plan,
                                          a.fixed_codes, a.preempt, a.preempt_quantile,
-                                         sigma, backoff, corr, a.cqi_aware)
+                                         sigma, backoff, corr, a.cqi_aware, delay=a.delay)
         report(a, util, digital, summary, base, sigma, backoff, ref, corr)
+        if a.delay:
+            report_delay(a, util, summary, base)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:
@@ -818,6 +901,44 @@ def report(a, util, digital, summary, base, sigma, backoff, ref, corr=1.0):
                 f"slots {ref[0]:g} dB ({100 * ref[1]:.1f}% of blocks lost there)")
         print("blocks lost (rate above what the slot supported): " + ", ".join(
             f"{p} {100 * s['failed_share']:.1f}%" for p, s in summary.items()))
+
+def report_delay(a, util, summary, base):
+    """The --delay table."""
+    T = a.slots
+    empty = util.psnr(0, []) if getattr(util, "kind", "") != "digital" else float("nan")
+    print(f"timing: '1st' = the slot of a user's first decodable phase (mean; {T + 1} = never), "
+          f"'PSNR over frame' = its PSNR averaged over the {T} slots, as decoded after each "
+          f"(nothing yet = the empty image, {empty:.1f} dB)")
+    if a.target is None:
+        print(f"{'policy':15s} {'1st':>6s} {'PSNR over frame':>15s}")
+        for p, s in summary.items():
+            print(f"{p:15s} {s['first_slot']:6.2f} {s['time_avg_psnr']:15.3f}")
+        return
+    cut = sorted({max(1, int(round(T * f))) for f in (0.25, 0.5, 0.75, 1.0)})
+    ref = "padc" if "padc" in summary else base
+    print(f"target {a.target:g} dB: users at it by slot {', '.join(map(str, cut))} (% of all users); "
+          f"the slot they reach it (those that do: mean, 90th percentile); the mean slot over all "
+          f"users with misses at T + 1 = {T + 1}, against {ref}; and against {ref} on the users "
+          f"both bring to it (the same users: no selection effect)")
+    print(f"{'policy':15s} {'1st':>6s} {'PSNR over frame':>15s}   "
+          + " ".join(f"{'by ' + str(c):>6s}" for c in cut)
+          + f"   {'reach':>5s} {'p90':>4s}   {'all, vs ' + ref + ' [95% CI]':>30s}"
+          f"   {'same users vs ' + ref + ' [95% CI]':>30s}")
+    for p, s in summary.items():
+        by = s["at_target_by"]
+        ra, rp = s["reach_slot"], s["reach_p90"]
+        line = (f"{p:15s} {s['first_slot']:6.2f} {s['time_avg_psnr']:15.3f}   "
+                + " ".join(f"{100 * by[c - 1]:5.1f}%" for c in cut)
+                + f"   {ra if ra is None else format(ra, '5.2f'):>5s} "
+                  f"{rp if rp is None else format(rp, '4.0f'):>4s}   {s['reach_all']:6.2f}")
+        if p != ref:
+            lo, hi = s[f"reach_all_vs_{ref}_ci"]
+            line += f" {s[f'reach_all_vs_{ref}']:+6.2f} [{lo:+.2f}, {hi:+.2f}]"
+            m, ci = s[f"same_users_vs_{ref}"], s[f"same_users_vs_{ref}_ci"]
+            line += (f"   {m:+6.2f} [{ci[0]:+.2f}, {ci[1]:+.2f}] on {s[f'same_users_vs_{ref}_n']}"
+                     if m is not None and ci is not None else "   -")
+        print(line)
+
 
 if __name__ == "__main__":
     main()

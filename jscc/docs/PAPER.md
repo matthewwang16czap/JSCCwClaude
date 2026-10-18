@@ -26,7 +26,9 @@ code only ever sees the slots the scheduler gives it. We show that
    it, shows the rule decides near-optimality). Our closed-form rule gains +0.46 dB over PF and
    +11 points over PADC's rule (decoded), ties the Whittle index, and is certified within
    0.23 dB of the best causal scheduler at the regime's hardest point (8 users, one per slot);
-   the gap should shrink as users per slot grow (COMMANDS 18.3, pending);
+   the gap should shrink as users per slot grow (COMMANDS 18.3, pending). Read as latency, the
+   same gains should be a shorter deadline for the same quality and, with requests arriving
+   over time, more images at the target within any delay (C14; COMMANDS 19, pending);
 3. with fresh reports the scheduler makes the code's channel (selection lifts the first phases
    ~3 dB), the right channel to train for: +0.1 dB beyond rate specialisation, and the codes
    learn their scheduler's fade statistics; with stale reports the lift must vanish
@@ -44,6 +46,18 @@ bandits. If 18.3 shows no shrinking gap, item 2 keeps "certified within 0.23 dB"
 asymptotic claim; if JSCC's lead does not grow with staleness, item 4 stays on the dB-error axis;
 if the lift survives stale reports, item 3 needs no scope.
 
+Delay (added the same day, docs/PROBLEM.md section 3 item 7): the frame's deadline is the
+latency budget, so the scheduling gains are restated as the frame length needed for the same
+quality, and under continuous traffic (requests arriving over time, a deadline each) as the
+share of images at the target within every delay d and the load the cell carries at a given
+share (C14). Reported with them, because a reviewer will ask: the first coarse image comes later
+and early quality is lower (the deadline objective does not reward them), and on the requests
+two rules both serve the closed-form rule can be slower (its deadline guard waits for the slack
+to run out). There the theory earns its keep: with deadlines that differ, the Whittle index
+(each request's own program) weighs urgency against the channel and, on the stand-in, keeps the
+closed form's success with ~40% less delay. If 19 shows the reliability-latency curves crossing,
+C14 is the latency budget and the reliability at the deadline, not dominance at every d.
+
 ## Contributions and evidence
 
 Claim IDs are stable (COMMANDS.txt and the other docs cite them). All "decoded" results are the
@@ -57,6 +71,7 @@ codec itself decoding the schedules.
 | 2. Scheduling on it | C3 | Mean PSNR: the advantage index | +0.465 dB [0.39, 0.53] decoded over PF, +0.46 for the 5th-percentile user, robust over K, T, curve errors, correlation; content-aware lengths only +0.05 | 3 | done |
 | | C4 | Quality target: admission + stopping on realised SNRs + index timing | +11.0 points [8.3, 13.8] decoded over PADC's rule, +14 over PF; sizing +5, stopping +4, timing +3, admission +2 | 3 | done |
 | | C13 | Near-optimal, with a theory | two-number user state, restless bandit; one program per user (relaxation) + a conflict rule; Whittle index = our rule (+0.15 dB with lost slots); Lagrangian bound: within 0.26 dB of any causal scheduler (mean; the clairvoyant optimum, +0.23, is the tighter cap), 2-5.5 points at the target; clairvoyant optimum certified. Re-examined (SURVEY F5): the bound and the index carry over to stale reports; the theory's regime is many users per slot, where the gap should fall like 1/sqrt(K); conflict rules: value (indices) for the mean, persistency (ID, admission) for the target | 3 | done; COMMANDS 18.2-18.3 pending (stale-report bound, gap vs K, guided policies) |
+| | C14 | Delay: the same gains as latency | the frame length each policy needs for a quality (`tools/latency.py`); time to the target within a frame, a CDF by slot and on the same users (`schedule_sim.py --delay`); continuous traffic, a deadline per request (`tools/stream_sim.py`, the frame exactly when all deadlines coincide): share at the target within d slots for every d, capacity at a share, delay on the same requests. Stand-in only: ours needs 11% fewer slots than PF for the mean, 24% fewer than PADC at 30 dB; at 0.3 requests per slot 85% vs 52% at 30 dB, ahead at every d, but 1.9 slots slower on the requests both serve; the Whittle index (each request's program, its own deadline) keeps online's success with ~40% less delay and is faster than PADC on the same requests; in the frame too it brings users to 30 dB ~3.5 slots earlier at the same final share (its index ~ success gain per remaining phase: shortest remaining need first). The theory's index, not the closed form, carries the time-to-target claim | 3 | pending (COMMANDS 19) |
 | | C7 | Which QoS policy when | plan_adv with known slots and under CQI errors (online loses 13 points at 3 dB error), replan_adv with lost slots | 3, 5 | done |
 | 3. The scheduler-made channel | C8 | Training for it pays | +0.28 dB on the same slots over the same-budget control; +0.08-0.12 beyond length specialisation (two seeds); nothing at the target. Only as far as the reports are fresh (the lift is the scheduler's information about the slot) | 6 | holds, small; lift vs report freshness pending (18.2) |
 | | C9 | The physical channel is the wrong training channel | blind slots -0.04 dB vs generic training, -0.32 vs the scheduler's channel | 6 | done |
@@ -131,7 +146,8 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 6. The scheduler-made channel: the induced distribution and its order statistics,
    scheduler-aware training, what the codes learn (C8-C11).
 7. Evaluation: policies against PF / PADC, codes against per-CBR codes (C6), JSCC against
-   digital under CQI errors (C5); lost slots, correlated fading, K, T; complexity.
+   digital under CQI errors (C5); lost slots, correlated fading, K, T; delay (C14: the latency
+   budget at equal quality, time to the target, continuous traffic); complexity.
 8. Conclusion and limits.
 
 ## Key figures (sources in `results/` on the server)
@@ -144,6 +160,8 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 6. JSCC vs digital against CQI error (`s13_cqi_*.txt`).
 7. Prefix / per-length decoders / per-CBR, known and lost slots (`s12_*`, `s13_replays.txt`).
 8. The scheduler-made channel: lift per phase vs K, kappa and rho of eight codes (`s15_*`).
+9. Reliability against latency: the share of users / requests at 30 dB within d slots (frame and
+   continuous traffic), and the frame length each policy needs for a quality (`s19_*`).
 
 ## Owed before submission
 
@@ -160,6 +178,8 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 6. COMMANDS section 18 (CPU, ~3 h, built 2026-10-18): stale reports (18.1: JSCC vs digital,
    static vs opportunistic part; 18.2: the lift and the bound on stale reports) and many users
    per slot (18.3: gap to the bound vs K, the blog's guided policies, indexability).
+7. COMMANDS section 19 (CPU, ~1.5 h, built 2026-10-18): delay (C14): 19.1 time to the target in
+   the frame, 19.2 the latency budget at equal quality, 19.3 continuous traffic.
 
 ## Expected reviewer objections
 
@@ -173,6 +193,7 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | Why an index and not the ID policy of the recent theory (Hong et al.)? | both are the same relaxation with a different conflict rule; their theorems are for average reward, ours is a finite horizon where index policies need no attractor condition; we run the ID-guided policy and its random-order baseline beside the indices (COMMANDS 18.3): value ranking for smooth rewards, persistency (our admission rules) for all-or-nothing ones |
 | Is the Whittle index well defined (indexability)? | the Lagrangian index (gain at the bound's prices) needs no indexability (Hu and Frazier; Brown and Smith) and is run beside it; the programs' grid check reports the share of non-monotone states (18.3); the index takes the top of the indifference range where now and later are alike |
 | Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds; JSCC vs digital, the scheduling gain and the lift against r (COMMANDS 18.1-18.2) |
+| A scheduler that waits for peaks must add delay | the deadline is the latency budget: the same quality with a shorter frame (C14, 19.2); within the frame and with requests arriving over time, more images at the target within every delay d (19.1, 19.3). With deadlines that differ, the Whittle index (each request's program weighs urgency against the channel) keeps the success with much less delay (stand-in: ~40%), faster than PADC even on the same requests. Slower only for the first coarse image, which the deadline objective does not reward; a per-slot reward in the same programs covers that if an application needs it |
 | Why not learn the scheduler (bandits, RL)? | the model is known: every user reports its channel each slot (full, not bandit, feedback) and the quality model is calibrated from 12 decodes per image; learning restless bandits address a different information structure; and any learned causal policy is capped by our bound (+0.26 dB mean) |
 | "The MMSE form is SoftCast's" | yes for linear analog codes, by construction; the finding is that a learned nonlinear code obeys it only when trained for it, and that this, not MIESM, is the abstraction for scheduling learned codes |
 | Analog symbols are not NR-compatible | a 6G mode (as all DeepJSCC work assumes); the scheduler and abstraction need only per-slot noise, so they carry over to quantised (DeepJSCC-Q-style) codes, to measure |

@@ -102,6 +102,11 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         that main.py --snr-profiles trains on; bank statistics and convergence)
                         rmab_scale.py (index policies against the bound as the cell grows:
                         K users, B = K/8 resource units per slot)
+                        latency.py (the frame length each policy needs for a quality: the
+                        latency budget at equal quality; schedule_sim.py --delay: time to the
+                        target within a frame)
+                        stream_sim.py (continuous traffic: requests arriving over time, a
+                        deadline each; reliability within d slots, capacity, delay)
 docs/NOTES.md           results by topic, condensed (the full chronological notes: git ec9cc68)
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D

@@ -107,7 +107,10 @@ allocation is exact with time-sharing and needs no side information.
 | NeurWIN (NeurIPS 2021); outcome-fair deadline RMABs ([2607.23772](https://arxiv.org/abs/2607.23772)); uncertainty-of-information RMAB ([2102.06384](https://arxiv.org/abs/2102.06384)); significance-driven semantic communication ([2608.28441](https://arxiv.org/abs/2608.28441)) | learned Whittle indices; fairness; information-centric rewards; RMAB named for semantic resource allocation | if the index has to be learned (CQI errors, correlated fading), the learned-index route; semantic RMABs so far use abstract rewards, not a decoded image-quality model |
 
 No paper found (searches of 2026-10-13) schedules a deep JSCC code with a learned image-quality
-reward as a restless bandit. Anchors for the theory: Whittle (J. Appl. Probab. 1988); Weber and
+reward as a restless bandit. For delay (docs/PROBLEM.md section 3, item 7; COMMANDS 19):
+`tools/stream_sim.py` is Yu, Xu and Tong's model (jobs arriving over time, a deadline each, an
+arm per job) with our reward, and its capacity measure is Hosseini and Panwar's "users admitted
+at a quality". Anchors for the theory: Whittle (J. Appl. Probab. 1988); Weber and
 Weiss (J. Appl. Probab. 1990, asymptotic optimality); Hawkins (MIT thesis 2003) and Adelman and
 Mersereau (Oper. Res. 2008), Lagrangian relaxations of weakly coupled dynamic programs; Brown and
 Smith (Manag. Sci. 2020), index policies and bounds for finite-horizon selection problems;

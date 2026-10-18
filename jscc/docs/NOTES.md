@@ -184,6 +184,39 @@ quality model calibrated), not a learning one; two assumptions are now testable.
   -0.07 +- 0.04 (the programs on the right model are not better as an index policy). K 16 with
   2 units per slot (3 frames): Whittle / Lagrangian 0.06 dB from the bound, our rule 0.17.
 
+## 6c. Delay (2026-10-18; COMMANDS 19 pending)
+
+Asked: would delay advantages make the case stronger? The frame has one deadline, so delay is
+read three ways (docs/PROBLEM.md section 3, item 7; tools in parentheses):
+
+* The latency budget at equal quality (`tools/latency.py`): each policy's quality against the
+  frame length T, inverted. The direct translation of the gains.
+* Time to the target within a frame (`schedule_sim.py --delay`): the share of users at the
+  target by every slot (a CDF over all users), the mean slot with misses at T + 1, and the slot
+  on the users two policies both bring there; plus the first decodable phase and the PSNR
+  averaged over the frame (progressive display), where the deadline objective is not on our side.
+* Continuous traffic (`tools/stream_sim.py`): Poisson arrivals, a deadline per request, a
+  request leaves when its rule is done; share at the target within d slots for every d,
+  capacity at a share, delay on the same requests. With one deadline for all it serves a frame
+  exactly as schedule_sim does (pf_len, padc, stop, stop_adv, online; checked slot by slot).
+* Stand-in only (the smoke utility, NOT the codec; direction, not for the paper): latency, K 8:
+  PF needs 27.0 slots for slope_adv's mean PSNR at 24 (11% fewer for ours), PADC 21.0 for
+  online's 30 dB share at 16 (24% fewer). Frame, T 24: online 15 / 42 / 72 / 89% at 30 dB by
+  slots 6 / 12 / 18 / 24 (PADC 12 / 41 / 69 / 81), 0.5 slots earlier on average with misses
+  counted, no slower on the same users (+0.1 [-0.1, +0.4]); slope_adv's first phase 1.6 slots
+  later than PF's and its PSNR over the frame 0.9 dB lower. The Whittle index in the frame (40
+  frames): 36 / 63 / 82 / 88% by slots 6 / 12 / 18 / 24 at the same final share as online, 3.5
+  slots ahead of PADC on the same users (its index ~ the success gain per remaining phase: the
+  shortest remaining need first). Traffic, D 24, 0.3 requests per
+  slot: online 85% at 30 dB vs PADC 52%, ahead at every d, 1.9 slots slower on the requests
+  both serve (its deadline guard lets requests wait until their slack runs out; p90 delay = the
+  deadline). The Whittle index with arrivals (each request's program, its own deadline), 0.35
+  requests per slot: 85.0% (online 84.9), 58.5% within D/4 (online 36.1), mean delay 5.9 slots
+  (online 10.0), 1.7 [1.3, 2.2] FASTER than PADC on the same requests: with deadlines that
+  differ, the program's index carries the delay advantage the closed form misses. Toy model of
+  the explainer (4 users): 10% fewer slots than PF for the mean, 33% fewer than PADC at 30 dB;
+  ahead at every slot from T 12.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -210,3 +243,4 @@ quality model calibrated), not a learning one; two assumptions are now testable.
 | P2, round 2 | 15, 16 | 10-14 | +0.16 is the length, +0.08-0.12 the channel (two seeds); codes learn their scheduler |
 | P1, step 8 | 17 (= 13) | 10-14 | MMSE abstraction ~9x MIESM; CQI errors: JSCC clearly ahead; scheduler certified; equal budget |
 | RMAB re-examined | 18 | 10-18 (pending) | stale reports (static vs opportunistic part, JSCC vs digital, lift, bound) and many users per slot (gap vs K) |
+| Delay | 19 | 10-18 (pending) | latency budget at equal quality; time to the target in a frame; continuous traffic (reliability within d, capacity, same-request delay) |
