@@ -154,6 +154,22 @@ IEEE Transactions on Wireless Communications (TWC).
    budget). Together with MAC-aware training (C8-C11) this is a coherent TWC paper: "the
    code-scheduler interface". Remaining risks: one test set, PSNR only, the codec ~0.8 dB
    behind the best published one.
+17. **The restless bandit, re-examined against its literature (2026-10-18; SURVEY F5,
+   COMMANDS 18).** The framing stands, sharper: ours is the PLANNING kind of restless bandit
+   (every user reports its channel each slot; the quality model is calibrated), so the learning
+   restless-bandit papers (Grunewalder and Khaleghi; Gornet and Sinopoli) do not replace it --
+   but they name its weakest assumption, fresh reports. Stale reports keep the decomposition
+   and the bound (the programs decide on the report; checked against simulation), and must
+   erase the opportunistic part of every gain and the lift of the scheduler-made channel while
+   the content part survives: a physical axis for C5 (speed x CSI delay) and a stated scope for
+   C8 (low mobility). The finite-horizon index theory (Hu and Frazier; Brown and Smith; Zhang
+   and Frazier; Gast, Gaujal and Yan) supplies a Lagrangian index that needs no indexability,
+   and says the bound is tight with many users per slot: our K 8, one-unit frame is the
+   hardest case, and 18.3 measures the gap against K. One flaw found and fixed: where now and
+   later are worth the same, the Whittle index is a price range, and its bottom (a sign test)
+   lets interpolation error choose users; the index is now the range's top (unchanged with
+   fresh reports). Risk if 18.3 shows no shrinking gap: the bound's slack is information, not
+   relaxation, and C13 stays "certified within 0.26 dB" without the asymptotic claim.
 
 ## 1. Your four points, checked
 

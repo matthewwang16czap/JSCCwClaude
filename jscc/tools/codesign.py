@@ -49,12 +49,15 @@ from tools.schedule_sim import NEEDS_TARGET, POLICIES, fades, simulate  # noqa: 
 def build_bank(util, policy, users=8, slots=24, frames=4000, mean_snr=(0.0, 15.0),
                fading="rayleigh", clip=(-2.0, 22.0), seed=1000, belief=None, target=None,
                margin=0.0, offset=0.0, fade_corr=0.0, plan="mean", preempt=0.0, blind=False,
-               shuffle=False):
-    """Every user's delivered history under `policy` on `frames` frames: a bank (dict)."""
+               shuffle=False, cqi_corr=1.0, cqi_aware=False):
+    """Every user's delivered history under `policy` on `frames` frames: a bank (dict).
+    cqi_corr < 1: the scheduler decides on stale reports (alloc/csi.py; cqi_aware: knowing
+    it), the histories hold the slots' true SNRs."""
     summary, _, dumped = simulate(util, users, slots, frames, tuple(mean_snr), fading,
                                   tuple(clip), [policy], seed, dump=frames, target=target,
                                   margin=margin, offset=offset, belief_util=belief,
-                                  fade_corr=fade_corr, plan=plan, preempt=preempt)
+                                  fade_corr=fade_corr, plan=plan, preempt=preempt,
+                                  cqi_corr=cqi_corr, cqi_aware=cqi_aware)
     hist = [[float(s) for s in e["snrs"]] for e in dumped]
     means = [float(e["mean_snr"]) for e in dumped]
     if blind:                                    # the same lengths, slots taken blindly
@@ -68,7 +71,8 @@ def build_bank(util, policy, users=8, slots=24, frames=4000, mean_snr=(0.0, 15.0
             "margin": margin, "blind": bool(blind), "shuffled": bool(shuffle), "seed": seed,
             "users": users,
             "slots": slots, "frames": frames, "mean_snr": list(mean_snr), "fading": fading,
-            "fade_corr": fade_corr, "snr_clip": list(clip), "summary": summary[policy],
+            "fade_corr": fade_corr, "cqi_corr": cqi_corr, "cqi_aware": bool(cqi_aware),
+            "snr_clip": list(clip), "summary": summary[policy],
             "frame": [int(e["frame"]) for e in dumped], "user": [int(e["user"]) for e in dumped],
             "image": [e["image"] for e in dumped], "user_mean_snr": means, "histories": hist}
 
@@ -113,7 +117,10 @@ def print_stats(name, bank, s):
     P = bank["phases"]
     what = (f"{bank['policy']}" + (f" at {bank['target']:g} dB" if bank.get("target") is not None
                                    else "") + (", slots taken blindly" if bank["blind"] else "")
-            + (", phase order shuffled" if bank.get("shuffled") else ""))
+            + (", phase order shuffled" if bank.get("shuffled") else "")
+            + (f", stale reports (correlation {bank['cqi_corr']:g}"
+               + (", scheduler aware)" if bank.get("cqi_aware") else ")")
+               if bank.get("cqi_corr", 1.0) < 1.0 else ""))
     print(f"{name}: {what}; {s['users']} users ({bank['frames']} frames x {bank['users']}, "
           f"{bank['slots']} slots), {100 * s['empty']:.1f}% received nothing")
     print("  phases received (users with any): " + "  ".join(
@@ -171,6 +178,11 @@ def main():
     b.add_argument("--fade-corr", type=float, default=0.0)
     b.add_argument("--plan", default="mean", choices=["mean", "conditional"])
     b.add_argument("--preempt", type=float, default=0.0)
+    b.add_argument("--cqi-corr", type=float, default=1.0,
+                   help="the scheduler decides on stale reports of this correlation with the "
+                        "slots (alloc/csi.py); the bank holds the true SNRs")
+    b.add_argument("--cqi-aware", action="store_true",
+                   help="--cqi-corr < 1: the scheduler knows its reports are stale")
     b.add_argument("--snr-clip", nargs=2, type=float, default=[-2.0, 22.0])
     b.add_argument("--seed", type=int, default=1000,
                    help="frames to train on: not the evaluation's (schedule_sim.py: 0)")
@@ -188,13 +200,16 @@ def main():
     if a.cmd == "bank":
         if a.policy in NEEDS_TARGET and a.target is None:
             ap.error(f"--policy {a.policy} needs --target")
+        if not 0.0 <= a.cqi_corr <= 1.0:
+            ap.error("--cqi-corr is a correlation in [0, 1]")
         util = load_utility(a.utility)
         if getattr(util, "kind", "") == "digital":
             ap.error("a bank describes a token prefix code: --utility from tools/utility_fit.py")
         belief = load_utility(a.belief) if a.belief else None
         bank = build_bank(util, a.policy, a.users, a.slots, a.frames, a.mean_snr, a.fading,
                           a.snr_clip, a.seed, belief, a.target, a.margin, a.plan_offset,
-                          a.fade_corr, a.plan, a.preempt, a.blind, a.shuffle_phases)
+                          a.fade_corr, a.plan, a.preempt, a.blind, a.shuffle_phases,
+                          a.cqi_corr, a.cqi_aware)
         bank.update(utility=a.utility, belief=a.belief)
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:

@@ -844,6 +844,138 @@ def check_codesign(x):
                "a missing bank is refused")
 
 
+def check_stale_csi():
+    """Stale reports (alloc/csi.py), the programs that decide on them (alloc/whittle.py), the
+    simulator's --cqi-corr / --cqi-aware and the many-users tool (tools/rmab_scale.py)."""
+    import contextlib
+    import io
+    import json
+
+    import numpy as np
+
+    from alloc.csi import equivalent_snr, goodput_snr, kernel, outdated, posterior, unit_noise
+    from alloc.digital import efficiency
+    from alloc.utility import Utility, nested_rho
+    from alloc.whittle import Arm, lagrangian_bound
+    from tools.schedule_sim import draw_frames, run_frame, simulate
+
+    print("[stale reports]")
+    e = unit_noise()
+    rep = np.array([-10.0, -3.0, 0.0, 3.0, 6.0])
+    pm = np.array([posterior(rep, r).mean(-1) for r in (0.0, 0.5, 0.9)])
+    th = np.array([r * r * 10 ** (rep / 10) + 1 - r * r for r in (0.0, 0.5, 0.9)])
+    K0, K5, K1 = kernel(16, 0.0), kernel(16, 0.5), kernel(16, 1.0)
+    ok(abs(np.mean(np.abs(e) ** 2) - 1) < 1e-12 and np.abs(pm - th).max() < 1e-9
+       and np.array_equal(K1, np.eye(16)) and np.abs(K0 - 1 / 16).max() < 1e-12
+       and np.allclose(K5.sum(1), 1) and np.abs(K5.mean(0) - 1 / 16).max() < 0.005,
+       "outdated CSI: posterior mean r^2 |h_rep|^2 + 1 - r^2 exact; report kernel = identity "
+       "(fresh), uniform (useless), stochastic with the stationary marginal in between")
+    rng = np.random.default_rng(0)
+    f = 10 * np.log10(rng.exponential(1.0, (2, 40000)))
+    o6 = outdated(rng, f, 0.6)
+    c = np.corrcoef(10 ** (f.ravel() / 10), 10 ** (o6.ravel() / 10))[0, 1]
+    ok(np.array_equal(outdated(rng, f, 1.0), f) and abs(np.mean(10 ** (o6 / 10)) - 1) < 0.02
+       and abs(c - 0.36) < 0.02,
+       f"stale reports keep the Rayleigh law, power correlation r^2 ({c:.3f} for r = 0.6)")
+    mean = np.array([5.0])
+    eq1 = equivalent_snr(rep[None], mean, 2.0, 1.0, (-2, 22))
+    eq0 = equivalent_snr(rep[None], mean, 2.0, 0.0, (-2, 22))
+    eq7 = equivalent_snr(rep[None], mean, 2.0, 0.7, (-2, 22))
+    ok(np.allclose(eq1, np.clip(5 + rep, -2, 22)) and np.ptp(eq0) < 1e-9
+       and np.all(np.diff(eq7) > 0) and np.ptp(eq7) < np.ptp(eq1),
+       "aware JSCC transmitter: a fresh report is taken as is, a useless one says nothing, "
+       "in between the slot's expected distortion rises with the report, less steeply")
+    gs1 = goodput_snr(rep[None], mean, efficiency, 1.0, (-2, 22))
+    true1 = np.clip(5 + rep, -2, 22)
+    g7 = goodput_snr(rep[None], mean, efficiency, 0.7, (-2, 22))
+    post = np.clip(5 + 10 * np.log10(posterior(rep, 0.7)), -2, 22)
+    good = lambda s: efficiency(s)[:, None] * (efficiency(s)[:, None] <= efficiency(post) + 1e-12)  # noqa: E731
+    fixed = max(good(np.clip(5 + rep - b, -2, 22)).mean() for b in np.arange(0, 12, 0.5))
+    ok(np.all(efficiency(gs1) == efficiency(true1)) and good(g7[0]).mean() >= fixed - 1e-12,
+       "aware digital transmitter: the highest rate the slot supports when fresh; when stale, "
+       "an expected goodput no fixed backoff beats")
+    N, P = 8, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    rho = [nested_rho(master, L) for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)
+    u = Utility(1.8, rho, dsrc, csens, [f"im{i}" for i in range(N)],
+                meta={"nested": master.tolist()})
+    fr1 = list(draw_frames(u, 4, 10, 3, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=4))
+    fr5 = list(draw_frames(u, 4, 10, 3, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=4, cqi_corr=0.5))
+    frx = list(draw_frames(u, 4, 10, 3, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=4, cqi_corr=1.0))
+    ok(all(np.array_equal(a[2], b[2]) and np.array_equal(a[2], x[2]) and a[5] is None
+           and x[5] is None and b[5] is not None for a, b, x in zip(fr1, fr5, frx)),
+       "--cqi-corr: the same frames and true slots at any correlation; 1 = the old frames")
+    pol = ["rr", "pf", "slope_adv", "whittle"]
+    s1, _, _ = simulate(u, 4, 12, 30, (0.0, 15.0), "rayleigh", (-2.0, 22.0), pol, seed=2)
+    sx, _, _ = simulate(u, 4, 12, 30, (0.0, 15.0), "rayleigh", (-2.0, 22.0), pol, seed=2,
+                        cqi_corr=1.0, cqi_aware=True)
+    lifts = []
+    for r in (1.0, 0.7, 0.0):
+        sr, _, _ = simulate(u, 4, 12, 30, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["slope_adv"],
+                            seed=2, cqi_corr=r, cqi_aware=True)
+        lifts.append(sr["slope_adv"]["served_snr_lift"])
+    ok(all(s1[p]["mean_psnr"] == sx[p]["mean_psnr"] for p in pol)
+       and lifts[0] > lifts[1] > lifts[2],
+       "simulator: fresh reports = the old results; the scheduler-made SNR lift fades as the "
+       f"reports go stale ({lifts[0]:+.1f} / {lifts[1]:+.1f} / {lifts[2]:+.1f} dB at r = 1 / 0.7 / 0)")
+    a1, ax = Arm(u, 1, 6.0, 10), Arm(u, 1, 6.0, 10, cqi_corr=1.0)
+    vals = np.array([[Arm(u, 1, 6.0, 10, cqi_corr=r).value(lam) for lam in (0.0, 0.5, 2.0)]
+                     for r in (1.0, 0.9, 0.6, 0.0)])
+    a0, a7 = Arm(u, 1, 6.0, 10, cqi_corr=0.0), Arm(u, 2, 8.0, 10, cqi_corr=0.7)
+    i0 = [a0.index(2, 1, a0.state([6.0])[1], x) for x in (-2.0, 6.0, 18.0)]
+    ia = [a0.index(0, n, a0.state([6.0] * n)[1], 6.0) for n in range(4)]
+    pr = np.full(10, 0.4)
+    dv, _ = a7.demand(pr)
+    ok(np.array_equal(a1.W, ax.W) and np.all(np.diff(vals, axis=0) <= 1e-9)
+       and np.ptp(i0) < 1e-9 and np.all(np.diff(ia) < 0) and ia[-1] > 0
+       and abs(dv - a7.priced(pr)[0, 0, 0]) < 1e-9,
+       "programs on stale reports: fresh = the old program; less information, lower value at "
+       "every price; a useless report leaves the index unchanged, which is then the expected "
+       "marginal gain (falling with the phases held, not 0); demand = value")
+    lam = float(a7.lams[5])
+    Wp = a7.priced(lam)
+    st = a7.state([7.0, 9.0])
+    ok(abs(a7.gain_at(Wp, lam, 3, st[0], st[1], 8.0) - a7.gain(3, st[0], st[1], 8.0)[5]) < 1e-9,
+       "the Lagrangian index at a grid price = the program's gain there")
+    from tools.schedule_sim import aware_snr
+    gaps = []
+    for imgs, means, snr, belief, avail, seen in draw_frames(u, 3, 6, 200, (0.0, 15.0), "rayleigh",
+                                                            (-2.0, 22.0), seed=9, cqi_corr=0.6):
+        arms = [Arm(u, int(i), float(m), 6, cqi_corr=0.6) for i, m in zip(imgs, means)]
+        ub, _ = lagrangian_bound(arms, 6)
+        h = run_frame(u, belief, imgs, means, snr, "whittle", seen=seen, aware=0.6)
+        gaps.append(ub / 3 - np.mean([u.psnr(i, x) for i, x in zip(imgs, h)]))
+    eqs = aware_snr(u, u, [0, 1], [3.0, 9.0], np.array([[3.0, 9.0], [3.0, 9.0]]), 0.6, (-2, 22))
+    se = np.std(gaps, ddof=1) / np.sqrt(len(gaps))
+    ok(np.mean(gaps) > 2 * se and np.all(np.isfinite(eqs)),
+       f"the bound on stale reports stays above the aware whittle policy (by {np.mean(gaps):.3f} "
+       f"+- {se:.3f} dB per user over {len(gaps)} frames; one program per user = simulation)")
+    import tools.rmab_scale as rs
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "u.json")
+    Utility(1.8, rho, np.concatenate([dsrc] * 3), np.concatenate([csens] * 3),
+            [f"im{i}" for i in range(3 * N)], meta={"nested": master.tolist()}).save(path)
+    buf = io.StringIO()
+    argv = sys.argv
+    sys.argv = ["rmab_scale.py", "--utility", path, "--users", "8", "16", "--frames", "2",
+                "--slots", "8", "--price-steps", "2", "--index-arms", "1",
+                "--out", os.path.join(tmp, "s.json")]
+    try:
+        with contextlib.redirect_stdout(buf):
+            rs.main()
+    finally:
+        sys.argv = argv
+    with open(os.path.join(tmp, "s.json")) as fh:
+        res = json.load(fh)["per_K"]
+    ok(set(res) == {"8", "16"} and all(np.isfinite(v["bound"]) and v["B"] == int(k) // 8
+                                         and all(np.isfinite(v[p]) for p in rs.POLICIES)
+                                         for k, v in res.items()),
+       "tools/rmab_scale.py: B = K / 8 units per slot, every policy and the bound per K")
+
+
 def check_eval_seed(x):
     """Validation and test draw their channel noise from --eval-seed, not --seed, so runs
     of different training seeds are scored on the same draws (paired comparisons)."""
@@ -1230,6 +1362,7 @@ def main():
     check_eval_seed(x)
     check_snr_profiles(x)
     check_codesign(x)
+    check_stale_csi()
     check_schedule()
     check_perception(x)
     check_allocation(x)

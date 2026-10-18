@@ -149,6 +149,31 @@ tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 
   the phase the scheduler favours (PF code: phase 2 most sensitive; slope_adv code: phase 1;
   shuffled: flatter). An unequal error protection learned from the scheduler.
 
+## 6b. The scheduler as a restless bandit, re-examined (2026-10-18; COMMANDS 18 pending)
+
+Built from reading the restless-bandit literature (docs/SURVEY.md F5; docs/PROBLEM.md section 3,
+item 6): our frame is a PLANNING restless bandit (every user's state reported each slot, the
+quality model calibrated), not a learning one; two assumptions are now testable.
+
+* Stale reports (`alloc/csi.py`; `schedule_sim.py --cqi-corr r [--cqi-aware]`; `codesign.py bank
+  --cqi-corr`; `Arm(cqi_corr=r)`): h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau). The user's
+  program decides on the report through a report-to-channel kernel; its value matches direct
+  simulation of one user (r = 1 / 0.8 / 0.4: 30.706 / 30.090 / 29.366 program, 30.715 / 30.099 /
+  29.350 +- 0.03 simulated, stand-in), so the bound holds on stale reports.
+* The index where now and later are alike: the indifference price is a range; the index is now
+  its top (identical results with fresh reports on the exact small frames; at r = 0 it is the
+  user's expected marginal gain). The bottom of the range (a plain sign test) let the
+  programs' interpolation error pick users: -0.5 dB at r = 0 on the stand-in, now fixed.
+* Many users per slot (`tools/rmab_scale.py`): B = K/8 units per slot, PF / our rule / Whittle /
+  Lagrangian index (gain at the bound's per-slot prices, ties by Whittle) against the bound.
+* Stand-in only (the smoke utility, 40-60 frames, NOT the codec; for direction, not for the
+  paper): as r falls 1 / 0.8 / 0.5 / 0, PF - RR +0.87 / +0.38 / -0.01 / -0.2 dB and the advantage
+  timing over PF timing on the same quotas +0.32 / +0.29 / +0.11 / -0.04: the opportunistic part
+  vanishes, the served-SNR lift +2.5 -> +0.9 -> -0.8 -> -2.0 dB (no selection). Aware vs naive
+  transmitter: slope_adv +0.02 +- 0.06 (r 0.5), +0.04 +- 0.05 (r 0.8); Whittle -0.04 +- 0.07,
+  -0.07 +- 0.04 (the programs on the right model are not better as an index policy). K 16 with
+  2 units per slot (3 frames): Whittle / Lagrangian 0.06 dB from the bound, our rule 0.17.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -174,3 +199,4 @@ tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 
 | P2, round 1 | 14 | 10-14 | scheduler-trained code +0.28 dB on the same slots; nothing at the target; one round suffices |
 | P2, round 2 | 15, 16 | 10-14 | +0.16 is the length, +0.08-0.12 the channel (two seeds); codes learn their scheduler |
 | P1, step 8 | 17 (= 13) | 10-14 | MMSE abstraction ~9x MIESM; CQI errors: JSCC clearly ahead; scheduler certified; equal budget |
+| RMAB re-examined | 18 | 10-18 (pending) | stale reports (static vs opportunistic part, JSCC vs digital, lift, bound) and many users per slot (gap vs K) |
