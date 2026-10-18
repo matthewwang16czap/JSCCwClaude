@@ -28,6 +28,13 @@ with phases left, as in tools/schedule_sim.py):
                 program priced at the bound's optimal prices lambda*_t (Hu and Frazier;
                 Brown and Smith), ties (users who would take a later unit as well) broken by
                 the Whittle index, top B
+    id_guided   the CMU blog's ID policy (Hong et al., Math. Oper. Res. 2025): a user WANTS the
+                slot if taking it is optimal in its program at lambda*_t (its ideal action);
+                when more users want it than there are units, the ones first in a fixed order
+                drawn once per frame (the arms shuffled at time 0, as for heterogeneous arms):
+                persistency, no ranking by value
+    rand_guided the same ideal actions, conflicts broken in a fresh random order every slot
+                (the blog's failing baseline: no persistency)
 
 Channel: i.i.d. Rayleigh per user and slot (the programs' model); each unit lost to other
 traffic with probability --preempt. --cqi-corr r: stale reports (alloc/csi.py); the
@@ -49,7 +56,8 @@ import numpy as np  # noqa: E402
 from alloc.utility import load_utility  # noqa: E402
 from tools.schedule_sim import aware_snr, bootstrap, rate, targets  # noqa: E402
 
-POLICIES = ("pf", "adv", "whittle", "lagrange")
+POLICIES = ("pf", "adv", "whittle", "lagrange", "id_guided", "rand_guided")
+PRICED = ("lagrange", "id_guided", "rand_guided")       # need the programs at lambda*
 _G = {}
 
 
@@ -85,8 +93,9 @@ def top(score, claim, n, tie=None):
 
 
 def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_star=None,
-        prices=None):
-    """One frame under one policy: the delivered (true) SNR lists of the users."""
+        prices=None, order=None, rng=None):
+    """One frame under one policy: the delivered (true) SNR lists of the users. `order`: the
+    frame's fixed user order (id_guided); `rng`: the random orders of rand_guided."""
     K, T = snr.shape
     P = util.P
     goal = o.target
@@ -131,13 +140,19 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
                 n, Y = arms[k].state(hist[k])
                 x = float(seen[k, t]) if arms[k].kern is not None else float(g[k])
                 wi[k] = arms[k].index(t, n, Y, x)
-                if policy == "lagrange":
+                if policy in PRICED:
                     score[k] = arms[k].gain_at(W_star[k], prices, t, n, Y, x)
+            tol = 0.5 * float(arms[0].lams[1])            # the programs' precision
             if policy == "whittle":
                 score = wi
-            else:                          # the Lagrangian gain (to the programs' precision),
-                tol = 0.5 * float(arms[0].lams[1])            # ties by the Whittle index
+            elif policy == "lagrange":     # the Lagrangian gain, ties by the Whittle index
                 score, tie = np.where(np.isfinite(score), np.round(score / tol), -np.inf), wi
+            else:                          # guided: the users whose ideal action is to take it,
+                claim &= np.isfinite(score) & (score >= -tol)     # in an order, not by value
+                perm = order if policy == "id_guided" else rng.permutation(K)
+                rank = np.empty(K)
+                rank[perm] = np.arange(K)
+                score = -rank
             if goal is not None:           # no gain for anyone: leftover units (PF below)
                 claim &= wi > 1e-12
         chosen = top(score, claim, Bt, tie)
@@ -177,14 +192,16 @@ def _work(args):
         pol_arms = [Arm(belief, int(i), float(m), T, target=o.target, p_lost=p_user, clip=clip,
                         cqi_corr=1.0 if o.cqi_naive else r) for i, m in zip(imgs, means)]
     W_star = None
-    if "lagrange" in o.policies:
+    if any(p in o.policies for p in PRICED):
         if pol_arms is not arms:
             _, prices = lagrangian_bound(pol_arms, T, o.preempt, per_slot=o.price_steps, units=B)
         W_star = [a.priced(prices) for a in pol_arms]
     for p in o.policies:
         if p == "adv" and o.target is not None:
             continue
-        h = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star, prices)
+        h = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star, prices,
+                order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
+                rng=np.random.default_rng([o.seed, K, f, 8]))
         res[p] = _score(util, imgs, h, o.target)
         res[p + "_phases"] = float(np.mean([len(x) for x in h]))
     if f < o.index_frames:
@@ -272,7 +289,7 @@ def main():
             row[p + "_gap"] = float(d.mean())
             row[p + "_gap_ci"] = [float(lo), float(hi)]
         for a, b in (("lagrange", "whittle"), ("whittle", "adv"), ("lagrange", "adv"), ("adv", "pf"),
-                     ("whittle", "pf")):
+                     ("whittle", "pf"), ("id_guided", "rand_guided"), ("lagrange", "id_guided")):
             if a in pols and b in pols:
                 d = np.array([r[a] - r[b] for r in res])
                 lo, hi = bootstrap(d, seed=o.seed)

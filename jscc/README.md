@@ -179,8 +179,9 @@ Stale reports (`alloc/csi.py`): `schedule_sim.py --cqi-corr 1 0.9 0.6 0` gives e
 report of correlation r with its channel (r = J0(2 pi f_D tau)), the true slots unchanged;
 policies take reports as exact unless `--cqi-aware` (decisions on each slot's posterior; the
 whittle policy's programs decide on the report). `tools/rmab_scale.py --users 8 16 32 64 128`
-runs PF, our rule, the Whittle and Lagrangian indices and the Lagrangian bound with B = K/8
-units per slot (`--cqi-corr`, `--target`, `--preempt` too).
+runs PF, our rule, the Whittle and Lagrangian indices, the ID-guided policy of the restless-
+bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8 units
+per slot (`--cqi-corr`, `--target`, `--preempt` too).
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and

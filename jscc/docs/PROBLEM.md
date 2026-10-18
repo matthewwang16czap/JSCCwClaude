@@ -164,6 +164,20 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         definition on the exact small frames). Taking the bottom of the range, as a plain
         sign test does, lets the programs' interpolation error pick the users (seen on the
         stand-in: very unequal counts, -0.5 dB).
+     d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
+        SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
+        an ideal action (take or leave this slot at the price lambda*_t), and a rule decides
+        who is served when more users want the slot than it has units. Whittle / Lagrangian
+        indices rank by value; our rule ranks by its certainty-equivalent value among users
+        below their quotas; the blog's ID policy takes the wanting users in a fixed order
+        (persistency), which it proves near-optimal for average reward without the global
+        attractor index policies need. In our finite-horizon frame no attractor condition is
+        needed for index policies, but the blog's lesson still applies where rewards are
+        all-or-nothing: at a quality target, spreading slots over too many users wastes them
+        (its random tie-breaking failure), which our admission rules (shortest need first)
+        already prevent. `tools/rmab_scale.py` runs the ID-guided policy and its random-order
+        baseline beside the indices (COMMANDS 18.3). Stand-in, K 16, 4 frames: ID beats random
+        by 9 points [6, 16] at 30 dB; for the mean the index policies beat both by ~0.15 dB.
 
 ## 4. Baselines
 

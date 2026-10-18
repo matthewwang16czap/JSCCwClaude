@@ -3,7 +3,7 @@
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 18 (CPU only, ~2.5 h in three background chains). Everything through
+WHAT TO RUN: SECTION 18 (CPU only, ~3 h in three background chains). Everything through
 section 17 is done and recorded in docs/NOTES.md.
 
   section                                     status
@@ -1792,7 +1792,7 @@ cat results/s13_budget.txt                                                     #
 # Decision: section 13's block (C5, C6, C7, RL, ABS, RMAB) -- unchanged.
 
 ================================================================================
- 18. TO RUN NOW -- the scheduler as a restless bandit, re-examined (CPU only, ~2.5 h)
+ 18. TO RUN NOW -- the scheduler as a restless bandit, re-examined (CPU only, ~3 h)
 ================================================================================
 # Why (docs/PROBLEM.md section 3; docs/SURVEY.md F5): two assumptions of our restless-bandit
 # frame are tested against what the restless-bandit literature says. (1) The scheduler is
@@ -1889,12 +1889,14 @@ python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --target 30 
 mv results/s18_rmab_stale.tmp results/s18_rmab_stale.txt ; }
 " > /dev/null 2>&1 &
 
-# 18.3 -- CPU, background, ~1 h: many users, the index theory's regime. K = 8 ... 128 users,
+# 18.3 -- CPU, background, ~1.5 h: many users, the index theory's regime. K = 8 ... 128 users,
 #   B = K/8 units per slot (each one phase, a user at most one per slot), 24 slots: every user
 #   gets 3 phases on average at every K, as in the main frame. Per K: pf, our rule (adv), the
-#   Whittle index, the Lagrangian index, the Lagrangian bound (price per slot), the gap per
-#   user and the gap x sqrt(K), and an indexability check of 8 programs. Mean PSNR, the 30 dB
-#   target, and 25% of units lost
+#   Whittle index, the Lagrangian index, the CMU blog's ID-guided policy and its random-order
+#   baseline (each user's ideal action from its program at the bound's prices; conflicts in a
+#   fixed order per frame / a fresh random order per slot), the Lagrangian bound (price per
+#   slot), the gap per user and the gap x sqrt(K), and an indexability check of 8 programs.
+#   Mean PSNR, the 30 dB target, and 25% of units lost
 . logs_s18/env.sh
 nohup bash -c "
 [ -s results/s18_scale.txt ] || {
@@ -1921,7 +1923,10 @@ cat results/s18_scale.txt                                          # 18.3
 #         no transmitter logic recovers.
 #   18.2  the lift shrinking with r: the scheduler-made channel (C8-C10) is a low-mobility,
 #         fresh-report effect -- the caveat the paper states, with the measured curve.
-#   18.3  gap x sqrt(K) flat or falling: the theory's regime holds for learned codes; our
+#   18.3  id_guided above rand_guided at the 30 dB target and the index policies above both
+#         for the mean: conflicts must be resolved by persistency where rewards are all-or-
+#         nothing and by value where they are smooth (the blog's lesson, in our setting).
+#         gap x sqrt(K) flat or falling: the theory's regime holds for learned codes; our
 #         K = 8, one-unit frame is its hardest point, and the certified gap shrinks with the
 #         cell (answers "TDMA, one user per slot"). Indexability ~0%: the Whittle index is
 #         well defined on our programs; the Lagrangian index needs no indexability anyway.

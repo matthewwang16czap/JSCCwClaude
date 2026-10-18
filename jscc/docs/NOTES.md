@@ -165,7 +165,17 @@ quality model calibrated), not a learning one; two assumptions are now testable.
   user's expected marginal gain). The bottom of the range (a plain sign test) let the
   programs' interpolation error pick users: -0.5 dB at r = 0 on the stand-in, now fixed.
 * Many users per slot (`tools/rmab_scale.py`): B = K/8 units per slot, PF / our rule / Whittle /
-  Lagrangian index (gain at the bound's per-slot prices, ties by Whittle) against the bound.
+  Lagrangian index (gain at the bound's per-slot prices, ties by Whittle) against the bound, and
+  the CMU blog's ID-guided policy (each user's ideal action at the bound's prices, conflicts in a
+  fixed order per frame) with its random-order baseline.
+* The CMU blog (Hong 2026, read in full): every policy = one program per user + a conflict rule;
+  the rule decides near-optimality (random fails, ID ordering is provably near-optimal for
+  average reward). Stand-in, K 16 with 2 units per slot, 4 frames: at 30 dB ID-guided beats
+  random-guided by +9.4 points [6.3, 15.6] (persistency); for the mean the indices (0.10 dB from
+  the bound) beat our rule (0.18) and the guided policies (0.26-0.29): value ranking matters
+  where rewards are smooth. Indexability on the grid: 1-4% of states non-monotone for the mean
+  objective, 18% for the target (1 program): the Lagrangian index, which needs none, is the
+  safer method for the target.
 * Stand-in only (the smoke utility, 40-60 frames, NOT the codec; for direction, not for the
   paper): as r falls 1 / 0.8 / 0.5 / 0, PF - RR +0.87 / +0.38 / -0.01 / -0.2 dB and the advantage
   timing over PF timing on the same quotas +0.32 / +0.29 / +0.11 / -0.04: the opportunistic part

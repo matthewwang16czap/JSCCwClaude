@@ -170,6 +170,11 @@ IEEE Transactions on Wireless Communications (TWC).
    lets interpolation error choose users; the index is now the range's top (unchanged with
    fresh reports). Risk if 18.3 shows no shrinking gap: the bound's slack is information, not
    relaxation, and C13 stays "certified within 0.26 dB" without the asymptotic claim.
+   The CMU blog (read in full the same day) confirms the frame rather than changing it: its
+   two-step recipe (one arm under the averaged budget, then a tie-breaking rule) is exactly ours,
+   and its lesson (the rule decides near-optimality) is now tested: ID-ordered and random-
+   ordered guided policies run beside the indices in 18.3. The story's spine is unchanged; the
+   scheduling claim is restated as relaxation + conflict rule with its regime (PAPER.md).
 
 ## 1. Your four points, checked
 

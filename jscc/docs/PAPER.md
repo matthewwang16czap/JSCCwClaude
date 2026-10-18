@@ -1,4 +1,4 @@
-# Paper plan (IEEE TWC), condensed 2026-10-15, restless-bandit re-examination 2026-10-18
+# Paper plan (IEEE TWC), condensed 2026-10-15, story revised 2026-10-18
 
 Every number is in `docs/NOTES.md` (section numbers below). Earlier versions of this plan, with
 the framings that were tried and dropped, are in git: `git show ec9cc68:jscc/docs/PAPER.md`.
@@ -19,14 +19,30 @@ code only ever sees the slots the scheduler gives it. We show that
 1. a learned code trained for slot-varying SNR admits a link abstraction of its own: its slots
    add as sensitivity-weighted MMSEs, not as mutual information (MIESM, digital's standard, is
    ~9x less accurate), and the transmitter calibrates it from 12 decodes per image;
-2. with it, deadline scheduling of many users is a restless bandit whose index policy gains
-   +0.46 dB over PF and +11 points over PADC's rule (decoded) and is certified within 0.26 dB of
-   the best possible causal scheduler;
-3. the scheduler in turn makes the code's channel (selection lifts the first phases ~3 dB), the
-   right channel to train for: +0.1 dB beyond rate specialisation, and the codes learn their
-   scheduler's fade statistics;
-4. under realistic CSI errors this JSCC system beats HEVC intra with tuned link adaptation by
-   +1.6 dB and +15 points at 2 dB CQI error.
+2. with it, each user is a small MDP with a two-number state and deadline scheduling of many
+   users is a finite-horizon restless bandit. Relaxing the slot budget gives one program per
+   user, hence an upper bound on every scheduler and each user's ideal action; any scheduler is
+   those ideal actions plus a conflict rule (the restless-bandit literature, the CMU blog among
+   it, shows the rule decides near-optimality). Our closed-form rule gains +0.46 dB over PF and
+   +11 points over PADC's rule (decoded), ties the Whittle index, and is certified within
+   0.23 dB of the best causal scheduler at the regime's hardest point (8 users, one per slot);
+   the gap should shrink as users per slot grow (COMMANDS 18.3, pending);
+3. with fresh reports the scheduler makes the code's channel (selection lifts the first phases
+   ~3 dB), the right channel to train for: +0.1 dB beyond rate specialisation, and the codes
+   learn their scheduler's fade statistics; with stale reports the lift must vanish
+   (COMMANDS 18.2, pending), so this is a low-mobility effect;
+4. under realistic CSI this JSCC system beats HEVC intra with tuned link adaptation: +1.6 dB and
+   +15 points at 2 dB CQI error, and (COMMANDS 18.1, pending) along a physical axis, speed x
+   feedback delay, on which the opportunistic part of every scheduler fades and the content part
+   (how many phases each user gets) remains.
+
+What changed on 2026-10-18 (the doc "Scheduling Learned Image Codes as a Restless Bandit",
+https://claude.ai/code/artifact/0801c93d-9404-4fb3-acd8-e88c03641f8f): item 2 is now stated as
+relaxation + conflict rule with its regime; items 3-4 gain the report-staleness axis; the index
+takes the top of its indifference range; the positioning adds planning vs learning restless
+bandits. If 18.3 shows no shrinking gap, item 2 keeps "certified within 0.23 dB" without the
+asymptotic claim; if JSCC's lead does not grow with staleness, item 4 stays on the dB-error axis;
+if the lift survives stale reports, item 3 needs no scope.
 
 ## Contributions and evidence
 
@@ -40,7 +56,7 @@ codec itself decoding the schedules.
 | | C12 | Learned codes need their own abstraction, and training decides it | sensitivity-weighted MMSE 0.055 dB vs MIESM 0.49, EESM 0.19; a constant-SNR-trained code obeys no rule | 2 | done: the anchor |
 | 2. Scheduling on it | C3 | Mean PSNR: the advantage index | +0.465 dB [0.39, 0.53] decoded over PF, +0.46 for the 5th-percentile user, robust over K, T, curve errors, correlation; content-aware lengths only +0.05 | 3 | done |
 | | C4 | Quality target: admission + stopping on realised SNRs + index timing | +11.0 points [8.3, 13.8] decoded over PADC's rule, +14 over PF; sizing +5, stopping +4, timing +3, admission +2 | 3 | done |
-| | C13 | Near-optimal, with a theory | two-number user state, restless bandit; Whittle index = our rule (+0.15 dB with lost slots); Lagrangian bound: within 0.26 dB of any causal scheduler (mean), 2-5.5 points at the target; clairvoyant optimum certified. Re-examined (SURVEY F5): the bound and the index carry over to stale reports (programs that decide on the report); the theory's regime is many users per slot, where the gap should fall like 1/sqrt(K) | 3 | done; COMMANDS 18.2-18.3 pending (stale-report bound, gap vs K) |
+| | C13 | Near-optimal, with a theory | two-number user state, restless bandit; one program per user (relaxation) + a conflict rule; Whittle index = our rule (+0.15 dB with lost slots); Lagrangian bound: within 0.26 dB of any causal scheduler (mean; the clairvoyant optimum, +0.23, is the tighter cap), 2-5.5 points at the target; clairvoyant optimum certified. Re-examined (SURVEY F5): the bound and the index carry over to stale reports; the theory's regime is many users per slot, where the gap should fall like 1/sqrt(K); conflict rules: value (indices) for the mean, persistency (ID, admission) for the target | 3 | done; COMMANDS 18.2-18.3 pending (stale-report bound, gap vs K, guided policies) |
 | | C7 | Which QoS policy when | plan_adv with known slots and under CQI errors (online loses 13 points at 3 dB error), replan_adv with lost slots | 3, 5 | done |
 | 3. The scheduler-made channel | C8 | Training for it pays | +0.28 dB on the same slots over the same-budget control; +0.08-0.12 beyond length specialisation (two seeds); nothing at the target. Only as far as the reports are fresh (the lift is the scheduler's information about the slot) | 6 | holds, small; lift vs report freshness pending (18.2) |
 | | C9 | The physical channel is the wrong training channel | blind slots -0.04 dB vs generic training, -0.32 vs the scheduler's channel | 6 | done |
@@ -109,7 +125,8 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    calibration, accuracy against MIESM / EESM / noise rules (C1, C2, C12).
 5. Scheduling: the restless bandit, Whittle index and the advantage index as its
    certainty-equivalent form, the Lagrangian bound and the clairvoyant optimum; QoS admission,
-   stopping and planning; stale reports (the programs decide on the report, the bound holds)
+   stopping and planning; the unifying view (one program per user + a conflict rule: index,
+   advantage, ID-guided); stale reports (the programs decide on the report, the bound holds)
    and many users per slot (the Lagrangian index, the gap against K) (C3, C4, C7, C13).
 6. The scheduler-made channel: the induced distribution and its order statistics,
    scheduler-aware training, what the codes learn (C8-C11).
@@ -140,9 +157,9 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 4. Optional: a Jacobian probe (the first-order mechanism behind section 4); a better codec
    (more data) for the absolute numbers.
 5. Writing and figures.
-6. COMMANDS section 18 (CPU, ~2.5 h, built 2026-10-18): stale reports (18.1: JSCC vs digital,
+6. COMMANDS section 18 (CPU, ~3 h, built 2026-10-18): stale reports (18.1: JSCC vs digital,
    static vs opportunistic part; 18.2: the lift and the bound on stale reports) and many users
-   per slot (18.3: gap to the bound vs K, indexability).
+   per slot (18.3: gap to the bound vs K, the blog's guided policies, indexability).
 
 ## Expected reviewer objections
 
@@ -153,6 +170,7 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | Gains are moderate | the claims are the abstraction, certified optimality and the CSI verdict, not a single gain |
 | The digital baseline is weak | HEIC with tuned backoff, lost blocks counted, plus a 3 dB-gap code and capacity; ideal-CQI results reported too |
 | TDMA, one user per slot | a slot is any resource unit (a group of RBs over a TTI); B units per slot, K users, is the regime of the index-policy theory (gap to the bound O(1/sqrt(K)) per user); measured for K = 8 ... 128 with B = K/8 (COMMANDS 18.3) |
+| Why an index and not the ID policy of the recent theory (Hong et al.)? | both are the same relaxation with a different conflict rule; their theorems are for average reward, ours is a finite horizon where index policies need no attractor condition; we run the ID-guided policy and its random-order baseline beside the indices (COMMANDS 18.3): value ranking for smooth rewards, persistency (our admission rules) for all-or-nothing ones |
 | Is the Whittle index well defined (indexability)? | the Lagrangian index (gain at the bound's prices) needs no indexability (Hu and Frazier; Brown and Smith) and is run beside it; the programs' grid check reports the share of non-monotone states (18.3); the index takes the top of the indifference range where now and later are alike |
 | Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds; JSCC vs digital, the scheduling gain and the lift against r (COMMANDS 18.1-18.2) |
 | Why not learn the scheduler (bandits, RL)? | the model is known: every user reports its channel each slot (full, not bandit, feedback) and the quality model is calibrated from 12 decodes per image; learning restless bandits address a different information structure; and any learned causal policy is capped by our bound (+0.26 dB mean) |
