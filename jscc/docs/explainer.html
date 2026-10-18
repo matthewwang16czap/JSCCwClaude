@@ -1,0 +1,1156 @@
+<!doctype html>
+<!-- Interactive explainer of the scheduling problem (open in a browser). The toy model in its script
+     mirrors alloc/utility.py (nested MMSE model) and the rules of tools/schedule_sim.py. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Scheduling Learned Image Codes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* One reading column (~70ch) with figures that widen to 1120px. Sections follow the walkthrough:
+   setup, what a slot is worth, the rules, one frame, many frames, measured, why it works. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #0f151c;
+  --ink-2: #435061;
+  --muted: #6c7785;
+  --line: #d9dfe6;
+  --grid: #e8ecf1;
+  --soft: #edf1f6;
+  --ours: #2a78d6;
+  --pf: #eb6834;
+  --padc: #1baf7a;
+  --rr: #8a919b;
+  --good: #11743a;
+  --tip-bg: #0f151c;
+  --tip-fg: #f3f5f8;
+  --h0: #f5f7fa; --h1: #e3e8ee; --h2: #cdd5de; --h3: #b1bbc7; --h4: #8b97a5; --h5: #5c6878; --h6: #2f3a4a;
+  --ht0: #0f151c; --ht1: #0f151c; --ht2: #0f151c; --ht3: #0f151c; --ht4: #0f151c; --ht5: #ffffff; --ht6: #ffffff;
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --surface: #151a20; --ink: #e8edf2; --ink-2: #b4bec9; --muted: #8b95a1;
+    --line: #2a323c; --grid: #1f262e; --soft: #1b2129;
+    --ours: #3987e5; --pf: #d95926; --padc: #199e70; --rr: #6e7681; --good: #43c477;
+    --tip-bg: #e8edf2; --tip-fg: #0d1014;
+    --h0: #1b2129; --h1: #232b35; --h2: #2f3946; --h3: #415061; --h4: #5a6b80; --h5: #8796a8; --h6: #c5cfdb;
+    --ht0: #e8edf2; --ht1: #e8edf2; --ht2: #e8edf2; --ht3: #e8edf2; --ht4: #e8edf2; --ht5: #0f151c; --ht6: #0f151c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --surface: #151a20; --ink: #e8edf2; --ink-2: #b4bec9; --muted: #8b95a1;
+  --line: #2a323c; --grid: #1f262e; --soft: #1b2129;
+  --ours: #3987e5; --pf: #d95926; --padc: #199e70; --rr: #6e7681; --good: #43c477;
+  --tip-bg: #e8edf2; --tip-fg: #0d1014;
+  --h0: #1b2129; --h1: #232b35; --h2: #2f3946; --h3: #415061; --h4: #5a6b80; --h5: #8796a8; --h6: #c5cfdb;
+  --ht0: #e8edf2; --ht1: #e8edf2; --ht2: #e8edf2; --ht3: #e8edf2; --ht4: #e8edf2; --ht5: #0f151c; --ht6: #0f151c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+.col { max-width: 70ch; }
+h1, h2, h3 { font-family: var(--display); font-stretch: 112%; text-wrap: balance; line-height: 1.12; margin: 0; }
+h1 { font-size: clamp(2rem, 4.6vw, 3.1rem); font-weight: 780; letter-spacing: -0.01em; }
+h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); font-weight: 720; }
+h3 { font-size: 1.06rem; font-weight: 700; font-stretch: 106%; }
+p { margin: 0; }
+a { color: var(--ours); }
+sub, sup { line-height: 0; }
+.eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header.top { padding-block: 48px 28px; display: grid; gap: 14px; border-bottom: 1px solid var(--line); }
+.lead { font-size: 1.15rem; color: var(--ink-2); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+nav.toc a { font-family: var(--mono); font-size: 0.78rem; text-decoration: none; color: var(--ink-2); border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 99px; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); border-color: var(--muted); }
+section { padding-block: 44px 8px; display: grid; gap: 18px; }
+section > *, .grid-2 > *, .facts > *, .tiles > *, .why-grid > *, .player > * { min-width: 0; }
+.sec-head { display: grid; gap: 8px; }
+.sec-num { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); letter-spacing: 0.06em; }
+.prose { display: grid; gap: 10px; color: var(--ink-2); }
+.prose strong { color: var(--ink); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; }
+.scroll-x { overflow-x: auto; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.note { font-size: 0.86rem; color: var(--muted); }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; flex: none; }
+.sw-ours { background: var(--ours); } .sw-pf { background: var(--pf); } .sw-padc { background: var(--padc); } .sw-rr { background: var(--rr); }
+svg text { font-family: var(--body); }
+svg .tick { font-family: var(--mono); }
+
+/* 1 setup */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.fact b { font-family: var(--mono); font-size: 0.98rem; color: var(--ink); }
+.fact span { font-size: 0.9rem; color: var(--ink-2); }
+
+/* 2 what a slot is worth */
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 0.9rem; border: 0; background: var(--surface); color: var(--ink-2); padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+button:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ours); outline-offset: 2px; }
+.phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.ph { border-radius: 8px; padding: 10px; display: grid; gap: 2px; border: 1px solid var(--line); }
+.ph .w { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); }
+.ph .s { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+.ph.good { background: var(--soft); border: 1.5px solid var(--ink); }
+.strip { margin-top: 14px; display: grid; gap: 10px; }
+.srow { display: grid; grid-template-columns: 168px minmax(0, 1fr) 76px; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--ink-2); }
+.srow.on { color: var(--ink); font-weight: 700; }
+.track { position: relative; height: 16px; }
+.track::before { content: ""; position: absolute; left: 0; right: 0; top: 7.5px; height: 1px; background: var(--grid); }
+.track i { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--rr); box-shadow: 0 0 0 2px var(--surface); }
+.srow.on .track i { background: var(--ink); }
+.srow .val { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* 3 rules */
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td.pol { font-weight: 700; white-space: nowrap; }
+.yes { color: var(--ink); font-weight: 600; } .no { color: var(--muted); }
+
+/* 4 the frame player */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { font: inherit; font-size: 0.92rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); min-width: 84px; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.slotno { font-family: var(--mono); font-size: 0.9rem; color: var(--ink-2); margin-left: auto; }
+select { font: inherit; font-size: 0.9rem; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.player { display: grid; gap: 18px; }
+.moments { display: grid; gap: 8px; }
+.moments ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; counter-reset: m; }
+.moments li { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; align-items: start; font-size: 0.93rem; color: var(--ink-2); }
+.moments li button { font: inherit; font-family: var(--mono); font-size: 0.8rem; text-align: left; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.moments li button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface); }
+.board { display: grid; grid-template-columns: 180px repeat(12, minmax(40px, 1fr)); gap: 3px; min-width: 700px; align-items: stretch; }
+.bh { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); text-align: center; padding-bottom: 2px; align-self: end; }
+.bh.cur { color: var(--ink); font-weight: 600; }
+.bl { font-size: 0.86rem; padding: 2px 8px 2px 0; display: grid; align-content: center; line-height: 1.22; }
+.bl, .lane-l, .corner { position: sticky; left: 0; z-index: 2; background: var(--surface); }
+.bl b { font-family: var(--mono); font-size: 0.88rem; }
+.bl small { color: var(--muted); font-size: 0.74rem; }
+.bl small.t3, .bl small.t4 { display: none; }
+.cell { border-radius: 6px; min-height: 40px; display: grid; place-items: center; font-family: var(--mono); font-size: 0.78rem; position: relative; transition: opacity 0.25s; }
+.cell.future { opacity: 0.25; }
+.cell.cur { box-shadow: 0 0 0 2px var(--ink); }
+.ring { position: absolute; inset: 3px; border-radius: 5px; border: 2.5px solid var(--focus-c); pointer-events: none; }
+.ring b { position: absolute; right: -7px; top: -9px; font-size: 0.62rem; font-weight: 700; background: var(--surface); color: var(--ink); border: 1.5px solid var(--focus-c); border-radius: 6px; padding: 0 3px; line-height: 1.3; }
+.sep { grid-column: 1 / -1; height: 6px; }
+.lane-l { display: flex; align-items: center; padding-right: 8px; }
+.lane-l button { font: inherit; font-size: 0.86rem; font-weight: 700; color: var(--ink); background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 7px; cursor: pointer; text-align: left; display: inline-flex; align-items: center; }
+.lane-l button[aria-pressed="true"] { border-color: var(--line); background: var(--soft); }
+.chip { border-radius: 6px; min-height: 34px; display: grid; place-items: center; font-family: var(--mono); font-size: 0.8rem; font-weight: 600; color: var(--muted); border: 1px solid var(--grid); }
+.chip.on { color: var(--ink); background: color-mix(in srgb, var(--c) 24%, var(--surface)); border: 1.5px solid var(--c); }
+.chip.future { opacity: 0.25; }
+.chip.cur { box-shadow: 0 0 0 2px var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .chip.pop { animation: pop 0.35s ease-out; } }
+@keyframes pop { from { transform: scale(0.6); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+.legend-heat { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); }
+.legend-heat .ramp { display: inline-flex; gap: 2px; }
+.legend-heat .ramp i { width: 18px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend-heat .ringkey { display: inline-block; width: 18px; height: 14px; border-radius: 4px; border: 2.5px solid var(--focus-c, var(--ours)); vertical-align: -2px; }
+.why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; }
+.why { border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; align-content: start; background: var(--surface); }
+.why h3 { display: flex; align-items: center; }
+.why .say { font-size: 0.92rem; color: var(--ink-2); }
+.why table { font-size: 0.84rem; }
+.why td, .why th { padding: 5px 6px; }
+.why td:nth-child(2), .why th:nth-child(2) { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.why tr.pick td { font-weight: 700; color: var(--ink); }
+.why tr.out td { color: var(--muted); }
+.pickdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.results th:not(:first-child), .results td:not(:first-child) { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.results th { white-space: nowrap; }
+.results tr.sum td { font-weight: 700; border-bottom: 0; }
+.results td.hit { color: var(--good); font-weight: 600; }
+
+/* 5-6 charts and tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.tile .v { font-family: var(--display); font-stretch: 108%; font-size: 1.9rem; font-weight: 760; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 0.92rem; color: var(--ink-2); }
+.tile .s { font-size: 0.8rem; color: var(--muted); }
+figure { margin: 0; display: grid; gap: 8px; align-content: start; }
+figcaption { font-size: 0.84rem; color: var(--muted); }
+.chart-title { font-family: var(--display); font-stretch: 106%; font-weight: 700; font-size: 1.02rem; line-height: 1.25; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.84rem; color: var(--ink-2); align-items: center; }
+.legend span { display: inline-flex; align-items: center; }
+.dia { display: inline-block; width: 10px; height: 10px; background: var(--muted); transform: rotate(45deg); margin-right: 8px; }
+.dotk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--tip-bg); color: var(--tip-fg); font-size: 0.82rem; padding: 6px 9px; border-radius: 6px; max-width: 280px; line-height: 1.35; }
+#tip b { font-family: var(--mono); font-weight: 600; }
+footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 0.86rem; color: var(--muted); display: grid; gap: 6px; }
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .srow { grid-template-columns: 112px minmax(0, 1fr) 64px; }
+  .board { grid-template-columns: 96px repeat(12, minmax(38px, 1fr)); min-width: 600px; }
+  .bl small.t1, .bl small.t2 { display: none; }
+  .bl small.t3, .bl small.t4 { display: block; }
+  .moments li { grid-template-columns: 1fr; gap: 4px; }
+  .moments li button { justify-self: start; }
+  .slotno { margin-left: 0; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Explainer for the TWC paper draft</div>
+    <h1>Scheduling learned image codes</h1>
+    <p class="lead col">A base station must deliver one image to each of several users before a deadline, over fading channels, one slot at a time. This page shows the setup and how each scheduler decides. It then plays one frame slot by slot, with the baselines and our method on the same channel, and ends with the results measured on the real codec.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#setup">1 Setup</a><a href="#worth">2 What a slot is worth</a><a href="#rules">3 The rules</a><a href="#frame">4 One frame</a><a href="#many">5 Many frames</a><a href="#measured">6 Measured</a><a href="#why">7 Why it is near-optimal</a>
+    </nav>
+  </header>
+
+  <section id="setup">
+    <div class="sec-head"><div class="sec-num">1 · SETUP</div><h2>Each image is coded once, then sent phase by phase</h2></div>
+    <div class="prose col">
+      <p>A learned code (deep JSCC) encodes every image once into a <strong>prefix of 6 phases</strong>. The first phase gives a coarse picture and each later phase refines it. Each slot carries one phase of one user. Before each slot, every user reports its channel for that slot. The scheduler never sees future slots. At the deadline, each user decodes the phases it has received.</p>
+    </div>
+    <div class="panel scroll-x">
+      <svg viewBox="0 30 1000 258" role="img" aria-label="The base station sends one phase per slot to one of four users before the deadline" style="min-width:640px;width:100%;height:auto">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+        </defs>
+        <rect x="16" y="40" width="250" height="236" rx="10" style="fill:none;stroke:var(--line)"/>
+        <text x="32" y="66" font-size="15" font-weight="700" style="fill:var(--ink)">Base station</text>
+        <text x="32" y="86" font-size="12.5" style="fill:var(--muted)">each image encoded once: 6 phases</text>
+        <g id="setup-stacks"></g>
+        <text x="300" y="66" font-size="15" font-weight="700" style="fill:var(--ink)">Slots before the deadline</text>
+        <text x="300" y="86" font-size="12.5" style="fill:var(--muted)">one phase of one user per slot (our schedule, section 4)</text>
+        <g id="setup-slots"></g>
+        <text x="300" y="196" font-size="12.5" style="fill:var(--muted)">before every slot, all users report their channel (CQI)</text>
+        <text x="300" y="214" font-size="12.5" style="fill:var(--muted)">and the scheduler picks who gets it</text>
+        <line x1="300" y1="246" x2="672" y2="246" style="stroke:var(--muted)" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="300" y="268" font-size="12" style="fill:var(--muted)">time</text>
+        <text x="672" y="268" font-size="12" text-anchor="end" font-weight="700" style="fill:var(--ink)">deadline: decode what you hold</text>
+        <rect x="716" y="40" width="268" height="236" rx="10" style="fill:none;stroke:var(--line)"/>
+        <text x="732" y="66" font-size="15" font-weight="700" style="fill:var(--ink)">Users and their channels</text>
+        <text x="732" y="86" font-size="12.5" style="fill:var(--muted)">a mean SNR, a new fade every slot</text>
+        <g id="setup-users"></g>
+        <line x1="266" y1="150" x2="296" y2="150" style="stroke:var(--muted)" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="680" y1="150" x2="712" y2="150" style="stroke:var(--muted)" stroke-width="1.2" marker-end="url(#ar)"/>
+      </svg>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>K = 8 users, T = 24 slots</b><span>in the paper; this page uses 4 users and 12 slots, also 3 phases per user on average</span></div>
+      <div class="fact"><b>Rayleigh block fading</b><span>a new fade every slot, around each user's mean SNR (0 to 15 dB)</span></div>
+      <div class="fact"><b>Two goals</b><span>the mean PSNR at the deadline, or the share of users that reach 30 dB</span></div>
+      <div class="fact"><b>One phase = CBR 1/48</b><span>4,096 complex symbols per 256 px tile; all 6 phases = CBR 1/8</span></div>
+    </div>
+  </section>
+
+  <section id="worth">
+    <div class="sec-head"><div class="sec-num">2 · WHAT A SLOT IS WORTH</div><h2>Which phase a good slot carries matters</h2></div>
+    <div class="prose col">
+      <p>For our code, received phases combine as <strong>sensitivity-weighted MMSEs</strong>: each phase's noise counts with its own weight. The first phase carries half of the total weight, so it should go into a good slot. This rule predicts the decoded PSNR with a mean error of 0.055 dB. MIESM, the rule digital system simulation uses (it averages capacity), errs by 0.49 dB on the same code.</p>
+    </div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="chart-title">The first phase carries half of the noise sensitivity</div>
+        <svg id="weights" viewBox="0 0 460 200" role="img" aria-label="Sensitivity weight of each of the six phases" style="width:100%;height:auto"></svg>
+        <p class="note">Fitted weights of the main code at CBR 1/8 (docs/NOTES.md, section 2).</p>
+      </div>
+      <div class="panel">
+        <div class="chart-title">Three phases, one good slot (15 dB) and two poor ones (3 dB)</div>
+        <p class="note" style="margin-top:4px">Which phase should get the good slot? A medium-detail image; PSNR from the model below.</p>
+        <div style="margin-top:12px" class="seg" role="group" aria-label="Phase that gets the good slot">
+          <button type="button" id="gs1" aria-pressed="true">Good slot on phase 1</button>
+          <button type="button" id="gs2" aria-pressed="false">on phase 2</button>
+          <button type="button" id="gs3" aria-pressed="false">on phase 3</button>
+        </div>
+        <div class="phases" id="gsPhases"></div>
+        <div class="strip" id="gsStrip"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="prose col">
+        <p><strong>The model behind every decision on this page.</strong> A user holding n phases, received at SNRs g<sub>1</sub>, …, g<sub>n</sub>, has distortion</p>
+        <p class="mono" style="font-size:0.95rem;color:var(--ink);overflow-wrap:anywhere">D = D<sub>src</sub>(n) + C(n) · Σ<sub>j</sub> m<sub>j</sub> φ(10<sup>−g<sub>j</sub>/10</sup>) / (m<sub>1</sub> + … + m<sub>n</sub>), &nbsp; φ(x) = x / (1 + x/κ), &nbsp; PSNR = −10 log<sub>10</sub> D</p>
+        <p>D<sub>src</sub>(n) is the image's distortion with n noise-free phases and C(n) its sensitivity to noise, both calibrated per image. φ(x) is the error of the best estimate of a Gaussian of variance κ seen through noise of variance x. So a user's state is two numbers: n, the phases it holds, and Y = Σ m<sub>j</sub> φ, their weighted noise.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <div class="sec-head"><div class="sec-num">3 · THE RULES</div><h2>Who gets the slot: the baselines and ours</h2></div>
+    <div class="panel scroll-x">
+      <table style="min-width:760px">
+        <thead><tr><th>Scheduler</th><th>Uses the channel</th><th>Uses the image</th><th>How many phases per user</th><th>When each user is served</th></tr></thead>
+        <tbody>
+          <tr><td class="pol"><span class="swatch sw-rr"></span>Round robin</td><td class="no">no</td><td class="no">no</td><td>equal turns</td><td>in a fixed rotation</td></tr>
+          <tr><td class="pol"><span class="swatch sw-pf"></span>Proportional fair (PF)</td><td class="yes">yes, as a rate</td><td class="no">no</td><td>a fair share of the rate</td><td>when its rate now is high compared with its average so far; the LTE/NR default</td></tr>
+          <tr><td class="pol"><span class="swatch sw-padc"></span>PADC's rule (TWC 2023)</td><td>its mean SNR, for sizing</td><td class="yes">yes, a quality curve</td><td>fixed before the frame: the shortest prefix that reaches 30 dB at the mean SNR; users admitted shortest first</td><td>PF, among users below their length</td></tr>
+          <tr><td class="pol"><span class="swatch sw-ours"></span>Ours, mean PSNR</td><td class="yes">yes, valued in PSNR</td><td class="yes">yes, calibrated per image</td><td>quotas: phases go where they add the most PSNR at the mean SNR</td><td>the <strong>advantage index</strong>: the PSNR a phase gains in this slot minus what it would gain in a slot at the user's mean SNR</td></tr>
+          <tr><td class="pol"><span class="swatch sw-ours"></span>Ours, 30 dB goal</td><td class="yes">yes, valued in PSNR</td><td class="yes">yes, calibrated per image</td><td>decided online: users whose remaining need fits the slots left go first; a user stops once it reaches 30 dB</td><td>the advantage index</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose col">
+      <p>PF chases peaks in <em>rate</em>; our rule chases peaks in <em>quality</em>. A user whose image is close to its best quality gains little from a good slot and can take a poor one. A user about to send its sensitive first phase waits for a peak.</p>
+    </div>
+  </section>
+
+  <section id="frame">
+    <div class="sec-head"><div class="sec-num">4 · ONE FRAME</div><h2>The same channel, three schedulers, slot by slot</h2></div>
+    <div class="prose col">
+      <p>The grid shows each user's channel in each slot. The number is the SNR in dB, and the shade shows how the slot compares with that user's mean (key below the grid). Slots after the current one are faded because no scheduler can see them yet. Each scheduler's row underneath shows who got each slot and which phase it carried. Click a scheduler's name to circle its choices on the grid.</p>
+    </div>
+    <div class="panel player">
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Goal">
+          <button type="button" id="mMean" aria-pressed="true">Goal: mean PSNR</button>
+          <button type="button" id="mTarget" aria-pressed="false">Goal: users at 30 dB</button>
+        </div>
+        <button type="button" class="btn primary" id="bPlay">Play</button>
+        <button type="button" class="btn" id="bBack" aria-label="Previous slot">◀ Slot</button>
+        <button type="button" class="btn" id="bNext" aria-label="Next slot">Slot ▶</button>
+        <button type="button" class="btn" id="bReset">Restart</button>
+        <label class="note" for="speed">Speed</label>
+        <select id="speed"><option value="1700">slow</option><option value="1000" selected>normal</option><option value="500">fast</option></select>
+        <button type="button" class="btn" id="bNew">New random frame</button>
+        <button type="button" class="btn" id="bExample" hidden>Back to the example</button>
+        <span class="slotno" id="slotno" aria-live="polite"></span>
+      </div>
+      <div class="moments" id="moments">
+        <h3>What to look for in this frame</h3>
+        <ol id="momentList"></ol>
+      </div>
+      <div class="scroll-x"><div class="board" id="board"></div></div>
+      <div class="legend-heat"><span>Shade: the slot against the user's mean SNR</span><span>deep fade</span><span class="ramp" id="ramp"></span><span>peak</span><span><span class="ringkey" id="ringkey"></span> the circled scheduler's choice, with its phase number</span></div>
+      <div class="sec-head"><h3 id="whyTitle">Slot 12: who gets it?</h3><p class="note">Each card shows every user's score under that rule; the highest eligible score wins. Users without a score were not eligible, and the reason is given.</p></div>
+      <div class="why-grid" id="why"></div>
+      <div>
+        <h3 id="resTitle">PSNR so far</h3>
+        <div class="scroll-x"><table class="results" id="results" style="min-width:420px"></table></div>
+        <p class="note" style="margin-top:6px">Only the deadline counts: a rule that holds back a sensitive phase for a peak can trail on the way. A user with no phase yet decodes a flat gray image, counted as 10 dB.</p>
+      </div>
+    </div>
+    <p class="note col">This is a toy model (four users, invented image curves, the main code's fitted phase weights), not the codec. The example frame is typical: our gain over PF in it, +0.55 dB, is close to the average over 2,000 random frames (section 5). Keyboard: ← and → step through the slots while the player is on screen.</p>
+  </section>
+
+  <section id="many">
+    <div class="sec-head"><div class="sec-num">5 · MANY FRAMES</div><h2>Over 2,000 random frames, the ranking holds</h2></div>
+    <div class="prose col">
+      <p>The same toy model and rules on 2,000 random frames, with random images, mean SNRs from 0 to 15 dB and random fades, computed in your browser when the page loads. The sizes of the gaps depend on the invented image curves. Section 6 gives the numbers measured on the codec.</p>
+    </div>
+    <div class="grid-2">
+      <figure class="panel"><div class="chart-title" id="cMeanT">Mean PSNR at the deadline</div><svg id="cMean" viewBox="0 0 480 196" role="img" aria-label="Mean PSNR by scheduler" style="width:100%;height:auto"></svg><figcaption id="cMeanCap">Toy model · computing…</figcaption></figure>
+      <figure class="panel"><div class="chart-title" id="cTgtT">Users reaching 30 dB</div><svg id="cTgt" viewBox="0 0 480 196" role="img" aria-label="Share of users at 30 dB by scheduler" style="width:100%;height:auto"></svg><figcaption id="cTgtCap">Toy model · computing…</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="measured">
+    <div class="sec-head"><div class="sec-num">6 · MEASURED</div><h2>On the real codec, decoded, with paired 95% intervals</h2></div>
+    <div class="prose col"><p>Here the learned codec itself decodes the schedules. Kodak images, 8 users, 24 slots, mean SNRs from 0 to 15 dB, Rayleigh fading.</p></div>
+    <div class="tiles">
+      <div class="tile"><div class="v">+0.465 dB</div><div class="l">mean PSNR over PF</div><div class="s">decoded; 95% CI 0.39 to 0.53</div></div>
+      <div class="tile"><div class="v">+11.0 points</div><div class="l">users at 30 dB, over PADC's rule</div><div class="s">decoded; 95% CI 8.3 to 13.8</div></div>
+      <div class="tile"><div class="v">≤ 0.23 dB</div><div class="l">below the best possible scheduler</div><div class="s">capped by the clairvoyant optimum; the Lagrangian bound gives 0.26</div></div>
+      <div class="tile"><div class="v">+1.64 dB</div><div class="l">over digital (HEVC intra) at 2 dB CQI error</div><div class="s">and +14.5 points at 30 dB; tuned link adaptation</div></div>
+    </div>
+    <p class="note col">Still running (COMMANDS section 18): outdated channel reports, where the timing gain is expected to shrink with mobility, and many users per slot, the regime of the restless-bandit theory.</p>
+    <div class="grid-2">
+      <figure class="panel">
+        <div class="chart-title">Our rule is within 0.23 dB of the best possible scheduler</div>
+        <div class="legend"><span><i class="dia"></i>upper bound on every causal scheduler</span><span><i class="dotk" style="background:var(--rr)"></i>a scheduler</span></div>
+        <svg id="cLadder" viewBox="0 0 520 262" role="img" aria-label="Mean PSNR of each scheduler and bound, against our rule" style="width:100%;height:auto"></svg>
+        <figcaption>Mean PSNR against our rule, on the codec's fitted curves (400 frames; PF from the main 2,000-frame run). The best causal scheduler lies in the shaded band.</figcaption>
+      </figure>
+      <figure class="panel">
+        <div class="chart-title">JSCC's lead over digital grows with CQI error</div>
+        <svg id="cDigital" viewBox="0 0 520 262" role="img" aria-label="JSCC lead over digital by CQI error" style="width:100%;height:auto"></svg>
+        <figcaption>Mean PSNR of our system (encode once, a decoder per length) minus HEVC intra with LTE CQI-table link adaptation and a tuned backoff, through the same schedulers. Users at 30 dB: +2.8, +9.2, +14.5, +18.9 points.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="why">
+    <div class="sec-head"><div class="sec-num">7 · WHY IT IS NEAR-OPTIMAL</div><h2>One small program per user, then a rule for conflicts</h2></div>
+    <div class="prose col">
+      <p>Because a user's state is just (n, Y), the downlink is a <strong>restless bandit</strong>. The users are the arms, and a slot activates one of them. Each user's state changes even when it is not served: its channel is redrawn and its deadline gets closer. Putting a price on each slot splits the problem into one small program per user. Those programs give two things: an upper bound on every possible scheduler, and each user's ideal action at the price. A scheduler is then those ideal actions plus a rule for who wins when more users want a slot than it can serve.</p>
+    </div>
+    <div class="panel scroll-x">
+      <svg viewBox="0 0 760 304" role="img" aria-label="One program per user gives the upper bound and the ideal actions; a conflict rule turns them into a scheduler" style="min-width:600px;width:100%;height:auto" id="recipe"></svg>
+    </div>
+    <div class="panel scroll-x">
+      <table style="min-width:640px">
+        <thead><tr><th>Conflict rule</th><th>Ranks the users who want the slot by</th><th>Needs</th><th>Measured</th></tr></thead>
+        <tbody>
+          <tr><td class="pol">Whittle index</td><td>the slot price at which the user is indifferent between taking the slot and leaving it</td><td>each user's program at many prices</td><td>equal to our rule (+0.005 dB); +0.15 dB with 25% of slots lost</td></tr>
+          <tr><td class="pol">Lagrangian index</td><td>the user's gain from the slot at the bound's prices</td><td>each user's program at one set of prices</td><td>pending (COMMANDS 18.3)</td></tr>
+          <tr><td class="pol">ID policy (Hong et al.)</td><td>a fixed order of user IDs, among the users the relaxation would serve</td><td>each user's program at one set of prices</td><td>pending (COMMANDS 18.3)</td></tr>
+          <tr><td class="pol"><span class="swatch sw-ours"></span>Ours: advantage index</td><td>the PSNR gain in this slot minus the gain in a typical slot</td><td>no program: closed form</td><td>the reference</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose col">
+      <p>Our advantage index is the closed-form shortcut to the Whittle index. It compares this slot with a typical one instead of solving the program, and it gives up nothing measurable (+0.005 dB). No causal scheduler, however clever, can beat it by more than 0.23 dB in mean PSNR. The <a href="https://claude.ai/code/artifact/0801c93d-9404-4fb3-acd8-e88c03641f8f" target="_blank" rel="noopener">full write-up</a> has the formulation.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="col">Sections 2, 4 and 5 use a toy model with the paper's structure: the nested MMSE model with the main code's fitted weights and κ = 1.77, three invented image types, and the paper's scheduling rules (tools/schedule_sim.py). Section 6 is measured on the real codec (docs/NOTES.md, sections 3 to 5).</div>
+  </footer>
+</div>
+<div id="tip" hidden></div>
+<script>
+// ---------------------------------------------------------------- the model and the rules
+// The nested additive MMSE model (alloc/utility.py) with the main code's fitted kappa and phase
+// weights, three invented image types, and the rules of tools/schedule_sim.py: rr, pf,
+// slope_adv ("ours", mean), padc, online ("ours", target).
+const P = 6, KAPPA = 1.77, D_EMPTY = 0.1, CLIP = [-2, 22], GOAL = 30;
+const M = [0.51, 0.25, 0.17, 0.05, 0.010, 0.006];
+const S = [0]; for (const m of M) S.push(S[S.length - 1] + m);
+const TYPES = {
+  detailed: [26.0, 29.0, 31.0, 32.5, 33.5, 34.1],
+  medium: [28.0, 31.0, 32.9, 34.1, 34.9, 35.4],
+  smooth: [30.5, 33.5, 35.1, 35.9, 36.3, 36.5],
+};
+function makeUser(name, type, mean, c) {
+  const dsrc = TYPES[type].map(q => 10 ** (-q / 10));
+  const csens = dsrc.map((d, i) => d * c * (1 - 0.4 * i / (P - 1)));
+  return { name, type, mean, c, dsrc, csens };
+}
+const noiseVar = s => 10 ** (-s / 10);
+const phi = n => n / (1 + n / KAPPA);
+function mse(u, snrs) {
+  const L = snrs.length;
+  if (!L) return D_EMPTY;
+  let Y = 0;
+  for (let j = 0; j < L; j++) Y += M[j] * phi(noiseVar(snrs[j]));
+  return u.dsrc[L - 1] + u.csens[L - 1] * Y / S[L];
+}
+const psnr = (u, snrs) => -10 * Math.log10(Math.max(mse(u, snrs), 1e-12));
+const rate = s => Math.log2(1 + 10 ** (s / 10));
+function rng32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function drawChannel(users, T, seed) {
+  const r = rng32(seed);
+  return users.map(u => Array.from({ length: T }, () => {
+    const fade = 10 * Math.log10(-Math.log(1 - r()));
+    return Math.min(CLIP[1], Math.max(CLIP[0], u.mean + fade));
+  }));
+}
+function randomUsers(K, seed) {
+  const r = rng32(seed * 7919 + 13);
+  const kinds = ['detailed', 'medium', 'smooth'];
+  return Array.from({ length: K }, (_, k) => makeUser('ABCDEFGH'[k],
+    kinds[Math.floor(r() * 3)], Math.round(r() * 150) / 10, 4 + r() * 4));
+}
+function quotasSlope(users, T) {
+  const q = users.map(u => Array.from({ length: P + 1 }, (_, L) => psnr(u, Array(L).fill(u.mean))));
+  const L = users.map(() => 0);
+  for (let s = 0; s < T; s++) {
+    let best = -1, bg = -Infinity;
+    users.forEach((u, k) => {
+      if (L[k] < P && q[k][L[k] + 1] - q[k][L[k]] > bg) { bg = q[k][L[k] + 1] - q[k][L[k]]; best = k; }
+    });
+    if (best < 0) break;
+    L[best]++;
+  }
+  return L;
+}
+function need(u, hist, plan, goal) {
+  for (let n = 0; n <= P - hist.length; n++) {
+    if (psnr(u, hist.concat(Array(n).fill(plan))) >= goal) return n;
+  }
+  return Infinity;
+}
+function byValue(vals) { return vals.map((v, k) => k).sort((a, b) => (vals[a] - vals[b]) || (a - b)); }
+function padcLengths(users, T, goal) {
+  const L = users.map(u => need(u, [], u.mean, goal));
+  const tgt = users.map(() => 0);
+  let left = T;
+  for (const k of byValue(L)) if (isFinite(L[k]) && L[k] <= left) { tgt[k] = L[k]; left -= L[k]; }
+  return { need: L, tgt };
+}
+// One frame under one rule. Per slot the log keeps the chosen user, every user's score (null when
+// not eligible, with the reason in why[]), the phases held before the slot, and the rule's inputs.
+function runFrame(users, snr, policy, goal) {
+  const K = users.length, T = snr[0].length;
+  const hist = users.map(() => []), when = users.map(() => []);
+  const served = Array(K).fill(0);
+  let last = -1, tgt = null, rest = null;
+  if (policy === 'ours_mean') tgt = quotasSlope(users, T);
+  if (policy === 'padc') tgt = padcLengths(users, T, goal).tgt;
+  if (policy === 'ours_target') rest = users.map(u => need(u, [], u.mean, goal));
+  const needAtMean = users.map(u => need(u, [], u.mean, goal));
+  const log = [];
+  for (let t = 0; t < T; t++) {
+    const has = hist.map(h => h.length < P);
+    const g = users.map((u, k) => snr[k][t]);
+    const why = Array(K).fill('');
+    const entry = { t, k: -1, scores: Array(K).fill(null), why, mode: 'idle', held: hist.map(h => h.length),
+                    restBefore: rest ? rest.slice() : null, quota: tgt, rates: g.map(rate), avgs: served.slice() };
+    if (!has.some(Boolean)) { log.push(entry); continue; }
+    let ok = has.slice();
+    has.forEach((h, k) => { if (!h) why[k] = 'holds all 6 phases'; });
+    if (tgt) ok = ok.map((o, k) => {
+      if (o && hist[k].length >= tgt[k]) {
+        why[k] = tgt[k] ? (policy === 'padc' ? `length ${tgt[k]} reached` : `quota ${tgt[k]} reached`) : 'not admitted';
+        return false;
+      }
+      return o;
+    });
+    if (rest) {
+      ok = ok.map((o, k) => {
+        if (o && rest[k] === 0) { why[k] = 'already at 30 dB'; return false; }
+        return o;
+      });
+      const adm = Array(K).fill(false);
+      let left = T - t;
+      for (const k of byValue(rest)) if (ok[k] && rest[k] <= left) { adm[k] = true; left -= rest[k]; }
+      if (adm.some(Boolean) && left < 1) {
+        ok.forEach((o, k) => { if (o && !adm[k]) why[k] = 'waits: others need every slot left'; });
+        ok = adm;
+        entry.restricted = true;
+      }
+    }
+    entry.mode = 'rule';
+    if (!ok.some(Boolean)) {
+      if (policy === 'ours_mean') { entry.mode = 'idle'; log.push(entry); continue; }
+      ok = has.slice();
+      entry.mode = 'leftover';
+      ok.forEach((o, k) => { if (o) why[k] = ''; });
+    }
+    const scores = entry.scores;
+    let k = -1;
+    if (policy === 'rr') {
+      let pos = 0;
+      for (let j = 1; j <= K; j++) { const c = (last + j + K) % K; if (ok[c]) { scores[c] = ++pos; if (k < 0) k = c; } }
+    } else {
+      for (let c = 0; c < K; c++) {
+        if (!ok[c]) continue;
+        if (policy === 'pf' || policy === 'padc') scores[c] = entry.rates[c] / (served[c] + 1e-3 * entry.rates.reduce((a, b) => a + b, 0) / K);
+        else scores[c] = psnr(users[c], hist[c].concat([g[c]])) - psnr(users[c], hist[c].concat([users[c].mean]));
+      }
+      let bv = -Infinity;
+      for (let c = 0; c < K; c++) if (scores[c] !== null && scores[c] > bv) { bv = scores[c]; k = c; }
+    }
+    hist[k].push(g[k]);
+    when[k].push(t);
+    if (rest) rest[k] = need(users[k], hist[k], users[k].mean, goal);
+    for (let c = 0; c < K; c++) served[c] *= (1 - 1 / T);
+    served[k] += rate(g[k]) / T;
+    last = k;
+    entry.k = k;
+    entry.phase = hist[k].length;
+    log.push(entry);
+  }
+  return { hist, when, log, tgt, needAtMean };
+}
+// ---------------------------------------------------------------- end of the model and the rules
+
+// ---------------------------------------------------------------- page state
+const T = 12, K = 4;
+const EXAMPLE = { users: [makeUser('A', 'detailed', 6, 6), makeUser('B', 'smooth', 13, 5), makeUser('C', 'medium', 9, 6), makeUser('D', 'detailed', 2, 7)], seed: 214 };
+const TYPE_WORD = { detailed: 'detailed image', medium: 'medium image', smooth: 'smooth image' };
+const POL = {
+  mean: [{ id: 'rr', name: 'Round robin', cls: 'rr' }, { id: 'pf', name: 'PF', cls: 'pf' }, { id: 'ours_mean', name: 'Ours', cls: 'ours' }],
+  target: [{ id: 'pf', name: 'PF', cls: 'pf' }, { id: 'padc', name: 'PADC', cls: 'padc' }, { id: 'ours_target', name: 'Ours', cls: 'ours' }],
+};
+// The example frame's key slots (checked against the runs by test_page.js).
+const MOMENTS = {
+  mean: [
+    { t: 2, focus: 'pf', label: 'Slot 2', text: 'PF first serves the users it has not served yet, best rate first, so B sends its sensitive first phase in a 7 dB fade. Ours gives the slot to D, whose channel is at its usual level.' },
+    { t: 4, focus: 'ours', label: 'Slots 3–4', text: "A's channel peaks, 6 dB above its mean. Ours sends A's phases 1 and 2 there; together they carry three quarters of A's noise sensitivity." },
+    { t: 7, focus: 'ours', label: 'Slot 7', text: "B's best slot, 21 dB. PF gives it to B. Ours gives it to C: B's smooth image is close to its best quality, so this 8 dB peak is worth only 0.21 dB to B, a little less than C's smaller peak is worth to C (0.22 dB)." },
+    { t: 12, focus: 'ours', label: 'Deadline', text: 'PF gave B, the strongest user, 4 phases (34.1 dB); ours gave 4 phases to D, whose PSNR grows most per phase. Mean PSNR: ours 29.79 dB, PF 29.24, round robin 28.14.' },
+  ],
+  target: [
+    { t: 0, focus: 'padc', label: 'Before slot 1', text: 'PADC fixes each length from the mean SNR: A 5 phases, B 2, C 3. D cannot reach 30 dB at its 2 dB mean, so it is not admitted and gets only spare slots.' },
+    { t: 4, focus: 'padc', label: 'Slot 4', text: "A peak for both A and B. PADC's PF timing gives it to B; A's phases 2 to 5 then land in fades (slots 7 to 10), and A ends at 29.8 dB, just short of 30." },
+    { t: 10, focus: 'ours', label: 'Slots 3–10', text: "Ours sends A's phases 1 and 2 to its peaks (slots 3 and 4). A reaches 30.2 dB with 4 phases and stops." },
+    { t: 12, focus: 'ours', label: 'Deadline', text: 'Users at 30 dB: ours 3 of 4, PADC 2, PF 2.' },
+  ],
+};
+const state = { mode: 'mean', users: EXAMPLE.users, seed: EXAMPLE.seed, isExample: true, t: T, focus: 'ours',
+                playing: false, timer: null, popAt: -1, moment: -1, inView: true };
+let snr = drawChannel(state.users, T, state.seed);
+let runs = {};
+function compute() {
+  runs = {};
+  for (const p of POL[state.mode]) runs[p.id] = runFrame(state.users, snr, p.id, GOAL);
+}
+const focusPol = () => {
+  const pols = POL[state.mode];
+  return pols.find(p => (state.focus === 'ours' ? p.cls === 'ours' : p.id === state.focus)) || pols[pols.length - 1];
+};
+const num = (v, d = 1) => v.toFixed(d).replace(/^-/, '−');
+const fmt = (v, d = 1) => { const a = Math.abs(v).toFixed(d); return +a === 0 ? a : (v > 0 ? '+' : '−') + a; };
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const heatBin = f => (f < -8 ? 0 : f < -4 ? 1 : f < -1.5 ? 2 : f < 0.5 ? 3 : f < 2.5 ? 4 : f < 4.5 ? 5 : 6);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+const SVGNS = 'http://www.w3.org/2000/svg';
+const sv = (tag, attrs, text) => {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+
+// ---------------------------------------------------------------- tooltip
+const tip = document.getElementById('tip');
+function showTip(ev, lines) {
+  tip.replaceChildren();
+  lines.forEach((ln, i) => { const d = el('div'); if (i === 0) d.appendChild(el('b', '', ln)); else d.textContent = ln; tip.appendChild(d); });
+  tip.hidden = false;
+  const r = ev.currentTarget && ev.currentTarget.getBoundingClientRect ? ev.currentTarget.getBoundingClientRect() : null;
+  const x = ev.clientX > 0 ? ev.clientX : (r ? r.left + r.width / 2 : 0);
+  const y = ev.clientY > 0 ? ev.clientY : (r ? r.top : 0);
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x + 12)) + 'px';
+  tip.style.top = (y - h - 10 < 8 ? y + 18 : y - h - 10) + 'px';
+}
+const hideTip = () => { tip.hidden = true; };
+function hover(node, linesFn, focusable) {
+  if (focusable) node.setAttribute('tabindex', '0');
+  const on = ev => showTip(ev, linesFn());
+  node.addEventListener('pointerenter', on);
+  node.addEventListener('pointermove', on);
+  node.addEventListener('pointerleave', hideTip);
+  if (focusable) { node.addEventListener('focus', on); node.addEventListener('blur', hideTip); }
+}
+window.addEventListener('scroll', hideTip, { passive: true });
+
+// ---------------------------------------------------------------- 4: the board
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.replaceChildren();
+  const pols = POL[state.mode], fp = focusPol(), frun = runs[fp.id];
+  board.style.setProperty('--focus-c', `var(--${fp.cls})`);
+  document.getElementById('ringkey').style.setProperty('--focus-c', `var(--${fp.cls})`);
+  const ours = runs[pols[pols.length - 1].id];
+  board.appendChild(el('div', 'bh corner', ''));
+  for (let t = 0; t < T; t++) board.appendChild(el('div', 'bh' + (t === state.t - 1 ? ' cur' : ''), `slot ${t + 1}`));
+  state.users.forEach((u, k) => {
+    const lab = el('div', 'bl');
+    lab.appendChild(el('b', '', `User ${u.name}`));
+    lab.appendChild(el('small', 't1', `${u.type} · mean ${u.mean.toFixed(1)} dB`));
+    lab.appendChild(el('small', 't3', `mean ${u.mean.toFixed(1)} dB`));
+    const n = ours.needAtMean[k];
+    lab.appendChild(el('small', 't2', state.mode === 'mean' ? `our quota: ${plural(ours.tgt[k], 'phase')}`
+      : (isFinite(n) ? `needs ${plural(n, 'phase')} for 30 dB` : 'cannot reach 30 dB')));
+    lab.appendChild(el('small', 't4', state.mode === 'mean' ? `quota ${ours.tgt[k]}` : (isFinite(n) ? `needs ${n}` : 'can’t reach 30')));
+    lab.title = `${TYPE_WORD[u.type]}, mean SNR ${u.mean.toFixed(1)} dB`;
+    board.appendChild(lab);
+    for (let t = 0; t < T; t++) {
+      const f = snr[k][t] - u.mean, b = heatBin(f);
+      const c = el('div', 'cell' + (t >= state.t ? ' future' : '') + (t === state.t - 1 ? ' cur' : ''), num(Math.round(snr[k][t]), 0));
+      c.style.background = `var(--h${b})`;
+      c.style.color = `var(--ht${b})`;
+      const ph = frun.when[k].indexOf(t);
+      if (ph >= 0 && t < state.t) { const ring = el('span', 'ring'); ring.appendChild(el('b', '', String(ph + 1))); c.appendChild(ring); }
+      hover(c, () => {
+        const lines = [`User ${u.name}, slot ${t + 1}: ${num(snr[k][t])} dB`, `${fmt(f)} dB against its mean of ${u.mean.toFixed(1)} dB`];
+        if (t >= state.t) lines.push('not seen yet by any scheduler');
+        else pols.forEach(p => { const j = runs[p.id].when[k].indexOf(t); if (j >= 0) lines.push(`${p.name} sends its phase ${j + 1} here`); });
+        return lines;
+      }, false);
+      board.appendChild(c);
+    }
+  });
+  board.appendChild(el('div', 'sep'));
+  pols.forEach(p => {
+    const lab = el('div', 'lane-l');
+    const btn = el('button');
+    btn.type = 'button';
+    btn.appendChild(el('span', `swatch sw-${p.cls}`));
+    btn.appendChild(document.createTextNode(p.name));
+    btn.setAttribute('aria-pressed', String(p === fp));
+    btn.title = `Circle ${p.name}'s choices on the grid`;
+    btn.addEventListener('click', () => { state.focus = p.cls === 'ours' ? 'ours' : p.id; state.moment = -1; renderAll(); });
+    lab.appendChild(btn);
+    board.appendChild(lab);
+    const run = runs[p.id];
+    for (let t = 0; t < T; t++) {
+      const L = run.log[t];
+      const on = L && L.k >= 0 && t < state.t;
+      const chip = el('div', 'chip' + (on ? ' on' : '') + (t >= state.t ? ' future' : '') + (t === state.t - 1 ? ' cur' : '') + (on && t === state.popAt ? ' pop' : ''),
+        on ? `${state.users[L.k].name}${L.phase}` : (t < state.t ? '–' : ''));
+      chip.style.setProperty('--c', `var(--${p.cls})`);
+      if (on) {
+        const u = state.users[L.k];
+        hover(chip, () => [`${p.name}, slot ${t + 1}: user ${u.name}, phase ${L.phase}`,
+          `at ${num(snr[L.k][t])} dB, ${fmt(snr[L.k][t] - u.mean)} dB against its mean`], true);
+        chip.setAttribute('aria-label', `${p.name}, slot ${t + 1}: user ${u.name}, phase ${L.phase}`);
+      }
+      board.appendChild(chip);
+    }
+  });
+}
+function renderRamp() {
+  const r = document.getElementById('ramp');
+  r.replaceChildren();
+  for (let b = 0; b <= 6; b++) { const i = el('i'); i.style.background = `var(--h${b})`; r.appendChild(i); }
+}
+function renderMoments() {
+  const box = document.getElementById('moments');
+  box.hidden = !state.isExample;
+  const ol = document.getElementById('momentList');
+  ol.replaceChildren();
+  if (!state.isExample) return;
+  MOMENTS[state.mode].forEach((m, i) => {
+    const li = el('li');
+    const b = el('button', '', m.label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(state.moment === i));
+    b.addEventListener('click', () => { stop(); state.t = m.t; state.focus = m.focus; state.moment = i; state.popAt = -1; renderAll(); });
+    li.appendChild(b);
+    li.appendChild(el('span', '', m.text));
+    ol.appendChild(li);
+  });
+}
+
+// ---------------------------------------------------------------- 4: why this slot
+function sayFor(p, L, t) {
+  if (L.k < 0) return p.id === 'ours_mean' ? 'Every user has its quota, so the slot stays empty.' : 'No phases left to send.';
+  const k = L.k, u = state.users[k], a = L.scores[k];
+  const at = `${num(snr[k][t])} dB, ${fmt(snr[k][t] - u.mean)} against its mean`;
+  switch (p.id) {
+    case 'rr':
+      return `Serves ${u.name}: next in the rotation, whatever its channel (${at}).`;
+    case 'pf':
+      return L.avgs[k] === 0 ? `Serves ${u.name}: PF first serves the users it has not served yet, best rate first (${at}).`
+        : `Serves ${u.name}: its rate now is the highest compared with its average so far (${at}).`;
+    case 'padc':
+      if (L.mode === 'leftover') return `Every admitted user has its fixed length, so this is a spare slot: PF over everyone with phases left picks ${u.name} (${at}).`;
+      return `${u.name} is below its fixed length of ${plural(L.quota[k], 'phase')}; among such users PF picks it${L.avgs[k] === 0 ? ', as it has not been served yet' : ''} (${at}).`;
+    case 'ours_mean':
+      return a >= 0 ? `Serves ${u.name}: its phase ${L.phase} gains ${a.toFixed(2)} dB more PSNR in this slot than in a typical one (${at}).`
+        : `Every user below its quota is in a fade; ${u.name}'s phase ${L.phase} loses least here, ${num(a, 2)} dB against a typical slot (${at}).`;
+    default: {
+      const n = L.restBefore[k];
+      const tail = a >= 0 ? `this slot gives it ${a.toFixed(2)} dB more than a typical one` : `it loses least here (${num(a, 2)} dB against a typical slot)`;
+      if (L.mode === 'leftover') return `Every user with phases left is already at 30 dB, so this is a spare slot; the advantage index picks ${u.name} (${at}).`;
+      if (!isFinite(n)) return `${u.name} cannot reach 30 dB, but the others do not need every slot left, so the slot is open to all, and ${tail} (${at}).`;
+      if (L.restricted) return `The users who can still reach 30 dB need every slot left, so only they compete. ${u.name} needs ${plural(n, 'more phase')}, and ${tail} (${at}).`;
+      return `Serves ${u.name}: it needs ${plural(n, 'more phase')} for 30 dB, and ${tail} (${at}).`;
+    }
+  }
+}
+function scoreText(p, L, c) {
+  const v = L.scores[c];
+  if (p.id === 'rr') return v === 1 ? 'next' : ['', '', '2nd in line', '3rd in line', '4th in line'][v];
+  if (p.id === 'pf' || p.id === 'padc') return L.avgs[c] === 0 ? `new · rate ${L.rates[c].toFixed(1)}` : v.toFixed(1);
+  return `${fmt(v, 2)} dB`;
+}
+function renderWhy() {
+  const pols = POL[state.mode];
+  const box = document.getElementById('why');
+  box.replaceChildren();
+  const t = state.t - 1;
+  document.getElementById('whyTitle').textContent = state.t === 0 ? 'Press Play or Slot ▶ to start' : `Slot ${state.t}: who gets it?`;
+  if (state.t === 0) return;
+  const head = { rr: 'turn', pf: 'rate ÷ its average', padc: 'rate ÷ its average', ours_mean: 'advantage', ours_target: 'advantage' };
+  pols.forEach(p => {
+    const L = runs[p.id].log[t];
+    const card = el('div', 'why');
+    const h = el('h3');
+    h.appendChild(el('span', `swatch sw-${p.cls}`));
+    h.appendChild(document.createTextNode(`${p.name} → ${L.k >= 0 ? 'user ' + state.users[L.k].name : 'nobody'}`));
+    card.appendChild(h);
+    card.appendChild(el('p', 'say', sayFor(p, L, t)));
+    const tbl = el('table');
+    const hr = el('tr');
+    hr.appendChild(el('th', '', 'user · held'));
+    hr.appendChild(el('th', '', head[p.id]));
+    tbl.appendChild(hr);
+    state.users.forEach((u, c) => {
+      const v = L.scores[c];
+      const tr = el('tr', L.k === c ? 'pick' : (v === null ? 'out' : ''));
+      const td = el('td');
+      if (L.k === c) { const d = el('span', 'pickdot'); d.style.background = `var(--${p.cls})`; td.appendChild(d); }
+      td.appendChild(document.createTextNode(`${u.name} · ${L.held[c]}`));
+      tr.appendChild(td);
+      tr.appendChild(el('td', '', v === null ? L.why[c] : scoreText(p, L, c)));
+      tbl.appendChild(tr);
+    });
+    card.appendChild(tbl);
+    box.appendChild(card);
+  });
+}
+
+// ---------------------------------------------------------------- 4: results so far
+function renderResults() {
+  const pols = POL[state.mode];
+  const tbl = document.getElementById('results');
+  tbl.replaceChildren();
+  const thead = el('thead'), hr = el('tr');
+  hr.appendChild(el('th', '', 'User'));
+  pols.forEach(p => { const th = el('th'); th.appendChild(el('span', `swatch sw-${p.cls}`)); th.appendChild(document.createTextNode(p.name)); hr.appendChild(th); });
+  thead.appendChild(hr);
+  tbl.appendChild(thead);
+  const tb = el('tbody');
+  const fin = pols.map(p => state.users.map((u, k) => {
+    const n = runs[p.id].when[k].filter(t => t < state.t).length;
+    return { q: psnr(u, runs[p.id].hist[k].slice(0, n)), n };
+  }));
+  state.users.forEach((u, k) => {
+    const tr = el('tr');
+    tr.appendChild(el('td', '', `User ${u.name}`));
+    pols.forEach((p, i) => {
+      const v = fin[i][k], hit = state.mode === 'target' && v.q >= GOAL;
+      tr.appendChild(el('td', hit ? 'hit' : '', `${v.q.toFixed(1)} (${v.n})${hit ? ' ✓' : ''}`));
+    });
+    tb.appendChild(tr);
+  });
+  const sum = el('tr', 'sum');
+  sum.appendChild(el('td', '', state.mode === 'mean' ? 'Mean PSNR' : 'Users at 30 dB'));
+  pols.forEach((p, i) => {
+    const qs = fin[i].map(v => v.q);
+    sum.appendChild(el('td', '', state.mode === 'mean' ? (qs.reduce((a, b) => a + b, 0) / K).toFixed(2) : `${qs.filter(q => q >= GOAL).length} of ${K}`));
+  });
+  tb.appendChild(sum);
+  tbl.appendChild(tb);
+  document.getElementById('resTitle').textContent = state.t >= T ? 'At the deadline: PSNR in dB (phases held)' : `After slot ${state.t}: PSNR in dB (phases held)`;
+}
+function renderSlotNo() {
+  document.getElementById('slotno').textContent = `Slot ${state.t} of ${T}${state.t === T ? ' · deadline' : ''}`;
+  document.getElementById('bBack').disabled = state.t === 0;
+  document.getElementById('bNext').disabled = state.t === T;
+  document.getElementById('bPlay').textContent = state.playing ? 'Pause' : (state.t === T ? 'Replay' : 'Play');
+  document.getElementById('bExample').hidden = state.isExample;
+}
+function renderAll() { renderMoments(); renderBoard(); renderWhy(); renderResults(); renderSlotNo(); }
+
+// ---------------------------------------------------------------- 4: controls
+function step(d) {
+  const nt = Math.min(T, Math.max(0, state.t + d));
+  state.popAt = d > 0 ? nt - 1 : -1;
+  state.t = nt;
+  state.moment = -1;
+  renderAll();
+}
+function stop() { state.playing = false; clearTimeout(state.timer); renderSlotNo(); }
+function play() {
+  if (state.playing) { stop(); return; }
+  if (state.t >= T) state.t = 0;
+  state.playing = true;
+  const tick = () => {
+    if (!state.playing) return;
+    if (state.t >= T) { stop(); return; }
+    step(1);
+    state.timer = setTimeout(tick, +document.getElementById('speed').value);
+  };
+  tick();
+}
+function setMode(m) {
+  state.mode = m;
+  state.moment = -1;
+  document.getElementById('mMean').setAttribute('aria-pressed', String(m === 'mean'));
+  document.getElementById('mTarget').setAttribute('aria-pressed', String(m === 'target'));
+  compute();
+  renderAll();
+}
+function loadFrame(users, seed, isExample) {
+  stop();
+  state.users = users; state.seed = seed; state.isExample = isExample; state.moment = -1; state.t = T;
+  snr = drawChannel(users, T, seed);
+  compute();
+  renderAll();
+}
+document.getElementById('mMean').addEventListener('click', () => setMode('mean'));
+document.getElementById('mTarget').addEventListener('click', () => setMode('target'));
+document.getElementById('bPlay').addEventListener('click', play);
+document.getElementById('bNext').addEventListener('click', () => { stop(); step(1); });
+document.getElementById('bBack').addEventListener('click', () => { stop(); step(-1); });
+document.getElementById('bReset').addEventListener('click', () => { stop(); state.t = 0; state.moment = -1; renderAll(); });
+document.getElementById('bNew').addEventListener('click', () => { const s = 1000 + Math.floor(Math.random() * 1e6); loadFrame(randomUsers(K, s), s + 1, false); });
+document.getElementById('bExample').addEventListener('click', () => loadFrame(EXAMPLE.users, EXAMPLE.seed, true));
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(es => { state.inView = es[es.length - 1].isIntersecting; }, { threshold: 0.1 }).observe(document.getElementById('frame'));
+}
+document.addEventListener('keydown', e => {
+  if (!state.inView || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (/INPUT|SELECT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return;
+  if (e.key === 'ArrowRight') { stop(); step(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { stop(); step(-1); e.preventDefault(); }
+});
+
+// ---------------------------------------------------------------- 1: the setup drawing
+function drawSetup() {
+  const st = document.getElementById('setup-stacks');
+  for (let j = 0; j < P; j++) st.appendChild(sv('text', { x: 65 + j * 30, y: 104, 'font-size': 10.5, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, String(j + 1)));
+  EXAMPLE.users.forEach((u, k) => {
+    const y = 112 + k * 38;
+    st.appendChild(sv('text', { x: 32, y: y + 15, 'font-size': 13, 'font-weight': 700, style: 'fill:var(--ink)' }, u.name));
+    for (let j = 0; j < P; j++) st.appendChild(sv('rect', { x: 52 + j * 30, y, width: 26, height: 22, rx: 4, style: `fill:var(--ink-2);fill-opacity:${(0.95 - j * 0.13).toFixed(2)}` }));
+  });
+  st.appendChild(sv('text', { x: 32, y: 266, 'font-size': 11.5, style: 'fill:var(--muted)' }, 'phase 1 coarse … phase 6 fine'));
+  const ex = runFrame(EXAMPLE.users, drawChannel(EXAMPLE.users, T, EXAMPLE.seed), 'ours_mean', GOAL);
+  const sl = document.getElementById('setup-slots');
+  ex.log.forEach((L, t) => {
+    const x = 300 + t * 31;
+    sl.appendChild(sv('text', { x: x + 13.5, y: 106, 'font-size': 10, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, String(t + 1)));
+    sl.appendChild(sv('rect', { x, y: 112, width: 27, height: 52, rx: 5, style: 'fill:var(--soft);stroke:var(--line)' }));
+    if (L.k < 0) return;
+    sl.appendChild(sv('text', { x: x + 13.5, y: 137, 'font-size': 14, 'font-weight': 700, 'text-anchor': 'middle', style: 'fill:var(--ink)' }, EXAMPLE.users[L.k].name));
+    sl.appendChild(sv('text', { x: x + 13.5, y: 154, 'font-size': 10.5, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, String(L.phase)));
+  });
+  const us = document.getElementById('setup-users');
+  const ch = drawChannel(EXAMPLE.users, T, EXAMPLE.seed);
+  EXAMPLE.users.forEach((u, k) => {
+    const y = 106 + k * 40;
+    us.appendChild(sv('rect', { x: 732, y: y + 1, width: 16, height: 26, rx: 3, 'stroke-width': 1.4, style: 'fill:none;stroke:var(--ink-2)' }));
+    us.appendChild(sv('line', { x1: 737, x2: 743, y1: y + 23, y2: y + 23, 'stroke-width': 1.2, style: 'stroke:var(--ink-2)' }));
+    us.appendChild(sv('text', { x: 756, y: y + 12, 'font-size': 13, 'font-weight': 700, style: 'fill:var(--ink)' }, `User ${u.name}`));
+    us.appendChild(sv('text', { x: 756, y: y + 27, 'font-size': 11, style: 'fill:var(--muted)' }, `${TYPE_WORD[u.type]}, ${u.mean} dB`));
+    us.appendChild(sv('line', { x1: 878, x2: 970, y1: y + 14, y2: y + 14, style: 'stroke:var(--grid)' }));
+    const pts = ch[k].map((v, t) => `${882 + t * 8},${(y + 14 - (v - u.mean)).toFixed(1)}`);
+    us.appendChild(sv('polyline', { points: pts.join(' '), 'stroke-width': 1.4, 'stroke-linejoin': 'round', style: 'fill:none;stroke:var(--muted)' }));
+  });
+  us.appendChild(sv('text', { x: 926, y: 101, 'font-size': 10.5, 'text-anchor': 'middle', style: 'fill:var(--muted)' }, 'its 12 slots'));
+}
+
+// ---------------------------------------------------------------- 2: weights and the good-slot demo
+const barUp = (x, base, w, h, r = 4) => { r = Math.min(r, h, w / 2); return `M${x} ${base}V${base - h + r}q0 ${-r} ${r} ${-r}h${w - 2 * r}q${r} 0 ${r} ${r}V${base}z`; };
+const barRight = (x, y, w, h, r = 4) => { r = Math.min(r, w, h / 2); return `M${x} ${y}h${w - r}q${r} 0 ${r} ${r}v${h - 2 * r}q0 ${r} ${-r} ${r}h${-(w - r)}z`; };
+function drawWeights() {
+  const g = document.getElementById('weights');
+  const x0 = 56, base = 160, H = 132, bw = 46, gap = 18, max = 0.6;
+  [0, 0.2, 0.4, 0.6].forEach(v => {
+    const y = base - v / max * H;
+    g.appendChild(sv('line', { x1: x0 - 4, x2: 448, y1: y, y2: y, style: 'stroke:var(--grid)' }));
+    g.appendChild(sv('text', { x: x0 - 10, y: y + 4, 'font-size': 11, 'text-anchor': 'end', class: 'tick', style: 'fill:var(--muted)' }, v.toFixed(1)));
+  });
+  M.forEach((m, j) => {
+    const x = x0 + 10 + j * (bw + gap), h = m / max * H;
+    const bar = sv('path', { d: barUp(x, base, bw, h), style: `fill:var(${j === 0 ? '--ink' : '--h4'})` });
+    hover(bar, () => [`Phase ${j + 1}: weight ${m.toFixed(3)}`, `${(100 * m / S[P]).toFixed(1)}% of the total`], false);
+    g.appendChild(bar);
+    g.appendChild(sv('text', { x: x + bw / 2, y: base - h - 6, 'font-size': 12, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--ink)' }, m < 0.1 ? m.toFixed(3) : m.toFixed(2)));
+    g.appendChild(sv('text', { x: x + bw / 2, y: base + 18, 'font-size': 12, 'text-anchor': 'middle', style: 'fill:var(--ink-2)' }, `phase ${j + 1}`));
+  });
+  g.appendChild(sv('line', { x1: x0 - 4, x2: 448, y1: base, y2: base, style: 'stroke:var(--muted)' }));
+}
+const GS_USER = makeUser('demo', 'medium', 9, 6);
+function goodSlot(which) {
+  ['gs1', 'gs2', 'gs3'].forEach((id, i) => document.getElementById(id).setAttribute('aria-pressed', String(i + 1 === which)));
+  const box = document.getElementById('gsPhases');
+  box.replaceChildren();
+  const snrs = [3, 3, 3];
+  snrs[which - 1] = 15;
+  snrs.forEach((s, j) => {
+    const d = el('div', 'ph' + (s === 15 ? ' good' : ''));
+    d.appendChild(el('span', 'w', `phase ${j + 1} · weight ${M[j].toFixed(2)}`));
+    d.appendChild(el('span', 's', `${s} dB`));
+    box.appendChild(d);
+  });
+  const strip = document.getElementById('gsStrip');
+  strip.replaceChildren();
+  const res = [1, 2, 3].map(w => { const a = [3, 3, 3]; a[w - 1] = 15; return psnr(GS_USER, a); });
+  const lo = Math.min(...res) - 0.3, hi = Math.max(...res) + 0.3;
+  res.forEach((q, i) => {
+    const row = el('div', 'srow' + (i + 1 === which ? ' on' : ''));
+    row.appendChild(el('span', '', `good slot → phase ${i + 1}`));
+    const tr = el('div', 'track');
+    const dot = el('i');
+    dot.style.left = `${((q - lo) / (hi - lo) * 100).toFixed(1)}%`;
+    tr.appendChild(dot);
+    row.appendChild(tr);
+    row.appendChild(el('span', 'val', `${q.toFixed(2)} dB`));
+    strip.appendChild(row);
+  });
+  strip.appendChild(el('p', 'note', `The same three slots in a different order end ${(res[0] - res[2]).toFixed(2)} dB apart.`));
+}
+['gs1', 'gs2', 'gs3'].forEach((id, i) => document.getElementById(id).addEventListener('click', () => goodSlot(i + 1)));
+
+// ---------------------------------------------------------------- 5: many frames, computed here
+function manyFrames(N) {
+  const acc = { rr: [], pf: [], ours_mean: [], pf_t: [], padc: [], ours_target: [] };
+  for (let f = 0; f < N; f++) {
+    const users = randomUsers(K, f + 1), ch = drawChannel(users, T, 1000 + f);
+    const fin = p => { const R = runFrame(users, ch, p, GOAL); return users.map((u, k) => psnr(u, R.hist[k])); };
+    for (const p of ['rr', 'pf', 'ours_mean']) acc[p].push(fin(p).reduce((a, b) => a + b, 0) / K);
+    for (const p of ['pf', 'padc', 'ours_target']) acc[p === 'pf' ? 'pf_t' : p].push(fin(p).filter(q => q >= GOAL).length / K);
+  }
+  return acc;
+}
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+function paired(a, b) {
+  const d = a.map((v, i) => v - b[i]), m = avg(d);
+  const sd = Math.sqrt(d.reduce((x, y) => x + (y - m) ** 2, 0) / (d.length - 1));
+  return [m, 1.96 * sd / Math.sqrt(d.length)];
+}
+function dotChart(svg, rows, lo, hi) {
+  svg.replaceChildren();
+  const x0 = 116, x1 = 440, y0 = 26, step = 44;
+  const X = v => x0 + (v - lo) / (hi - lo) * (x1 - x0), yEnd = y0 + step * (rows.length - 1) + 16;
+  for (let v = lo; v <= hi + 1e-9; v += 0.5) {
+    svg.appendChild(sv('line', { x1: X(v), x2: X(v), y1: y0 - 14, y2: yEnd, style: 'stroke:var(--grid)' }));
+    if (Math.abs(v - Math.round(v)) < 1e-9) svg.appendChild(sv('text', { x: X(v), y: yEnd + 16, 'font-size': 11, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, v.toFixed(0)));
+  }
+  rows.forEach((r, i) => {
+    const y = y0 + i * step;
+    svg.appendChild(sv('text', { x: x0 - 14, y: y + 4, 'font-size': 13, 'text-anchor': 'end', 'font-weight': r.main ? 700 : 400, style: 'fill:var(--ink)' }, r.name));
+    const dot = sv('circle', { cx: X(r.v), cy: y, r: 7, 'stroke-width': 2, style: `fill:var(--${r.cls});stroke:var(--surface)` });
+    hover(dot, () => [`${r.name}: ${r.v.toFixed(2)} dB`, 'mean PSNR at the deadline'], false);
+    svg.appendChild(dot);
+    svg.appendChild(sv('text', { x: X(r.v) + 13, y: y + 4, 'font-size': 12.5, class: 'tick', style: 'fill:var(--ink)' }, `${r.v.toFixed(2)} dB`));
+  });
+  svg.appendChild(sv('text', { x: (x0 + x1) / 2, y: yEnd + 34, 'font-size': 11.5, 'text-anchor': 'middle', style: 'fill:var(--muted)' }, 'mean PSNR (dB); the axis does not start at 0'));
+}
+function barChart(svg, rows) {
+  svg.replaceChildren();
+  const x0 = 116, x1 = 430, y0 = 16, step = 44, bh = 20;
+  const X = v => x0 + v / 100 * (x1 - x0), yEnd = y0 + step * (rows.length - 1) + bh + 8;
+  [0, 25, 50, 75, 100].forEach(v => {
+    svg.appendChild(sv('line', { x1: X(v), x2: X(v), y1: y0 - 6, y2: yEnd, style: 'stroke:var(--grid)' }));
+    svg.appendChild(sv('text', { x: X(v), y: yEnd + 16, 'font-size': 11, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, `${v}`));
+  });
+  rows.forEach((r, i) => {
+    const y = y0 + i * step;
+    svg.appendChild(sv('text', { x: x0 - 14, y: y + bh / 2 + 4, 'font-size': 13, 'text-anchor': 'end', 'font-weight': r.main ? 700 : 400, style: 'fill:var(--ink)' }, r.name));
+    const bar = sv('path', { d: barRight(x0, y, Math.max(1, X(r.v) - x0), bh), style: `fill:var(--${r.cls})` });
+    hover(bar, () => [`${r.name}: ${r.v.toFixed(1)}%`, 'of users reach 30 dB'], false);
+    svg.appendChild(bar);
+    svg.appendChild(sv('text', { x: X(r.v) + 8, y: y + bh / 2 + 4, 'font-size': 12.5, class: 'tick', style: 'fill:var(--ink)' }, `${r.v.toFixed(1)}%`));
+  });
+  svg.appendChild(sv('line', { x1: x0, x2: x0, y1: y0 - 6, y2: yEnd, style: 'stroke:var(--muted)' }));
+  svg.appendChild(sv('text', { x: (x0 + x1) / 2, y: yEnd + 34, 'font-size': 11.5, 'text-anchor': 'middle', style: 'fill:var(--muted)' }, 'users at 30 dB (%)'));
+}
+function drawMany() {
+  const N = 2000, acc = manyFrames(N);
+  const mRR = avg(acc.rr), mPF = avg(acc.pf), mO = avg(acc.ours_mean);
+  const lo = Math.floor(Math.min(mRR, mPF, mO) - 0.4), hi = Math.ceil(Math.max(mRR, mPF, mO) + 0.5);
+  dotChart(document.getElementById('cMean'), [
+    { name: 'Round robin', v: mRR, cls: 'rr' }, { name: 'PF', v: mPF, cls: 'pf' }, { name: 'Ours', v: mO, cls: 'ours', main: true },
+  ], lo, hi);
+  const [dm, dh] = paired(acc.ours_mean, acc.pf);
+  document.getElementById('cMeanT').textContent = `Ours gains ${dm.toFixed(2)} dB of mean PSNR over PF`;
+  document.getElementById('cMeanCap').textContent = `Toy model · ${N.toLocaleString('en-US')} random frames, 4 users, 12 slots · ours − PF ${fmt(dm, 2)} dB (95% CI ±${dh.toFixed(2)}), PF − round robin ${fmt(mPF - mRR, 2)} dB.`;
+  const sPF = 100 * avg(acc.pf_t), sPA = 100 * avg(acc.padc), sO = 100 * avg(acc.ours_target);
+  barChart(document.getElementById('cTgt'), [
+    { name: 'PF', v: sPF, cls: 'pf' }, { name: 'PADC', v: sPA, cls: 'padc' }, { name: 'Ours', v: sO, cls: 'ours', main: true },
+  ]);
+  const [dp, dph] = paired(acc.ours_target, acc.padc);
+  document.getElementById('cTgtT').textContent = `Ours brings ${(100 * dp).toFixed(0)} points more users to 30 dB than PADC`;
+  document.getElementById('cTgtCap').textContent = `Toy model · ${N.toLocaleString('en-US')} random frames · ours − PADC ${fmt(100 * dp, 1)} points (95% CI ±${(100 * dph).toFixed(1)}). On the codec: +11.0 points (section 6).`;
+}
+
+// ---------------------------------------------------------------- 6: measured charts
+function drawLadder() {
+  const svg = document.getElementById('cLadder');
+  const rows = [
+    { name: 'Lagrangian bound', db: 0.26, d: 2, kind: 'bound' },
+    { name: 'clairvoyant optimum', db: 0.23, d: 2, kind: 'bound' },
+    { name: 'one-step rollout', db: 0.04, d: 2, kind: 'policy' },
+    { name: 'Whittle index policy', db: 0.005, d: 3, kind: 'policy' },
+    { name: 'our advantage rule', db: 0, d: 0, kind: 'ours' },
+    { name: 'PF', db: -0.476, d: 3, kind: 'pf' },
+  ];
+  const x0 = 176, x1 = 452, lo = -0.55, hi = 0.35, y0 = 34, step = 34;
+  const X = v => x0 + (v - lo) / (hi - lo) * (x1 - x0), yEnd = y0 + step * (rows.length - 1) + 14;
+  svg.appendChild(sv('rect', { x: X(0.04), y: y0 - 16, width: X(0.23) - X(0.04), height: yEnd - y0 + 16, style: 'fill:var(--soft)' }));
+  svg.appendChild(sv('text', { x: X(0.23), y: y0 - 22, 'font-size': 11, 'text-anchor': 'end', style: 'fill:var(--muted)' }, 'the best causal scheduler is in here'));
+  [-0.4, -0.2, 0, 0.2].forEach(v => {
+    svg.appendChild(sv('line', { x1: X(v), x2: X(v), y1: y0 - 16, y2: yEnd, style: v === 0 ? 'stroke:var(--muted);stroke-dasharray:4 4' : 'stroke:var(--grid)' }));
+    svg.appendChild(sv('text', { x: X(v), y: yEnd + 16, 'font-size': 11, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--muted)' }, fmt(v, 1)));
+  });
+  rows.forEach((r, i) => {
+    const y = y0 + i * step, x = X(r.db);
+    svg.appendChild(sv('text', { x: x0 - 12, y: y + 4, 'font-size': 12.5, 'text-anchor': 'end', 'font-weight': r.kind === 'ours' ? 700 : 400, style: 'fill:var(--ink)' }, r.name));
+    const fill = { bound: '--muted', policy: '--rr', ours: '--ours', pf: '--pf' }[r.kind];
+    const mark = r.kind === 'bound' ? sv('path', { d: `M${x} ${y - 7}l7 7l-7 7l-7 -7z`, style: `fill:var(${fill})` })
+      : sv('circle', { cx: x, cy: y, r: r.kind === 'ours' ? 7 : 6, 'stroke-width': 2, style: `fill:var(${fill});stroke:var(--surface)` });
+    const label = r.kind === 'ours' ? 'reference' : `${fmt(r.db, r.d)} dB`;
+    hover(mark, () => [`${r.name}: ${label}`, r.kind === 'bound' ? 'an upper bound on every causal scheduler' : 'mean PSNR against our rule'], false);
+    svg.appendChild(mark);
+    svg.appendChild(sv('text', { x: x + 12, y: y + 4, 'font-size': 11.5, class: 'tick', style: 'fill:var(--ink-2)' }, label));
+  });
+  svg.appendChild(sv('text', { x: (x0 + x1) / 2, y: yEnd + 34, 'font-size': 11.5, 'text-anchor': 'middle', style: 'fill:var(--muted)' }, 'mean PSNR against our rule (dB)'));
+}
+function drawDigital() {
+  const svg = document.getElementById('cDigital');
+  const rows = [{ e: 0, v: 0.34, p: 2.8 }, { e: 1, v: 1.00, p: 9.2 }, { e: 2, v: 1.64, p: 14.5 }, { e: 3, v: 2.31, p: 18.9 }];
+  const x0 = 64, x1 = 500, y0 = 22, H = 176, max = 2.5, bw = 52;
+  const Y = v => y0 + H - v / max * H;
+  [0, 0.5, 1, 1.5, 2, 2.5].forEach(v => {
+    svg.appendChild(sv('line', { x1: x0, x2: x1, y1: Y(v), y2: Y(v), style: `stroke:var(${v === 0 ? '--muted' : '--grid'})` }));
+    svg.appendChild(sv('text', { x: x0 - 8, y: Y(v) + 4, 'font-size': 11, 'text-anchor': 'end', class: 'tick', style: 'fill:var(--muted)' }, v.toFixed(1)));
+  });
+  rows.forEach((r, i) => {
+    const cx = x0 + 62 + i * ((x1 - x0 - 124) / 3), h = Y(0) - Y(r.v);
+    const bar = sv('path', { d: barUp(cx - bw / 2, Y(0), bw, h), style: 'fill:var(--ours)' });
+    hover(bar, () => [`CQI error ${r.e} dB: +${r.v.toFixed(2)} dB`, `and +${r.p.toFixed(1)} points of users at 30 dB`], false);
+    svg.appendChild(bar);
+    svg.appendChild(sv('text', { x: cx, y: Y(r.v) - 8, 'font-size': 12.5, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--ink)' }, `+${r.v.toFixed(2)}`));
+    svg.appendChild(sv('text', { x: cx, y: Y(0) + 18, 'font-size': 12, 'text-anchor': 'middle', style: 'fill:var(--ink-2)' }, `${r.e} dB`));
+  });
+  svg.appendChild(sv('text', { x: (x0 + x1) / 2, y: Y(0) + 38, 'font-size': 11.5, 'text-anchor': 'middle', style: 'fill:var(--muted)' }, 'error of the reported SNR (standard deviation)'));
+  svg.appendChild(sv('text', { x: 16, y: y0 + H / 2, 'font-size': 11.5, 'text-anchor': 'middle', transform: `rotate(-90 16 ${y0 + H / 2})`, style: 'fill:var(--muted)' }, 'JSCC minus digital (dB)'));
+}
+
+// ---------------------------------------------------------------- 7: the recipe
+function drawRecipe() {
+  const g = document.getElementById('recipe');
+  const defs = sv('defs', {});
+  const mk = sv('marker', { id: 'rar', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' });
+  mk.appendChild(sv('path', { d: 'M0 0L10 5L0 10z', style: 'fill:var(--muted)' }));
+  defs.appendChild(mk);
+  g.appendChild(defs);
+  const box = (cx, y, w, h, title, sub, accent) => {
+    g.appendChild(sv('rect', { x: cx - w / 2, y, width: w, height: h, rx: 8, 'stroke-width': accent ? 2 : 1.2,
+      style: accent ? 'fill:var(--soft);stroke:var(--ink)' : 'fill:var(--surface);stroke:var(--line)' }));
+    g.appendChild(sv('text', { x: cx, y: y + 23, 'font-size': 13.5, 'font-weight': 700, 'text-anchor': 'middle', style: 'fill:var(--ink)' }, title));
+    g.appendChild(sv('text', { x: cx, y: y + 40, 'font-size': 11.5, 'text-anchor': 'middle', style: 'fill:var(--ink-2)' }, sub));
+  };
+  const arrow = d => g.appendChild(sv('path', { d, 'stroke-width': 1.25, 'marker-end': 'url(#rar)', style: 'fill:none;stroke:var(--muted)' }));
+  arrow('M240 50H266'); arrow('M492 50H518'); arrow('M632 78V100H200V120'); arrow('M560 100V120'); arrow('M560 176V198');
+  arrow('M560 254V268H128V280'); arrow('M560 268H632V280'); arrow('M380 268V280');
+  box(128, 22, 224, 56, 'Link abstraction', 'slots add as weighted MMSEs');
+  box(380, 22, 224, 56, 'Each user: a small MDP', 'state (n, Y); paid at the deadline');
+  box(632, 22, 224, 56, 'Price each slot', 'one program per user');
+  box(200, 122, 300, 54, 'Upper bound on any scheduler', 'no causal rule can beat it');
+  box(560, 122, 300, 54, 'Ideal actions', 'each user: take or leave the slot at its price');
+  box(560, 200, 300, 54, 'Conflict rule', 'more users want the slot than it can serve', true);
+  [[128, 'Whittle / Lagrangian index'], [380, 'Our advantage index'], [632, 'ID policy (Hong et al.)']].forEach(([cx, s]) =>
+    g.appendChild(sv('text', { x: cx, y: 296, 'font-size': 12.5, 'font-weight': 700, 'text-anchor': 'middle', style: 'fill:var(--ink)' }, s)));
+}
+
+// ---------------------------------------------------------------- start
+renderRamp();
+drawSetup();
+drawWeights();
+goodSlot(1);
+compute();
+renderAll();
+drawLadder();
+drawDigital();
+drawRecipe();
+setTimeout(drawMany, 50);
+</script>
+</html>

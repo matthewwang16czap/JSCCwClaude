@@ -1,10 +1,11 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-18. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-18b. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTION 18 (CPU only, ~3 h in three background chains). Everything through
-section 17 is done and recorded in docs/NOTES.md.
+WHAT TO RUN: SECTIONS 18 AND 19 (CPU only; 18 ~3 h in three background chains, 19 ~2 h in
+two; they can run at the same time). Everything through section 17 is done and recorded in
+docs/NOTES.md.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -32,6 +33,9 @@ section 17 is done and recorded in docs/NOTES.md.
   18 the scheduler as a restless bandit,      TO RUN NOW (CPU only)
      re-examined: stale reports (Doppler x
      delay) and many users per slot
+  19 delay: the latency budget at equal        TO RUN NOW (CPU only), with 18
+     quality, time to the target, continuous
+     traffic (a deadline per request)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -1930,3 +1934,109 @@ cat results/s18_scale.txt                                          # 18.3
 #         K = 8, one-unit frame is its hardest point, and the certified gap shrinks with the
 #         cell (answers "TDMA, one user per slot"). Indexability ~0%: the Whittle index is
 #         well defined on our programs; the Lagrangian index needs no indexability anyway.
+
+================================================================================
+ 19. TO RUN NOW (with 18) -- delay: the same gains as latency (CPU only, ~2 h)
+================================================================================
+# Why (docs/PROBLEM.md section 3, item 7; docs/PAPER.md C14): a frame has ONE deadline, so
+# "delay" is read three ways, and they do not all favour the same rule. (1) The latency
+# budget: the shortest frame that reaches a quality (tools/latency.py inverts each policy's
+# quality against the frame length T). (2) Time to the target inside the frame
+# (schedule_sim.py --delay): the share of users at 30 dB by every slot (a CDF over ALL users;
+# a miss never counts), the mean slot with misses at T + 1, the slot on the users two policies
+# BOTH bring to the target (no selection effect), and two measures where the deadline
+# objective is not on our side: the first decodable phase and the PSNR averaged over the
+# frame (a progressive display). (3) Continuous traffic (tools/stream_sim.py): requests arrive
+# over time (Poisson), each with an image, a mean SNR U[0, 15] dB and its own deadline D; a
+# request leaves when its rule is done with it, so the slots a rule saves serve other requests.
+# Measured: the share at 30 dB within d slots of arriving for d = D/4 ... D (the reliability-
+# latency curve), the capacity (the arrival rate at which 60 / 70 / 80 / 90% still reach
+# 30 dB), the delay on the requests two rules both serve. With one deadline for all, a stream
+# is the frame (schedule_sim's decisions, slot by slot: tools/smoke.py checks it).
+# Everything is skipped if its output exists. No GPU. Order: 19.0, then 19.1-19.3 in the
+# background (two chains; they can run while 18 runs), then 19.4.
+
+# 19.0 -- setup, ~5 min CPU (skip the pull, pyflakes and smoke if you ran 18.0 after this pull)
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s19
+cat > logs_s19/env.sh <<'ENV'
+U=results/utility_snrc4.json
+B="--belief results/belief_snrc4.json"
+NU="--utility results/utility_snrc4_nested.json --belief results/belief_snrc4_nested.json"
+TS="8 12 16 20 24 28 32 36 40"
+RATES="0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45"
+ENV
+. logs_s19/env.sh
+ls results/utility_snrc4.json results/belief_snrc4.json results/utility_snrc4_nested.json results/belief_snrc4_nested.json > /dev/null
+
+# 19.1 + 19.2 -- CPU, background, ~1 h. 19.1: the timing inside the main frame (K 8, T 24,
+#   2000 frames, the calibrated transmitter as in sections 7-17), mean PSNR and the 30 dB target,
+#   plus a tight (T 16) and a loose (T 32) frame for the target, where the curves may cross, and
+#   the Whittle index in the frame (nested utility, 500 frames: its programs are per frame).
+#   19.2: the latency budget: every policy's quality at T = 8 ... 40 (K 8), the length each needs
+#   to match ours at T = 16 and 24, and the length each needs for 29-32 dB mean PSNR and for
+#   50-80% of users at 30 dB, with 95% bootstrap intervals over frames
+. logs_s19/env.sh
+nohup bash -c "
+[ -s results/s19_frame.txt ] || {
+python tools/schedule_sim.py --utility $U $B --policies rr pf fixed_slope slope_adv --delay --out results/s19_frame_mean.json > results/s19_frame.tmp 2>&1 ;
+python tools/schedule_sim.py --utility $U $B --target 30 --policies pf pf_len padc stop stop_adv online plan_adv replan_adv --delay --out results/s19_frame_tgt.json >> results/s19_frame.tmp 2>&1 ;
+python tools/schedule_sim.py --utility $U $B --target 30 --slots 16 --policies pf padc stop online --delay >> results/s19_frame.tmp 2>&1 ;
+python tools/schedule_sim.py --utility $U $B --target 30 --slots 32 --policies pf padc stop online --delay >> results/s19_frame.tmp 2>&1 ;
+python tools/schedule_sim.py $NU --frames 500 --policies pf slope_adv whittle --delay >> results/s19_frame.tmp 2>&1 ;
+python tools/schedule_sim.py $NU --frames 500 --target 30 --policies pf padc online whittle --delay >> results/s19_frame.tmp 2>&1 ;
+mv results/s19_frame.tmp results/s19_frame.txt ; }
+[ -s results/s19_latency.txt ] || {
+python tools/latency.py --utility $U $B --slots $TS --policies rr pf fixed_slope slope_adv --ref slope_adv --at 16 24 --levels 29 30 31 32 --out results/s19_latency_mean.json > results/s19_latency.tmp 2>&1 ;
+python tools/latency.py --utility $U $B --target 30 --slots $TS --policies pf padc stop online --ref online --at 16 24 --levels 50 60 70 80 --out results/s19_latency_tgt.json >> results/s19_latency.tmp 2>&1 ;
+mv results/s19_latency.tmp results/s19_latency.txt ; }
+" > /dev/null 2>&1 &
+
+# 19.3 -- CPU, background, ~1 h: continuous traffic, target 30 dB. (a) deadlines 16 / 24 / 32
+#   slots, 0.1 ... 0.45 requests per slot (0.33 per slot = the main frame's 8 users per 24
+#   slots), 20000 slots counted, pf_len / padc / stop / stop_adv / online; (b) the Whittle index
+#   (each request's own program with its own deadline; the nested utility, exact) beside padc,
+#   stop_adv and online at D 16 and 24 (on the stand-in it matched online's success with ~40%
+#   less delay); (c) 4 resource units per slot (4 requests per slot, the many-units regime)
+. logs_s19/env.sh
+nohup bash -c "
+[ -s results/s19_stream.txt ] || {
+python tools/stream_sim.py --utility $U $B --target 30 --deadline 16 24 32 --rate $RATES --slots 20000 --success 0.6 0.7 0.8 0.9 --out results/s19_stream.json > results/s19_stream.tmp 2>&1 ;
+python tools/stream_sim.py $NU --target 30 --deadline 16 24 --rate 0.2 0.3 0.4 --slots 10000 --policies padc stop_adv online whittle --success 0.6 0.7 0.8 --out results/s19_stream_whittle.json >> results/s19_stream.tmp 2>&1 ;
+python tools/stream_sim.py --utility $U $B --target 30 --deadline 24 --units 4 --rate 0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 --slots 10000 --success 0.6 0.7 0.8 0.9 --out results/s19_stream_b4.json >> results/s19_stream.tmp 2>&1 ;
+mv results/s19_stream.tmp results/s19_stream.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s19_*.tmp
+
+# 19.4 -- reading (send back everything it prints) ------------------------------------------
+cat results/s19_frame.txt                                          # 19.1
+cat results/s19_latency.txt                                        # 19.2
+cat results/s19_stream.txt                                         # 19.3
+#   (a chain still running shows as a missing file: its partial output is the .tmp of the
+#   same name; `ls results/s19_*.tmp` lists the ones not finished)
+
+# Decision (what the results would change; docs/PAPER.md C14):
+#   19.2  the headline delay claim: "the same mean PSNR with X% fewer slots than PF, the same
+#         share at 30 dB with Y% fewer than PADC" (stand-in: 11% and 24%). If the intervals
+#         exclude 0, C14 stands on this alone.
+#   19.1  online above PADC and PF at every checkpoint of the frame (by T/4 ... T) and no slower
+#         on the same users: "more users at the target at every point of the frame". If the
+#         curves cross in the tight frame (T 16), the claim is stated for T >= 24 and the
+#         crossing shown. slope_adv's first phase later and its PSNR over the frame lower than
+#         PF's are expected (the deadline objective) and are reported as the price.
+#   19.3  online's "within d" curve above the others at every d and its capacity higher at each
+#         share: the reliability-latency claim and "the cell carries X% more requests at 80%".
+#         Its delay on the requests both serve is expected to be longer (its deadline guard
+#         lets requests wait until their slack runs out). The Whittle index (19.3b) is the test:
+#         on the stand-in it matched online's success at ~40% less mean delay and was faster
+#         than PADC even on the same requests (each request's program weighs its urgency
+#         against its channel; the closed form ignores the time left). If that holds here, the
+#         continuous-traffic claim is made with the index policy (a table per image and
+#         mean-SNR class, computed once), and the closed form stays the frame's rule, where the
+#         two tie (19.1, last two lines). Units 4: the same ordering with several requests a slot.

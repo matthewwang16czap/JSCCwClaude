@@ -102,6 +102,11 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         that main.py --snr-profiles trains on; bank statistics and convergence)
                         rmab_scale.py (index policies against the bound as the cell grows:
                         K users, B = K/8 resource units per slot)
+                        latency.py (the frame length each policy needs for a quality: the
+                        latency budget at equal quality; schedule_sim.py --delay: time to the
+                        target within a frame)
+                        stream_sim.py (continuous traffic: requests arriving over time, a
+                        deadline each; reliability within d slots, capacity, delay)
 docs/NOTES.md           results by topic, condensed (the full chronological notes: git ec9cc68)
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -109,6 +114,8 @@ docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token 
                         adaptive tokenizers, allocation; the novelty matrix
 docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
 docs/PAPER.md           the paper plan: story, contributions and evidence, outline, what is owed
+docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
+                        setup, the rules, one frame played slot by slot, the measured results
 ```
 
 ## Defaults and the knobs worth knowing

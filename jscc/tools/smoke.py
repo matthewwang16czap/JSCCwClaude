@@ -976,6 +976,113 @@ def check_stale_csi():
        "tools/rmab_scale.py: B = K / 8 units per slot, every policy and the bound per K")
 
 
+def check_delay():
+    """Delay (docs/PROBLEM.md 3.7): the timing of a frame's deliveries (schedule_sim --delay),
+    the latency budget at equal quality (tools/latency.py) and continuous traffic with a
+    deadline per request (tools/stream_sim.py), which must reproduce a frame exactly."""
+    import contextlib
+    import io
+    import json
+
+    import numpy as np
+
+    from alloc.utility import Utility, nested_rho
+    from tools.latency import needed
+    from tools.schedule_sim import delay_times, draw_frames, run_frame, simulate
+    from tools.stream_sim import Requests, admit, capacity, draw_requests, run_stream
+
+    print("[delay]")
+    rng = np.random.default_rng(3)
+    N, P = 10, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    rho = [nested_rho(master, L) for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)
+    u = Utility(1.8, rho, dsrc, csens, [f"im{i}" for i in range(N)],
+                meta={"nested": master.tolist()})
+    h = [[12.0, 3.0], [], [9.0]]
+    q = [u.psnr(0, h[0][:j]) for j in range(3)]
+    fi, ta, re = delay_times(u, [0, 1, 2], h, [(1, 0), (2, 2), (3, 0)], 5, target=q[1] - 1e-9)
+    fw, tw, rw = delay_times(u, [0, 1, 2], h, [(1, 0), (2, 2), (3, 0)], 5, target=q[1] - 1e-9,
+                             whole=True)
+    ok(fi == [2, 6, 3] and abs(ta[0] - (q[0] + q[1] * 2 + q[2] * 2) / 5) < 1e-9
+       and re[0] == 2.0 and re[1] == np.inf and fw[0] == 4 and abs(tw[0] - (q[0] * 3 + q[2] * 2) / 5) < 1e-9
+       and rw[0] == 4.0,
+       "delay_times: first decodable phase, PSNR over the frame, slot the target is reached; "
+       "a whole (per-CBR) code counts only once complete")
+    sm, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["rr", "pf", "slope_adv"],
+                        seed=1, delay=True)
+    st, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["pf", "padc", "online"],
+                        seed=1, target=30.0, delay=True, keep_frames=True)
+    by = {p: s["at_target_by"] for p, s in st.items()}
+    ok(sm["rr"]["first_slot"] == 2.5 and sm["pf"]["first_slot"] == 2.5
+       and all(np.all(np.diff(b) >= 0) and abs(b[-1] - st[p]["satisfied"]) < 1e-12 for p, b in by.items())
+       and abs(np.mean(st["online"]["frames"]) - st["online"]["satisfied"]) < 1e-12
+       and st["online"]["same_users_vs_padc_n"] > 0 and "reach_all_vs_padc_ci" in st["online"],
+       "schedule_sim --delay: RR and PF serve every user once first (slot (K + 1) / 2 on "
+       "average); the CDF by slot ends at the satisfied share; per-frame values kept")
+    Ts = [8, 12, 16]
+    ok(needed(Ts, [1.0, 2.0, 3.0], 2.5) == (14.0, "") and needed(Ts, [1.0, 2.0, 3.0], 0.5)[1] == "<="
+       and needed(Ts, [1.0, 2.0, 3.0], 9.0)[1] == ">" and needed(Ts, [1.0, 2.0, 1.5, 3.0][:3], 2.0) == (12.0, ""),
+       "tools/latency.py: the frame length a curve needs, linear between lengths, flagged outside")
+    adm, grp = admit([0, 1, 2, 3], np.array([3.0, 1.0, np.inf, 2.0]), np.array([10, 10, 10, 10]), 4, 1)
+    adm2, grp2 = admit([0, 1, 2, 3], np.array([3.0, 1.0, np.inf, 2.0]), np.array([10, 10, 10, 10]), 3, 1)
+    adm3, grp3 = admit([0, 1], np.array([2.0, 2.0]), np.array([6, 9]), 4, 1)
+    ok(adm == [1, 3, 0] and grp == [1, 3, 0] and adm2 == [1, 3, 0] and grp2 is None
+       and adm3 == [0, 1] and grp3 == [0],
+       "stream admission: smallest needs first while every deadline holds; no slack before a "
+       "deadline restricts the slot to the admitted requests due by then")
+    same = True
+    for imgs, means, snr, belief, avail, seen in draw_frames(u, 5, 12, 12, (0.0, 15.0), "rayleigh",
+                                                            (-2.0, 22.0), seed=7):
+        req = Requests(np.zeros(5, int), imgs, means, snr - means[:, None], 12)
+        for pol in ("pf_len", "padc", "stop", "stop_adv", "online"):
+            lg = []
+            h1 = run_frame(u, belief, imgs, means, snr, pol, target=30.0, avg=belief.average(), log=lg)
+            o = run_stream(u, belief, req, pol, 30.0, stay=True, t_end=12)
+            same = same and all(len(x) == len(y) and np.allclose(x, y) for x, y in zip(h1, o["hist"]))
+            same = same and sorted(lg) == sorted((t, k) for k, w in enumerate(o["when"]) for t in w)
+    ok(same, "tools/stream_sim.py: a frame's users as requests with one deadline (--stay) are "
+             "served exactly as schedule_sim serves them (pf_len, padc, stop, stop_adv, online)")
+    rq = draw_requests(N, 0.02, 3000, 24, (0.0, 15.0), (-2.0, 22.0), 5)
+    rq2 = draw_requests(N, 0.02, 3000, 12, (0.0, 15.0), (-2.0, 22.0), 5, max_deadline=24)
+    o1 = run_stream(u, u, rq, "stop", 30.0)
+    o2 = run_stream(u, u, rq, "stop_adv", 30.0)
+    lone = np.array([np.all((rq.arr[j] > rq.dl[:j]) | (np.arange(j) == j)) and
+                     np.all(rq.arr[j + 1:] >= rq.dl[j]) for j in range(len(rq))])
+    alone = lone & (o1["phases"] > 0)
+    ok(np.array_equal(rq.arr, rq2.arr) and np.allclose(rq.snr[:, :12], rq2.snr)
+       and alone.sum() > 20 and np.array_equal(o1["phases"][alone], o2["phases"][alone])
+       and np.all(o1["reach"][alone & (o1["reach"] >= 0)] - rq.arr[alone & (o1["reach"] >= 0)] + 1
+                  <= o1["phases"][alone & (o1["reach"] >= 0)]),
+       "streams: the same requests at any deadline; a request alone in the system is served every "
+       "slot, whatever the timing rule, its delay at most its phases")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "u.json")
+        u.save(path)
+        import tools.stream_sim as ss
+        argv, buf = sys.argv, io.StringIO()
+        sys.argv = ["stream_sim.py", "--utility", path, "--rate", "0.1", "0.3", "--slots", "600",
+                    "--deadline", "12", "16", "--batches", "4", "--out", os.path.join(tmp, "s.json")]
+        try:
+            with contextlib.redirect_stdout(buf):
+                ss.main()
+        finally:
+            sys.argv = argv
+        with open(os.path.join(tmp, "s.json")) as fh:
+            res = json.load(fh)
+    r16 = res["results"]["16"]
+    ok(set(res["results"]) == {"12", "16"} and set(r16) == {"0.1", "0.3"}
+       and all(0 <= r16["0.3"][p]["success"] <= 1 and len(r16["0.3"][p]["within"]) == 4
+               for p in ss.DEFAULT)
+       and all(r16["0.1"][p]["in_system"] < r16["0.3"][p]["in_system"] for p in ss.DEFAULT)
+       and capacity([0.1, 0.2, 0.3], [0.9, 0.8, 0.6], 0.7) == (0.25, "")
+       and capacity([0.1, 0.2], [0.5, 0.4], 0.7)[1] == "<",
+       "tools/stream_sim.py end to end: every deadline, rate and policy; more requests in the "
+       "system at the higher rate; capacity interpolated between rates")
+
+
 def check_eval_seed(x):
     """Validation and test draw their channel noise from --eval-seed, not --seed, so runs
     of different training seeds are scored on the same draws (paired comparisons)."""
@@ -1363,6 +1470,7 @@ def main():
     check_snr_profiles(x)
     check_codesign(x)
     check_stale_csi()
+    check_delay()
     check_schedule()
     check_perception(x)
     check_allocation(x)
