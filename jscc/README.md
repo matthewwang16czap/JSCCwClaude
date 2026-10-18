@@ -109,6 +109,8 @@ docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token 
                         adaptive tokenizers, allocation; the novelty matrix
 docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
 docs/PAPER.md           the paper plan: story, contributions and evidence, outline, what is owed
+docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
+                        setup, the rules, one frame played slot by slot, the measured results
 ```
 
 ## Defaults and the knobs worth knowing
