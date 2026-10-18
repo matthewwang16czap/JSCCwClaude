@@ -46,6 +46,15 @@ def build(backbone, *extra):
     return JSCC(cfg).eval(), cfg
 
 
+def seed(s):
+    """Seed torch and, with the Sionna backend, Sionna's own generators, which torch.manual_seed
+    does not reach (net/channel.py): two forward passes then see the same channel draws."""
+    torch.manual_seed(s)
+    if BACKEND == "sionna":
+        from net.channel import seed_channel
+        seed_channel(s)
+
+
 def ok(cond, msg):
     if not cond:
         raise AssertionError(msg)
@@ -239,9 +248,9 @@ def check_cascade(x):
                 for kind in ("none", "awgn"):
                     pre.channel.kind = twin.channel.kind = kind
                     for c in cfg.cbrs:
-                        torch.manual_seed(5)
+                        seed(5)
                         a = pre.reconstruct(x, 7.0, c)[0]
-                        torch.manual_seed(5)
+                        seed(5)
                         b = twin.reconstruct(x, 7.0, c)[0]
                         worst = max(worst, diff(a, b))
                 ok(only_new and worst < 1e-5,
@@ -406,11 +415,11 @@ def check_snr_profiles(x):
        f"per-chunk noise variance follows the profile ({v1:.3f} at 0 dB, {v2:.4f} at 10 dB)")
     model, cfg = build("vit")
     enc, u, half = model.encode(x), cfg.cbr_units[2], cfg.n_tokens // 2
-    torch.manual_seed(5)
+    seed(5)
     r1 = model.send(enc, u, torch.tensor([3.0, 3.0]))
-    torch.manual_seed(5)
+    seed(5)
     r2 = model.send(enc, u, torch.full((2, cfg.n_tokens), 3.0))
-    torch.manual_seed(5)
+    seed(5)
     r3 = model.send(enc, u, piecewise_snr(torch.tensor([[3.0, 30.0]] * 2),
                                           torch.tensor([[half]] * 2), cfg.n_tokens))
     m = min(u, half)

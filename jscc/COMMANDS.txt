@@ -1,5 +1,5 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-18b. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-18c. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
@@ -1963,7 +1963,8 @@ cd jscc
 export JSCC_DATA_ROOT=$HOME
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
-python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (rev c: the test now seeds
+#   Sionna's own generators too; with Sionna 2.2 a cascade check failed with "max diff 4.8e-01")
 mkdir -p results logs_s19
 cat > logs_s19/env.sh <<'ENV'
 U=results/utility_snrc4.json
