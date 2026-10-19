@@ -46,6 +46,15 @@ def build(backbone, *extra):
     return JSCC(cfg).eval(), cfg
 
 
+def seed(s):
+    """Seed torch and, with the Sionna backend, Sionna's own generators, which torch.manual_seed
+    does not reach (net/channel.py): two forward passes then see the same channel draws."""
+    torch.manual_seed(s)
+    if BACKEND == "sionna":
+        from net.channel import seed_channel
+        seed_channel(s)
+
+
 def ok(cond, msg):
     if not cond:
         raise AssertionError(msg)
@@ -239,9 +248,9 @@ def check_cascade(x):
                 for kind in ("none", "awgn"):
                     pre.channel.kind = twin.channel.kind = kind
                     for c in cfg.cbrs:
-                        torch.manual_seed(5)
+                        seed(5)
                         a = pre.reconstruct(x, 7.0, c)[0]
-                        torch.manual_seed(5)
+                        seed(5)
                         b = twin.reconstruct(x, 7.0, c)[0]
                         worst = max(worst, diff(a, b))
                 ok(only_new and worst < 1e-5,
@@ -406,11 +415,11 @@ def check_snr_profiles(x):
        f"per-chunk noise variance follows the profile ({v1:.3f} at 0 dB, {v2:.4f} at 10 dB)")
     model, cfg = build("vit")
     enc, u, half = model.encode(x), cfg.cbr_units[2], cfg.n_tokens // 2
-    torch.manual_seed(5)
+    seed(5)
     r1 = model.send(enc, u, torch.tensor([3.0, 3.0]))
-    torch.manual_seed(5)
+    seed(5)
     r2 = model.send(enc, u, torch.full((2, cfg.n_tokens), 3.0))
-    torch.manual_seed(5)
+    seed(5)
     r3 = model.send(enc, u, piecewise_snr(torch.tensor([[3.0, 30.0]] * 2),
                                           torch.tensor([[half]] * 2), cfg.n_tokens))
     m = min(u, half)
@@ -976,6 +985,58 @@ def check_stale_csi():
        "tools/rmab_scale.py: B = K / 8 units per slot, every policy and the bound per K")
 
 
+def check_harq():
+    """HARQ in the digital baseline (tools/schedule_sim.py --harq; alloc/digital.mutual_info)."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from alloc.digital import CQI_EFF, CQI_SNR_DB, DigitalUtility, efficiency, mutual_info
+    from tools.schedule_sim import FAILED, harq_deliver, simulate, tune_backoff
+
+    print("[harq]")
+    x = np.linspace(-12.0, 30.0, 2001)
+    ok(np.allclose(mutual_info(CQI_SNR_DB), CQI_EFF)
+       and np.all(mutual_info(x) >= efficiency(x) - 1e-12) and np.all(np.diff(mutual_info(x)) >= 0),
+       "HARQ combining curve: the CQI table at its entries, interpolated in between (never below "
+       "the stepped efficiency), increasing")
+    sh = DigitalUtility([[[0.1, 25.0]]], ["a"], 1.0 / 16, "shannon", 0.0, P=6)
+    pend = [None]
+    ir = [harq_deliver(sh, pend, 0, d, 3.0, ("ir", 4)) for d in (10.0, 0.0, 0.0)]
+    pend = [None]
+    ch = [harq_deliver(sh, pend, 0, 10.0, v, ("chase", 4)) for v in (7.0, 7.0)]
+    pend = [None]
+    nh = [harq_deliver(sh, pend, 0, 10.0, v, None) for v in (7.0, 7.0)]
+    pend = [None]
+    dr = [harq_deliver(sh, pend, 0, 10.0, 3.0, ("chase", 2)) for _ in range(3)]
+    ok(ir == [FAILED, FAILED, 10.0] and ch == [FAILED, 10.0] and nh == [FAILED, FAILED]
+       and dr == [FAILED] * 3 and pend[0] is not None and pend[0]["tx"] == 1,
+       "harq_deliver: a 10 dB block sent at 3 dB is decoded by its third IR transmission (3 x 1.58 "
+       ">= 3.46 bits), Chase needs 7 dB twice (10.0 dB combined), without HARQ every slot is a new "
+       "block; after its last transmission a block is dropped and the next slot starts a new one")
+    d = DigitalUtility([[[0.3, 30.0], [0.1, 25.0], [0.6, 33.0]]] * 2
+                       + [[[0.05, 24.0], [0.2, 29.0], [0.4, 32.0]]] * 2, list("abcd"), 1.0 / 16,
+                       "cqi", P=6)
+    clip = (-2.0, 22.0)
+    f1, _, _ = simulate(d, 4, 12, 60, (0.0, 15.0), "rayleigh", clip, ["pf", "greedy"], seed=1)
+    f2, _, _ = simulate(d, 4, 12, 60, (0.0, 15.0), "rayleigh", clip, ["pf", "greedy"], seed=1,
+                        harq=("ir", 4))
+    best = [max(simulate(d, 4, 12, 60, (0.0, 15.0), "rayleigh", clip, ["pf"], seed=1,
+                         cqi_corr=0.6, backoff=b, harq=h)[0]["pf"]["mean_psnr"]
+                for b in (0.0, 1.0, 2.0, 3.0, 4.0))
+            for h in (None, ("chase", 4), ("ir", 4))]
+    a = SimpleNamespace(users=4, slots=12, mean_snr=(0.0, 15.0), fading="rayleigh", snr_clip=clip,
+                        seed=1, same_image=False, pred_noise=0.0, alpha=0.0, target=None,
+                        margin=0.0, plan_offset=0.0, fade_corr=0.0, plan="mean", fixed_codes=False,
+                        preempt=0.0, preempt_quantile=None)
+    off = tune_backoff(d, a, "pf", 0.0, None, frames=8, corr=0.6, harq=("ir", 4), aware=True)
+    ok(f1 == f2 and best[2] >= best[1] >= best[0] and best[2] > best[0] + 0.3
+       and -12.0 <= off <= 4.0,
+       f"--harq: nothing changes with fresh reports (no block fails); on stale reports (r = 0.6, "
+       f"best backoff) Chase / IR recover {best[1] - best[0]:+.2f} / {best[2] - best[0]:+.2f} dB of "
+       f"digital's mean PSNR; an aware transmitter's offset is tuned with HARQ ({off:+g} dB)")
+
+
 def check_delay():
     """Delay (docs/PROBLEM.md 3.7): the timing of a frame's deliveries (schedule_sim --delay),
     the latency budget at equal quality (tools/latency.py) and continuous traffic with a
@@ -1081,6 +1142,31 @@ def check_delay():
        and capacity([0.1, 0.2], [0.5, 0.4], 0.7)[1] == "<",
        "tools/stream_sim.py end to end: every deadline, rate and policy; more requests in the "
        "system at the higher rate; capacity interpolated between rates")
+    tie, _, _ = simulate(u, 4, 12, 40, (0.0, 15.0), "rayleigh", (-2.0, 22.0), ["padc", "padc_adv"],
+                         seed=2, target=30.0, cqi_corr=0.0, cqi_aware=True)
+    ok(tie["padc"]["mean_psnr"] == tie["padc_adv"]["mean_psnr"]
+       and tie["padc"]["satisfied"] == tie["padc_adv"]["satisfied"],
+       "useless reports, aware transmitter: every advantage ties, ties go to PF, so padc_adv "
+       "schedules exactly as padc (before: the first user took every spare slot)")
+    import tools.rmab_scale as rs
+    tmp2 = tempfile.mkdtemp()
+    path2 = os.path.join(tmp2, "u.json")
+    u.save(path2)
+    argv, buf = sys.argv, io.StringIO()
+    sys.argv = ["rmab_scale.py", "--utility", path2, "--users", "8", "--frames", "2", "--slots", "8",
+                "--price-steps", "2", "--index-arms", "1", "--target", "30", "--delay",
+                "--policies", "pf", "whittle", "lagrange", "--out", os.path.join(tmp2, "r.json")]
+    try:
+        with contextlib.redirect_stdout(buf):
+            rs.main()
+    finally:
+        sys.argv = argv
+    with open(os.path.join(tmp2, "r.json")) as fh:
+        row = json.load(fh)["per_K"]["8"]
+    ok(all(np.all(np.diff(row[p + "_by"]) >= 0) and abs(row[p + "_by"][-1] - row[p]) < 1e-12
+           and 1 <= row[p + "_slot"] <= 9 for p in ("pf", "whittle", "lagrange")),
+       "tools/rmab_scale.py --delay: the share at the target by slot rises to the share at the "
+       "deadline; mean slot within 1 .. T + 1")
 
 
 def check_eval_seed(x):
@@ -1470,6 +1556,7 @@ def main():
     check_snr_profiles(x)
     check_codesign(x)
     check_stale_csi()
+    check_harq()
     check_delay()
     check_schedule()
     check_perception(x)

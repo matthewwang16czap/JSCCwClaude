@@ -187,6 +187,38 @@ IEEE Transactions on Wireless Communications (TWC).
    the requests both rules serve, ours can be slower (it waits for peaks; PF rushes new
    arrivals). Risk: if the codec's curves cross, C14 shrinks to the latency budget and the
    reliability at the deadline.
+19. **Sections 18-19 measured (2026-10-19): the paper holds, with three corrections.** Every
+   prediction of entries 17-18 came true on the codec's curves, and two make the paper
+   stronger. (a) The theory's regime: with B = K/8 units per slot the programs' Lagrangian
+   index closes on the bound, 0.21 dB at 8 users to 0.005 at 128, and stays the best policy on
+   stale reports; C13 gains its asymptotic claim, measured. (b) The physical axis of C5: JSCC's
+   lead over digital grows with report age, +0.3 dB with fresh reports to +2.5 dB and +19
+   points at r = 0.8 (about 10 km/h with 5 ms-old reports at 3.5 GHz): the paper's strongest
+   system result. (c) The latency budget: 9-19% fewer slots than PF for the same mean PSNR,
+   39% fewer than PADC for the same share at 30 dB. The corrections: our closed form is not
+   the scheduler to recommend at scale (it plateaus 0.15 dB from the bound; the programs'
+   index is the method, the closed form its cheap approximation, a tie at one unit per slot);
+   the time-to-target claim belongs to the Whittle index (2.9 slots before PADC on the same
+   users, at the same final share; with arrivals, online's success with half its delay),
+   while the closed-form online rule trails PADC early and wins only at the deadline; and the
+   scheduler-made channel (C8) is a fresh-report effect (65% of the lift left at r = 0.8, 8%
+   at 0.3), so it is scoped to low mobility. New caveats, stated: stopping on reported SNRs
+   breaks with stale reports (the aware transmitter and plan_adv fix most of it; COMMANDS
+   20.3 tests margins), the Whittle index degrades on stale reports where the Lagrangian index
+   does not, and the stale-report JSCC numbers are on the fitted curves until COMMANDS 20.1
+   decodes them. Risk: if the decoded check moves the stale-report numbers by more than the
+   abstraction's 0.05-0.09 dB, C5's physical axis must be restated from decoded runs only.
+   A larger one, found while writing section 20: the digital side drops a block the slot could
+   not carry, while NR would retransmit and combine it (HARQ), which matters most exactly on
+   stale reports. HARQ is now in the simulator (`--harq`; on a toy codec digital's best policy
+   gains +2.2 dB at r = 0.8 and +3.1 at 0.6 with bold, HARQ-tuned rates: half of its stale-report
+   loss) and COMMANDS 20.2 measures C5 with it; until then the stale-report lead is an upper
+   estimate and is not to be quoted as the headline. If the codec behaves like the toy, the
+   lead at r = 0.8 falls from +2.5 to about +1 dB: still JSCC's, no longer the headline, and C5
+   then rests on what JSCC does without retransmissions or rate selection. The CQI-error axis
+   (+1.6 dB at 2 dB error, the verdict of entry 16) is exposed the same way: the toy's digital
+   gains +0.9 dB there with HARQ (+1.9 at 3 dB). So C5 as a whole is at stake in 20.2; the
+   paper's spine (C12, C13, C14) does not depend on it, but "why JSCC in a downlink" does.
 
 ## 1. Your four points, checked
 

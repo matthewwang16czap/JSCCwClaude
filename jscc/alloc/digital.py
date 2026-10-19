@@ -18,7 +18,16 @@ scalable codec at the codec's efficiency). Below the smallest file: nothing (d_e
 Every assumption here favours the digital scheme. With CQI errors (tools/schedule_sim.py
 --cqi-error) the transmitter picks the rate from the reported SNR minus a backoff, a block
 whose rate the true SNR does not support is lost, and the transmitter knows which (HARQ
-ACK; no combining gain is modelled).
+ACK). Without --harq the lost block's slot is wasted. With --harq a failed block waits for
+the user's next slot, which retransmits it and is combined with what was received (NR's
+HARQ; tools/schedule_sim.harq_deliver):
+
+    ir     ideal incremental redundancy: the block is decoded once its transmissions together
+           carry its rate, sum_i mutual_info(snr_i) >= rate; mutual_info is the link's own
+           efficiency curve (the CQI table interpolated between its entries; log2(1 + SNR /
+           gap) for the shannon link), so one transmission decodes exactly as without HARQ
+    chase  Chase combining: the transmissions' SNRs add (maximum-ratio combining), decoded
+           once mutual_info(sum_i snr_i) >= rate
 """
 
 import numpy as np
@@ -37,6 +46,21 @@ def efficiency(snr_db, link="cqi", gap_db=0.0):
     if link == "cqi":
         idx = np.searchsorted(CQI_SNR_DB, snr_db, side="right") - 1
         return np.where(idx >= 0, CQI_EFF[np.clip(idx, 0, None)], 0.0)
+    raise ValueError(f"unknown link {link!r}")
+
+
+def mutual_info(snr_db, link="cqi", gap_db=0.0):
+    """What one transmission at snr_db (dB) contributes to a block under HARQ combining, in
+    bits per channel use: the link's efficiency curve, for the CQI table interpolated
+    linearly in dB between its entries (down to 0 at 3.7 dB below the lowest, the slope of
+    its first step) instead of stepped. At a table entry it equals the entry's efficiency, so
+    a block sent at an entry's rate is decoded by one transmission exactly when efficiency()
+    says so."""
+    snr_db = np.asarray(snr_db, dtype=np.float64)
+    if link == "shannon":
+        return np.log2(1.0 + 10.0 ** ((snr_db - gap_db) / 10.0))
+    if link == "cqi":
+        return np.interp(snr_db, np.r_[CQI_SNR_DB[0] - 3.7, CQI_SNR_DB], np.r_[0.0, CQI_EFF])
     raise ValueError(f"unknown link {link!r}")
 
 
@@ -60,6 +84,10 @@ class DigitalUtility:
     def efficiency(self, snr_db):
         """Bits per channel use of this link at snr_db (dB)."""
         return efficiency(snr_db, self.link, self.gap_db)
+
+    def mi(self, snr_db):
+        """What one transmission at snr_db (dB) adds to a block under HARQ (mutual_info)."""
+        return mutual_info(snr_db, self.link, self.gap_db)
 
     def bpp(self, snrs_db):
         return float(self.sym_per_pixel * self.efficiency(snrs_db).sum())

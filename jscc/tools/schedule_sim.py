@@ -99,9 +99,12 @@ SNRs are off by N(0, s^2) dB; every policy decides on the reports (needs, stoppi
 a token prefix is decoded at the true SNR (the codec needs no SNR at either end), and a
 digital slot is sent at the rate of its report minus --cqi-backoff (default: tuned per
 policy and objective on other frames, the best outer-loop link adaptation could settle at) and
-lost if the true SNR does not support that rate (the transmitter learns it: HARQ ACK). --dump N writes the
-delivery histories of the first N frames for tools/mixed_snr.py --design file, which decodes
-them with the codec itself.
+lost if the true SNR does not support that rate (the transmitter learns it: HARQ ACK). --harq
+ir|chase: a lost block is retransmitted in the user's next slot and combined with what was
+received (incremental redundancy / Chase combining, alloc/digital.py) up to --harq-max
+transmissions, as NR does; the backoff is then tuned with HARQ on (and with --cqi-aware an
+offset on the aware rate too). --dump N writes the delivery histories of the first N frames
+for tools/mixed_snr.py --design file, which decodes them with the codec itself.
 
 Stale reports (alloc/csi.py): --cqi-corr r gives every slot a report of its channel with
 correlation r (h_rep = r h + sqrt(1 - r^2) e; r = J0(2 pi f_D tau) for Doppler f_D and report
@@ -222,15 +225,29 @@ def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0):
     return _ARMS[key]
 
 
+_AWARE = {}
+
+
 def aware_snr(util, belief, imgs, means, seen, r, clip):
     """--cqi-aware: the decision SNRs of a transmitter that knows its reports `seen` (dB,
-    unclipped) have correlation r with the slots (alloc/csi.py)."""
+    unclipped) have correlation r with the slots (alloc/csi.py). Cached by content: backoff
+    tuning and every policy see the same frames again."""
     from alloc.csi import equivalent_snr, goodput_snr
-    rep = np.asarray(seen, dtype=np.float64) - np.asarray(means, dtype=np.float64)[:, None]
-    if getattr(util, "kind", "") == "digital":
-        return goodput_snr(rep, means, util.efficiency, r, clip)
-    kap = belief.kappa if np.ndim(belief.kappa) == 0 else belief.kappa[np.asarray(imgs, dtype=int)]
-    return equivalent_snr(rep, means, kap, r, clip)
+    means = np.asarray(means, dtype=np.float64)
+    rep = np.asarray(seen, dtype=np.float64) - means[:, None]
+    digital = getattr(util, "kind", "") == "digital"
+    kap = None if digital else (belief.kappa if np.ndim(belief.kappa) == 0
+                                else belief.kappa[np.asarray(imgs, dtype=int)])
+    what = (util.link, util.gap_db) if digital else np.asarray(kap, dtype=np.float64).tobytes()
+    key = (what, rep.shape, rep.tobytes(), means.tobytes(), float(r), tuple(clip))
+    out = _AWARE.get(key)
+    if out is None:
+        out = (goodput_snr(rep, means, util.efficiency, r, clip) if digital
+               else equivalent_snr(rep, means, kap, r, clip))
+        if len(_AWARE) >= 4000:
+            _AWARE.clear()
+        _AWARE[key] = out
+    return out.copy()
 
 
 
@@ -299,6 +316,39 @@ def fill(belief, imgs, plan, goal, tgt, spare, P, rule="admit", delta=1.0):
 FAILED = -100.0                                               # a lost digital block (no bits)
 
 
+def harq_deliver(util, pend, k, d, s, harq=None):
+    """A digital slot of user k, decided at SNR d (dB: its rate is efficiency(d)), true SNR s
+    (dB): what the user's history records, d if a block is decoded in this slot (its bits),
+    FAILED if none is. Without HARQ a block is decoded iff s supports its rate. harq = (mode,
+    max_tx): a failed block waits in pend[k] and the user's next slot retransmits it (whatever
+    that slot's d), combined with what was received (alloc/digital.py: "ir" adds the
+    transmissions' mutual_info, "chase" their SNRs) until it is decoded or has had max_tx
+    transmissions; then it is dropped. A block still waiting at the deadline is lost."""
+    if harq is not None and pend[k] is not None:
+        mode, max_tx = harq
+        b = pend[k]
+        b["tx"] += 1
+        if mode == "ir":
+            b["acc"] += float(util.mi(s))
+            got = b["acc"]
+        else:
+            b["acc"] += 10.0 ** (s / 10.0)
+            got = float(util.mi(10.0 * np.log10(b["acc"])))
+        if got >= b["rate"] - 1e-12:
+            pend[k] = None
+            return b["d"]
+        if b["tx"] >= max_tx:
+            pend[k] = None
+        return FAILED
+    rate_d = float(util.efficiency(d))
+    if rate_d <= float(util.efficiency(s)) + 1e-12:
+        return d
+    if harq is not None and harq[1] > 1:
+        pend[k] = {"rate": rate_d, "d": d, "tx": 1,
+                   "acc": float(util.mi(s)) if harq[0] == "ir" else 10.0 ** (s / 10.0)}
+    return FAILED
+
+
 def delay_times(util, imgs, hist, log, T, target=None, whole=False):
     """The timing of one frame's deliveries, per user: the slot (1-based) of its first
     decodable phase (T + 1: none), its PSNR averaged over the frame's T slots (as decoded
@@ -331,7 +381,7 @@ def delay_times(util, imgs, hist, log, T, target=None, whole=False):
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
               t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None,
-              clip=(-2.0, 22.0), aware=None):
+              clip=(-2.0, 22.0), aware=None, harq=None):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame).
@@ -343,7 +393,9 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     t0 from that state (the transmitter's own play-outs: no `seen`); `stop_after` n returns
     after n served slots; `log` (a list) receives (slot, user) for every served slot.
     `aware` = r: the reports are stale with correlation r and the transmitter knows it
-    (--cqi-aware): it decides on aware_snr, the whittle policy on its reports."""
+    (--cqi-aware): it decides on aware_snr, the whittle policy on its reports. `harq` =
+    (mode, max_tx): a digital link retransmits failed blocks (harq_deliver); a user's slot
+    is then valued, by the policies that value slots, by the block waiting for it."""
     K, T = snr.shape
     P = util.P
     digital = getattr(util, "kind", "") == "digital"
@@ -357,6 +409,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     off = offset - (backoff if digital else 0.0)
     hist = [[] for _ in range(K)]                             # as the transmitter knows them
     out = [[] for _ in range(K)]                              # as delivered (what is decoded)
+    pend = [None] * K                                         # HARQ: a block awaiting its user
     served = np.zeros(K)                                      # PF: served-rate average
     plan = plan_snr(pmeans, rep, 0, off, corr)               # SNR assumed for future phases
     T_plan = int(round(T * p_avail)) if t_plan is None else int(t_plan)  # slots planned for
@@ -453,10 +506,16 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             r = rate(g)
             k = int(np.argmax(np.where(ok, r / (served + 1e-3 * r.mean()), -np.inf)))
         else:
+            gv = g
+            if any(b is not None for b in pend):              # HARQ: the slot carries the
+                gv = g.copy()                                 # block waiting for the user
+                for j, b in enumerate(pend):
+                    if b is not None:
+                        gv[j] = b["d"]
             gain = np.full(K, -np.inf)
             for j in np.flatnonzero(ok):
                 now = belief.psnr(imgs[j], hist[j])
-                gain[j] = belief.psnr(imgs[j], hist[j] + [float(g[j])]) - now
+                gain[j] = belief.psnr(imgs[j], hist[j] + [float(gv[j])]) - now
                 if policy in ADV_TIMING or policy == "greedy_rel":
                     ref = belief.psnr(imgs[j], hist[j] + [float(plan[j])]) - now
                     if policy in ADV_TIMING:                  # this slot against a typical one
@@ -465,10 +524,14 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                         gain[j] *= gain[j] / max(ref, 1e-9)
                 elif alpha:
                     gain[j] *= max(now, 1e-3) ** (-alpha)
-            k = int(np.argmax(gain))
+            tied = np.flatnonzero(gain >= gain.max() - 1e-12)
+            if len(tied) > 1 and policy in ADV_TIMING:   # exact ties (useless reports: every
+                r = rate(g)        # slot alike) go to PF, not to the first user, who would take
+                k = int(tied[np.argmax((r / (served + 1e-3 * r.mean()))[tied])])  # every spare slot
+            else:              # (greedy keeps the first: a digital step curve ties all the time)
+                k = int(tied[0])
         if digital:                                           # the block arrives or is lost
-            x = float(g[k]) if util.efficiency(g[k]) <= util.efficiency(snr[k, t]) + 1e-12 \
-                else FAILED
+            x = harq_deliver(util, pend, k, float(g[k]), float(snr[k, t]), harq)
             hist[k].append(x)
             out[k].append(x)
         else:
@@ -585,18 +648,25 @@ def draw_frames(util, users, slots, frames, mean_snr, fading, clip, seed=0, same
         yield imgs, means, snr, belief, avail, seen
 
 
-def tune_backoff(util, a, policy, sigma, belief, frames=300, corr=1.0):
+def tune_backoff(util, a, policy, sigma, belief, frames=300, corr=1.0, harq=None, aware=False):
     """A digital policy's MCS backoff under CQI errors of sd sigma (and stale reports of
     correlation corr), the best on a grid of 0.5 dB for its own objective on `frames` OTHER
     frames (seed + 1): where outer-loop link adaptation, which sees the ACKs of the blocks
-    this policy schedules, would settle at best."""
+    this policy schedules, would settle at best. harq: tuned with the retransmissions on,
+    from -8 dB (a negative backoff sends above the report: with incremental redundancy a
+    block that fails is finished by the next transmissions, so bold rates pay). aware (stale
+    reports, --cqi-aware, with HARQ): an offset on the aware transmitter's rate instead,
+    -12 ... +4 dB."""
     best = None
-    for b in np.arange(0.0, 2.0 * sigma + (10.0 if corr < 1.0 else 0.0) + 0.51, 0.5):
+    lo = -8.0 if harq is not None else 0.0
+    grid = (np.arange(-12.0, 4.01, 0.5) if aware
+            else np.arange(lo, 2.0 * sigma + (10.0 if corr < 1.0 else 0.0) + 0.51, 0.5))
+    for b in grid:
         s, _, _ = simulate(util, a.users, a.slots, frames, a.mean_snr, a.fading, a.snr_clip,
                            [policy], a.seed + 1, a.same_image, a.pred_noise, a.alpha, 0,
                            a.target, a.margin, a.plan_offset, belief, a.fade_corr, a.plan,
                            a.fixed_codes, a.preempt, a.preempt_quantile, sigma, float(b),
-                           cqi_corr=corr)
+                           cqi_corr=corr, cqi_aware=aware, harq=harq)
         v = s[policy]["mean_psnr" if a.target is None else "satisfied"]
         if best is None or v > best[0] + 1e-12:
             best = (v, float(b))
@@ -607,13 +677,14 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
              offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
              preempt=0.0, preempt_quantile=None, cqi_error=0.0, backoff=0.0, cqi_corr=1.0,
-             cqi_aware=False, delay=False, keep_frames=False):
+             cqi_aware=False, delay=False, keep_frames=False, harq=None):
     """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
     on it, users are scored on `util`. cqi_error: sd (dB) of the error of the reported slot
     SNRs; backoff: a digital link's MCS backoff (dB), or one per policy {policy: dB};
     cqi_corr: stale reports (alloc/csi.py), cqi_aware: the transmitter knows they are.
     delay: the timing of the deliveries (delay_times); keep_frames: each policy's per-frame
-    objective in its summary ("frames": frame mean PSNR, or share at the target)."""
+    objective in its summary ("frames": frame mean PSNR, or share at the target); harq:
+    (mode, max_tx), a digital link's retransmissions (harq_deliver)."""
     t_plan = planned_slots(slots, preempt, preempt_quantile)
     res = {p: {"psnr": [], "frame_mean": [], "frame_min": [], "deep": [], "served": [],
                "lift": [], "sat": [], "frame_sat": [], "failed": [], "first": [], "tavg": [],
@@ -630,7 +701,7 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
                              avail, 1.0 - preempt, t_plan, seen,
                              backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
-                             log=lg, clip=clip, aware=aware)
+                             log=lg, clip=clip, aware=aware, harq=harq)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -763,6 +834,11 @@ def main():
                          "posterior of each slot (token prefix: its expected distortion; digital: "
                          "the rate of largest expected goodput, no backoff; whittle: on the "
                          "report, through its program)")
+    ap.add_argument("--harq", default=None, choices=["ir", "chase"],
+                    help="digital: a lost block is retransmitted in the user's next slot and "
+                         "combined (ir: incremental redundancy, chase: Chase combining)")
+    ap.add_argument("--harq-max", type=int, default=4,
+                    help="--harq: transmissions per block at most (NR: 4)")
     ap.add_argument("--cqi-backoff", default="auto",
                     help="digital: MCS backoff (dB) under --cqi-error; 'auto': tuned per policy "
                          "and objective on other frames (the best outer-loop link adaptation "
@@ -810,6 +886,11 @@ def main():
     if not all(0.0 <= r <= 1.0 for r in a.cqi_corr):
         ap.error("--cqi-corr is a correlation in [0, 1]")
     digital = getattr(util, "kind", "") == "digital"
+    if a.harq and not digital:
+        ap.error("--harq is for a digital utility (a token prefix has no blocks to lose)")
+    if a.harq_max < 1:
+        ap.error("--harq-max >= 1")
+    harq = (a.harq, a.harq_max) if a.harq else None
     if a.length_bonus:
         if digital:
             ap.error("--length-bonus is for the token-prefix utility")
@@ -819,10 +900,13 @@ def main():
     for corr, sigma in [(c, s) for c in a.cqi_corr for s in a.cqi_error]:
         backoff, ref = 0.0, None
         stale = corr < 1.0 and a.fading != "none"
-        if digital and (sigma > 0 or stale) and not (a.cqi_aware and stale):
+        aw = bool(a.cqi_aware and stale)                     # an aware rate: tuned only with HARQ
+        if digital and (sigma > 0 or stale) and (not aw or harq is not None):
             if a.cqi_backoff == "auto":
-                ref = goodput_backoff(util, sigma, a.mean_snr, a.fading, a.snr_clip, corr=corr)
-                backoff = {p: tune_backoff(util, a, p, sigma, belief, corr=corr)
+                if not aw:
+                    ref = goodput_backoff(util, sigma, a.mean_snr, a.fading, a.snr_clip, corr=corr)
+                backoff = {p: tune_backoff(util, a, p, sigma, belief, corr=corr, harq=harq,
+                                           aware=aw)
                            for p in a.policies}
             else:
                 backoff = float(a.cqi_backoff)
@@ -831,7 +915,8 @@ def main():
                                          a.pred_noise, a.alpha, a.dump, a.target, a.margin,
                                          a.plan_offset, belief, a.fade_corr, a.plan,
                                          a.fixed_codes, a.preempt, a.preempt_quantile,
-                                         sigma, backoff, corr, a.cqi_aware, delay=a.delay)
+                                         sigma, backoff, corr, a.cqi_aware, delay=a.delay,
+                                         harq=harq)
         report(a, util, digital, summary, base, sigma, backoff, ref, corr)
         if a.delay:
             report_delay(a, util, summary, base)
@@ -863,6 +948,7 @@ def report(a, util, digital, summary, base, sigma, backoff, ref, corr=1.0):
           f"{', same image' if a.same_image else ''}"
           f"{f', transmitter curves {a.belief}' if a.belief else ''}"
           f"{f', digital: {util.link} link, {util.mode}, up to {util.P} slots' if digital else ''}"
+          f"{f', HARQ {a.harq} (up to {a.harq_max} transmissions)' if digital and a.harq else ''}"
           f"{f', CQI error {sigma:g} dB' if sigma else ''}"
           f"{f', stale reports (correlation {corr:g}; transmitter {tx})' if stale else ''}"
           f"{f' (MCS backoff {backoff:g} dB)' if digital and (sigma or stale) and not isinstance(backoff, dict) else ''}"
@@ -896,11 +982,14 @@ def report(a, util, digital, summary, base, sigma, backoff, ref, corr=1.0):
             print(line)
     if digital and (sigma or stale):
         if isinstance(backoff, dict):
-            print("MCS backoff per policy, tuned on 300 other frames (0.5 dB grid): " + ", ".join(
-                f"{p} {b:g} dB" for p, b in backoff.items()) + f"; goodput-optimal over all "
-                f"slots {ref[0]:g} dB ({100 * ref[1]:.1f}% of blocks lost there)")
-        print("blocks lost (rate above what the slot supported): " + ", ".join(
-            f"{p} {100 * s['failed_share']:.1f}%" for p, s in summary.items()))
+            what = ("offset on the aware rate" if a.cqi_aware and stale else "MCS backoff")
+            print(f"{what} per policy, tuned on 300 other frames (0.5 dB grid): " + ", ".join(
+                f"{p} {b:g} dB" for p, b in backoff.items())
+                + (f"; goodput-optimal over all slots {ref[0]:g} dB ({100 * ref[1]:.1f}% of "
+                   f"blocks lost there, one transmission)" if ref is not None else ""))
+        print(("slots without a decoded block (a transmission that failed; HARQ retransmits "
+               "it): " if a.harq else "blocks lost (rate above what the slot supported): ")
+              + ", ".join(f"{p} {100 * s['failed_share']:.1f}%" for p, s in summary.items()))
 
 def report_delay(a, util, summary, base):
     """The --delay table."""

@@ -227,8 +227,8 @@ def run_stream(util, belief, req, policy, target, margin=0.0, offset=0.0, units=
                 ref[r] = belief.psnr(i, hist[r] + [float(plan[r])])
             return belief.psnr(i, hist[r] + [g[r]]) - ref[r]
 
-        score = adv if policy in ADV_TIMING else pf
-        by_score = lambda r: (-score(r), r)                   # noqa: E731
+        by_score = ((lambda r: (-adv(r), -pf(r), r)) if policy in ADV_TIMING   # noqa: E731
+                    else (lambda r: (-pf(r), r)))             # advantage ties go to PF
         by_pf = lambda r: (-pf(r), r)                         # noqa: E731
         stages = [(ok, by_score), (has, by_score)]            # its rule, then leftover slots
         if policy == "online":

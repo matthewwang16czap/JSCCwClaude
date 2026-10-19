@@ -142,8 +142,19 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         gets) remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR
         of its expected distortion, exact for the additive model's MSE; digital: the rate of
         best expected goodput); a "naive" one takes the reports as exact, as schedulers do
-        today. Measured in COMMANDS 18.1-18.2 (stand-in: the lift falls from +1.3 dB at r = 1
-        to -2.0 at r = 0, i.e. no selection; aware ~ naive, as information lost is lost).
+        today. Measured (COMMANDS 18.1-18.2, `docs/NOTES.md` 5 and 6b): as predicted, the
+        opportunistic part fades and at K 8, T 24 it is all there is (the content part is 0.000
+        at every r): slope_adv - PF +0.475 dB at r = 1, +0.385 / +0.256 at r = 0.8 / 0.6 (aware
+        +0.475 / +0.342), ~0 at r = 0. The lift of the scheduler-made channel (+5.0 / +4.5 /
+        +3.6 dB, phases 1-3) keeps 65% of itself at r = 0.8, 8% at 0.3. Unlike the stand-in
+        suggested, the aware transmitter is worth something: it keeps the whole gain over PF
+        to r = 0.8 and saves the quality target (stopping on the reports breaks: a user served
+        at a reported peak looks done although its slot was worse; aware plan_adv keeps +8
+        points over PADC at r = 0.8). JSCC's lead over digital grows with report age, the
+        physical axis of C5: +0.3 dB at r = 1, +2.5 dB / +19 points at 0.8, +3.3 / +20 at 0.6
+        (digital without HARQ; with retransmission and combining, `--harq`, COMMANDS 20.2).
+        The bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to
+        it shrinks: less information, less to gain.
      b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and
         Smith 2020; Zhang and Frazier 2021; Gast, Gaujal and Yan 2023) is asymptotic in the
         number of arms with a fixed share served per period: there, Lagrangian (LP-priority)
@@ -153,7 +164,16 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         bound's supply term (1 - p) B T lam. Our K 8, one-unit frame is its hardest point.
         `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with
         B = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's
-        gain at the bound's per-slot prices, ties broken by the Whittle index).
+        gain at the bound's per-slot prices, ties broken by the Whittle index). Measured (mean
+        PSNR, gap to the bound per user, K 8 / 16 / 32 / 64 / 128): Lagrangian 0.207 / 0.090 /
+        0.039 / 0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed
+        form 0.267 -> 0.155, a plateau (its continuation is a typical slot, not the price);
+        PF 0.71 -> 0.52. At 30 dB the Lagrangian index stays ~1.5 points from the bound at
+        every K. So the theory's regime holds, and at scale the programs' index is the
+        scheduler to use; the closed form is its cheap approximation (one unit per slot: a
+        tie). On stale reports (K 8) the Lagrangian index stays best and the Whittle index
+        degrades (-0.15 dB against our rule at r = 0.4): its price-range convention is
+        fragile when the reports say little.
      c. THE INDEX WHERE NOW AND LATER ARE ALIKE. When a later slot is as good as this one
         (useless reports, or no deadline pressure yet) taking and leaving the slot are worth
         the same over a whole range of prices and the indifference price is not unique; the
@@ -176,29 +196,35 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         all-or-nothing: at a quality target, spreading slots over too many users wastes them
         (its random tie-breaking failure), which our admission rules (shortest need first)
         already prevent. `tools/rmab_scale.py` runs the ID-guided policy and its random-order
-        baseline beside the indices (COMMANDS 18.3). Stand-in, K 16, 4 frames: ID beats random
-        by 9 points [6, 16] at 30 dB; for the mean the index policies beat both by ~0.15 dB.
-  7. DELAY (2026-10-18; COMMANDS 19). A frame has one deadline, so delay can mean three things,
-     and they do not all favour the same rule. Stand-in numbers below (the smoke utility, NOT
-     the codec; direction only):
+        baseline beside the indices (COMMANDS 18.3). Measured: at 30 dB ID beats random by
+        +0.5 to +0.7 points at every K (persistency, modest here: the stand-in's +9 was four
+        frames), but both trail the Lagrangian index (2.6 / 3.1 vs 1.5 points from the bound
+        at K 128); for the mean value ranking wins (0.005 vs 0.09-0.11 dB at K 128). On stale
+        reports (r = 0.7) the guided policies collapse at the target (ID 35.6%, random 46.3%,
+        the best policy 59.9%): with flat ideal actions the order alone decides.
+  7. DELAY (2026-10-18; measured in COMMANDS 19, 2026-10-19, `docs/NOTES.md` 6c). A frame has
+     one deadline, so delay can mean three things, and they do not all favour the same rule
+     (snrc4, calibrated transmitter, K 8, 2000 frames; the Whittle index on the nested utility):
      a. THE LATENCY BUDGET: the shortest frame that reaches a quality (`tools/latency.py`: each
         policy's quality against T, inverted). The cleanest delay claim, the same quality with a
-        shorter deadline. Stand-in, K 8: PF needs 27.0 slots [26.6, 27.5] for slope_adv's mean
-        PSNR at 24 (ours: 11% fewer slots); PADC needs 21.0 [20.0, 21.8] for online's share at
-        30 dB at 16 (24% fewer); 80% of users at 30 dB takes online 18.1 slots, PADC 23.7, PF 29.4.
+        shorter deadline. For slope_adv's mean PSNR at T = 16 / 24 PF needs 17.6 / 29.5 slots:
+        9.3% [8.7, 9.9] / 18.6% [16.3, 20.7] fewer for ours; for online's share at 30 dB at
+        T = 16 (66.8%) PADC needs 26.0 slots (38.6% [34.9, 41.9] fewer), and online's share at
+        T = 24 (74.0%) no other policy reaches within 40 slots (PADC saturates near 70%).
      b. TIME TO THE TARGET within a frame (`schedule_sim.py --delay`): the share of users at the
-        target by every slot, a CDF over all users (a miss never counts). Stand-in, K 8, T 24:
-        online 15 / 42 / 72 / 89% by slots 6 / 12 / 18 / 24, PADC 12 / 41 / 69 / 81, PF
-        12 / 31 / 56 / 71; online's mean slot (misses at T + 1) 0.5 earlier than PADC's
-        [0.3, 0.8], and on the users both bring to the target no slower (+0.1 [-0.1, +0.4];
-        PF +1.6 slower). The mean slot over the users who get there is NOT the comparison: ours
-        brings more, and harder, users there. The WHITTLE INDEX is far earlier at the same
-        success (stand-in, 40 frames: 36 / 63 / 82 / 88% by slots 6 / 12 / 18 / 24; 3.5 slots
-        [2.9, 4.1] ahead of PADC on the same users, online +0.4): with the target reward, the
-        index of a user with n phases to go is about its success gain per remaining phase (the
-        top of its indifference range), so it serves the shortest remaining need first, weighted
-        by the channel -- shortest-remaining-processing-time, the rule that minimises completion
-        times, which the closed form (this slot against a typical one) does not know.
+        target by every slot, a CDF over all users (a miss never counts). T 24: online 18.3 /
+        42.1 / 61.9 / 74.0% by slots 6 / 12 / 18 / 24, PADC 19.5 / 48.9 / 61.6 / 65.6, PF 16.2 /
+        33.3 / 53.6 / 63.5: online trails PADC in the first half and overtakes in the last
+        quarter, 0.36 slots later on average with misses counted and 1.8 later on the users
+        both bring there (its deadline guard waits). The mean slot over the users who get
+        there is NOT the comparison: ours brings more, and harder, users there. The WHITTLE
+        INDEX is ahead at every slot: 38.4 / 60.0 / 69.3 / 72.8% (PADC 20.1 / 48.4 / 60.8 /
+        64.6 on the same frames), 2.9 slots [2.7, 3.1] before PADC on the same users, at
+        online's final share. With the target reward the index of a user with n phases to go is
+        about its success gain per remaining phase (the top of its indifference range), so it
+        serves the shortest remaining need first, weighted by the channel --
+        shortest-remaining-processing-time, the rule that minimises completion times, which
+        the closed form (this slot against a typical one) does not know.
      c. CONTINUOUS TRAFFIC (`tools/stream_sim.py`): requests arrive over time (Poisson), each
         with an image, a mean SNR and its own deadline D; a request leaves as soon as its rule
         is done with it, so the slots a rule saves (online stopping, peak timing) serve other
@@ -207,22 +233,24 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         measures: the share of requests at the target within d slots of arriving, for every d
         up to D (the reliability-latency curve of URLLC); the capacity, the arrival rate at which
         a given share still reach the target (Hosseini and Panwar count users admitted at a
-        quality); and the delay on the requests two rules both bring there. Stand-in, D 24, 0.3
-        requests per slot: online 85% at 30 dB, PADC 52%, pf_len 56%; ahead at every d
-        (42 vs 36% within D/4); but on the requests both serve, 1.9 slots [0.9, 2.8] SLOWER than
-        PADC: its deadline guard lets requests wait until their slack runs out (p90 delay = the
-        deadline) and it does not rush new arrivals, which PF timing serves first. The WHITTLE
-        INDEX does not have this flaw: each request's program (horizon = its own deadline) weighs
-        how urgent it is against how good its slot is. Stand-in, D 24, 0.35 requests per slot,
-        3000 slots: whittle 85.0% at 30 dB (online 84.9, PADC 53.0), 58.5% within D/4 (online
-        36.1, PADC 31.7), mean delay 5.9 slots (online 10.0), and 1.7 slots [1.3, 2.2] FASTER
-        than PADC on the same requests. With one deadline for all (a frame) the two tie; with
-        deadlines that differ, the program's index is what delivers the delay advantage, at the
-        cost of one table per image and mean-SNR class (computed once).
+        quality); and the delay on the requests two rules both bring there. 30 dB, D 24, at the
+        frame's load (~0.33 requests per slot): online 70-71%, PADC 46%, stop_adv 66-68%, PF
+        timing with stopping 58-62%. Online's share RISES with load (66% at 0.1 requests per
+        slot, when a request is mostly alone and every slot is its: no choice of slot), PADC
+        stays near 45%; capacity at 60%: online >= 0.45 per slot at every D, PADC never (about
+        a third of requests cannot reach 30 dB at any load). But online's delay is long: its
+        p90 is the deadline at high load, and on the same requests it is 2.9 to 7 slots slower
+        than PADC. The WHITTLE INDEX does not have this flaw: each request's program (horizon =
+        its own deadline) weighs how urgent it is against how good its slot is. D 24, 0.3 / 0.4
+        requests per slot: 68.3 / 68.8% at 30 dB (online 70.5 / 69.3), 57.3 / 54.1% within D/4
+        (online 39.2 / 27.3), mean delay 4.2 / 4.8 slots (online 8.0 / 11.1), and 0.6 / 1.0
+        slots FASTER than PADC on the same requests. With deadlines that differ the program's
+        index is what delivers the delay advantage, at the cost of one table per image and
+        mean-SNR class (computed once).
      What does not favour our rule, and is reported with the rest: the first decodable image
      comes later (round robin and PF serve every user once first, slot (K + 1) / 2 on average;
-     slope_adv 1.6 slots later on the stand-in), and the PSNR averaged over the frame's slots
-     (a progressive display) is lower (-0.9 dB against PF): the deadline objective does not
+     slope_adv's at slot 6.7, PF's at 4.5), and the PSNR averaged over the frame's slots (a
+     progressive display) is lower (25.0 vs 26.2 dB against PF): the deadline objective does not
      reward early coarse images. If an application does, the users' programs take a per-slot
      reward (the quality shown after each slot, or 1 per slot spent at the target), which gives
      a delay-aware Whittle index and its bound by the same decomposition (not implemented).
@@ -237,7 +265,8 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
 4. Fixed-length per-user codes (one model per CBR, as DeepJSCC-MIMO / SwinJSCC) with
    opportunistic timing: isolates what online LENGTH adds over online TIMING.
 5. Digital: BPG (and a progressive codec) with capacity-achieving or LDPC codes, AMC per slot,
-   the same schedulers.
+   the same schedulers; as run: HEIC with the LTE CQI table or a 3 dB-gap code, the backoff
+   tuned per policy, and HARQ (a lost block retransmitted and combined, `--harq`).
 6. JSCCformer-f's setting (K = 1, a quality target, feedback): the single-user special case,
    where this scheme stops on predicted quality with CQI only.
 
@@ -355,9 +384,11 @@ dB with random cuts and uniform lengths: another channel.
   scheduler makes exists only as far as the scheduler sees the channel. With stale reports of
   correlation r the lift of every phase must shrink towards the blind channel (Grunewalder and
   Khaleghi: a policy's sampling times bias what it samples only through the dependence between
-  its information and the pay-off). Stand-in: the served-SNR lift falls from +1.3 dB (r = 1) to
-  -0.8 (r = 0.7) and -2.0 (r = 0: blind). So scheduler-aware training is a low-mobility, fresh-
-  report effect; COMMANDS 18.2 measures the per-phase lift against r on the real utility.
+  its information and the pay-off). Measured (COMMANDS 18.2, banks of 4000 frames, slope_adv):
+  the lift over random selection, +5.0 / +4.5 / +3.6 dB for phases 1 / 2 / 3 with fresh reports,
+  keeps 91% of itself at r = 0.95, 65% at 0.8, 36% at 0.6 and 8% at 0.3. So scheduler-aware
+  training is a low-mobility, fresh-report effect (3.5 GHz, 5 ms-old reports: r 0.98 at
+  3 km/h, 0.76 at 10).
 * Theory owed if it passes: (a) the game and its monotone improvement (above), with the two
   approximation gaps bounded by what section 3 measures; (b) the linear-Gaussian version
   (analog prefix code of a Gaussian source, per-phase power allocation under a per-phase SNR
