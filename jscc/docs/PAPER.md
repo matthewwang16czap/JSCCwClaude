@@ -196,7 +196,7 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 6. Done 2026-10-19: COMMANDS 18 (stale reports, many users per slot; NOTES 5, 6b) and 19
    (delay; NOTES 6c).
 7. COMMANDS section 20 (built 2026-10-19): 20.1 the stale-report schedules decoded by the codec
-   (GPUs 2-5, ~30 min); 20.2 C5 with HARQ, stale reports and CQI errors (CPU, ~1.5 h); 20.3 the
+   (GPUs 1-4, ~30 min); 20.2 C5 with HARQ, stale reports and CQI errors (CPU, ~1.5 h); 20.3 the
    time to the target of the Lagrangian index and the guided policies; 20.4 margins for
    quality targets on stale reports, and the r = 0 aware rerun after the tie fix.
 

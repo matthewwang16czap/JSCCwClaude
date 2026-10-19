@@ -1,9 +1,12 @@
 ================================================================================
  COMMANDS.txt — rev 2026-10-19. Everything runs on the server, from the jscc/ directory.
- GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
+ GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
+ (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
+ now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
+ the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: SECTION 20 (20.1 on GPUs 2-5, ~30 min; the rest CPU, ~1-1.5 h in six
+WHAT TO RUN: SECTION 20 (20.1 on GPUs 1-4, ~30 min; the rest CPU, ~1-1.5 h in six
 background chains, which can run while the GPUs decode). Everything through section 19 is
 done and recorded in docs/NOTES.md.
 
@@ -36,7 +39,7 @@ done and recorded in docs/NOTES.md.
   19 delay: the latency budget at equal        done (docs/NOTES.md 6c)
      quality, time to the target, continuous
      traffic (a deadline per request)
-  20 C5 with HARQ, the stale-report            TO RUN NOW (GPUs 2-5 for 20.1, the rest
+  20 C5 with HARQ, the stale-report            TO RUN NOW (GPUs 1-4 for 20.1, the rest
      schedules decoded, the Lagrangian         CPU)
      index's delay, margins on stale reports
 
@@ -52,7 +55,7 @@ that day, before the paper moved to scheduling, and four things are wrong with i
      2-4x worse model errors). The gap c2 measures does not price the per-CBR baseline.
   3. It trains two lengths (1/8, 1/48); the schedulers mostly send 2-4 phases (1/24-1/12),
      and 5/48 was nowhere.
-  4. The sheet kept asking for its results ("send 4b-4d") while sections 5-8 used GPU 5,
+  4. The sheet kept asking for its results ("send 4b-4d") while sections 5-8 used GPU 4,
      which section 3 had queued for c2.
 Its replacement is 10.1: one specialist per phase length (1/48 ... 1/8), each trained
 exactly like snrc4_s1 (from w1, 400 epochs, --snr-chunks 4) plus --fixed-cbr, then
@@ -109,19 +112,19 @@ python tools/compare_runs.py ${VT}_w1 ${VT}_grid_c1 --test --per-snr
 
 # 5b. E1, ~10 min, ~3 GB: the w1 ViT on prefixes whose two halves had different SNRs.
 #     It fits next to M1 if section 2's probe showed M1 below ~19 GiB reserved: then run it
-#     now on GPU 2; otherwise run it when GPU 5's queue is done (change the 2 to 5).
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py --backbone vit --pretrained $W1V $MIX \
+#     now on GPU 1; otherwise run it when GPU 4's queue is done (change the 1 to 4).
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py --backbone vit --pretrained $W1V $MIX \
   --out results/p1_mixed_w1.json | tee results/p1_mixed_w1.txt
 
-# 5c. E2, ~8 h on one card, when GPU 5's queue in section 3 is done (nvidia-smi -i 4,5):
+# 5c. E2, ~8 h on one card, when GPU 4's queue in section 3 is done (nvidia-smi -i 3,4):
 #     piecewise-SNR training (4 chunks at random SNRs per image) against its constant-SNR
 #     control, same w1 start, same 400 epochs, uniform budgets (every length stays
 #     decodable); then both on the mixed-SNR test of 5b.
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FTS $VI > s1_gpu5_E2a_const.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FTS $VI --snr-chunks 4 > s1_gpu5_E2b_snrc4.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_s1/models/last.pt $MIX --out results/p1_mixed_s1.json > results/p1_mixed_s1.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_snrc4_s1/models/last.pt $MIX --out results/p1_mixed_snrc4_s1.json > results/p1_mixed_snrc4_s1.txt 2>&1
+CUDA_VISIBLE_DEVICES=4 python main.py $FTS $VI > s1_gpu5_E2a_const.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FTS $VI --snr-chunks 4 > s1_gpu5_E2b_snrc4.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_s1/models/last.pt $MIX --out results/p1_mixed_s1.json > results/p1_mixed_s1.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained ${VT}_snrc4_s1/models/last.pt $MIX --out results/p1_mixed_snrc4_s1.json > results/p1_mixed_snrc4_s1.txt 2>&1
 " > /dev/null 2>&1 &
 
 # --- reading section 5 (send back everything it prints) ---------------------------
@@ -147,7 +150,7 @@ python tools/paired.py ${VT}_w1 ${VT}_s1                # what 400 more epochs a
 # (alloc/utility.py), symmetric effective-SNR rules fail, early tokens dominate. Now:
 # measure that per phase (one chunk = one phase) for 1/48 ... 1/8, fit the model per image,
 # simulate the scheduler on it, and replay simulated schedules through the codec itself.
-# GPU 5 is free since section 5c finished (use 4 instead if it is idle: change the 5).
+# GPU 4 is free since section 5c finished (use 3 instead if it is idle: change the 4).
 
 export JSCC_DATA_ROOT=$HOME
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -170,12 +173,12 @@ python tools/compare_runs.py ${VT}_w1 ${VT}_grid_c1 --test --per-snr
 python tools/utility_fit.py --mixed results/p1_mixed_snrc4_s1.json
 python tools/utility_fit.py --mixed results/p1_mixed_s1.json
 
-# 6b. GPU 5, ~5-10 min each: one chunk per phase, 1/48 ... 1/8 -- constant profiles, each phase
+# 6b. GPU 4, ~5-10 min each: one chunk per phase, 1/48 ... 1/8 -- constant profiles, each phase
 #     alone off 7 dB, 10 held-out random profiles per CBR -- for the piecewise-trained model
 #     and for its constant-SNR control
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $MIXP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $MIXP \
   --out results/p2_full_snrc4.json | tee results/p2_full_snrc4.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $MIXP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $S1 $MIXP \
   --out results/p2_full_s1.json | tee results/p2_full_s1.txt
 
 # 6c. CPU, seconds: fit per image (held-out errors next to the best symmetric rule's) and
@@ -197,12 +200,12 @@ python tools/schedule_sim.py $SIM --users 8 --slots 36 | tee -a results/sched.tx
 python tools/schedule_sim.py $SIM --users 16 --slots 48 | tee -a results/sched.txt
 python tools/schedule_sim.py $SIM --users 8 --slots 24 --pred-noise 0.1 | tee -a results/sched.txt
 
-# 6e. GPU 5, a few minutes each: 30 frames of simulated schedules (every policy) decoded by
+# 6e. GPU 4, a few minutes each: 30 frames of simulated schedules (every policy) decoded by
 #     the codec itself -- does the model predict the codec under real schedules (snrc4), and
 #     what does the constant-SNR decoder (s1) lose on the very same schedules?
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --out results/replay_snrc4.json | tee results/replay.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
   --out results/replay_s1.json | tee -a results/replay.txt
 
 # --- reading section 6 (send back everything it prints) ---------------------------
@@ -274,18 +277,18 @@ python tools/schedule_sim.py --utility $U --frames 60 --dump 60 --target 30 \
 python tools/schedule_sim.py --utility $U --frames 60 --dump 60 --target 30 --margin 0.2 \
   --policies pf padc padc_adv stop_adv online --out results/s7_rep_tgt_m02.json
 
-# 7d. GPU 5, ~5 min each: decode them. Each prints predicted vs decoded per policy, then the
+# 7d. GPU 4, ~5 min each: decode them. Each prints predicted vs decoded per policy, then the
 #     DECODED differences to pf (and padc), paired by frame: those are the gates
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --profiles-json results/s7_rep_mean_histories.json --out results/s7_dec_mean_snrc4.json \
   | tee results/s7_dec.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $S1 $REP \
   --profiles-json results/s7_rep_mean_histories.json --out results/s7_dec_mean_s1.json \
   | tee -a results/s7_dec.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --profiles-json results/s7_rep_tgt_histories.json --out results/s7_dec_tgt_snrc4.json \
   | tee -a results/s7_dec.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --profiles-json results/s7_rep_tgt_m02_histories.json --out results/s7_dec_tgt_m02_snrc4.json \
   | tee -a results/s7_dec.txt
 
@@ -374,15 +377,15 @@ python tools/schedule_sim.py $D --target 32 --policies pf padc stop online_pf | 
 python tools/schedule_sim.py $D --target 28 --policies pf padc stop online_pf | tee -a results/s8_digital.txt
 python tools/schedule_sim.py $SIM $B --target 28 | tee -a results/s8_digital.txt
 
-# 8e. CPU seconds + GPU 5, ~5 min each: schedules decided on the belief, decoded by the codec
+# 8e. CPU seconds + GPU 4, ~5 min each: schedules decided on the belief, decoded by the codec
 python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 \
   --policies rr pf fixed_uni slope_adv --out results/s8_rep_mean.json
 python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --target 30 --margin 0.3 \
   --policies pf padc padc_adv stop_adv online --out results/s8_rep_tgt.json
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --profiles-json results/s8_rep_mean_histories.json --out results/s8_dec_mean.json \
   | tee results/s8_dec.txt
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py --backbone vit --pretrained $SNRC4 $REP \
   --profiles-json results/s8_rep_tgt_histories.json --out results/s8_dec_tgt.json \
   | tee -a results/s8_dec.txt
 
@@ -403,10 +406,10 @@ cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_di
      targets: see the top of this file; section 11 has what is left)
 --------------------------------------------------------------------------------
 # Left for the paper: (a) one model per CBR as the baseline, done right: six piecewise-
-# trained specialists, measured and scheduled like the prefix model (GPUs 2-5, ~8 h);
+# trained specialists, measured and scheduled like the prefix model (GPUs 1-4, ~8 h);
 # (b) separation: HEVC intra and JPEG 2000 with ideal link adaptation through the same
 # schedulers (CPU); (c) slow fading with --plan conditional (CPU); (d) more training data for
-# the codec (queued on GPU 5 after its specialist; skipped if Flickr2K is missing). Run 10.0, start 10.1, do the
+# the codec (queued on GPU 4 after its specialist; skipped if Flickr2K is missing). Run 10.0, start 10.1, do the
 # CPU parts (10.2) while it trains, then 10.3-10.4 when it is done (10.5: ~5 h later).
 
 # 10.0 -- setup, ~5 min CPU ---------------------------------------------------------
@@ -421,7 +424,7 @@ python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s10
 # Are retired c2 jobs still running? This lists them (the queue wrappers and the jobs):
 pgrep -af "c2_gpu|--tag c2|--tag m1"
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 # If it listed any: stop them (wrappers first, so no queued job starts) -- they are not
 # needed, and 10.1 needs the cards. Their finished runs stay in history/.
 pkill -f "c2_gpu" ; pkill -f -- "--tag c2" ; pkill -f -- "--tag m1"
@@ -442,7 +445,7 @@ FTSP="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
 MIXF="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
   --design full --chunks phase --random-profiles 10 --backbone vit"
 
-# the optional data run (the old 7e), queued on GPU 5 after its specialist: the snrc4
+# the optional data run (the old 7e), queued on GPU 4 after its specialist: the snrc4
 # recipe on DIV2K + Flickr2K for the same number of image samples (400 x 800 = 93 x 3450).
 # Needs $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR (2650 PNGs, https://cv.snu.ac.kr/research/EDSR/
 # Flickr2K.tar); the queue skips it by itself if that folder is missing.
@@ -452,32 +455,32 @@ FTD="--trainset DIV2K Flickr2K --validset DIV2K --testset Kodak --img-size 256 \
   --amp --training --max-epoch 93 --valid-freq 31 --lr 5e-5 --warmup-steps 200 \
   --tag d1 --snr-chunks 4 --backbone vit --pretrained $W1V"
 
-# 10.1 -- GPUs 2-5, ~4 h per specialist (like snrc4_s1), ~10 min per measurement --------
+# 10.1 -- GPUs 1-4, ~4 h per specialist (like snrc4_s1), ~10 min per measurement --------
 #   run names: ${VT}_snrc4_fix1-24_s1 etc. Each queue trains, then measures what it trained.
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 1/24 > logs_s10/gpu2_F2_spec24.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 1/24 --pretrained ${VT}_snrc4_fix1-24_s1/models/last.pt --out results/p3_full_fix2.json > results/p3_full_fix2.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 1/8 > logs_s10/gpu2_F6_spec8.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_s1/models/last.pt --out results/p3_full_fix6.json > results/p3_full_fix6.txt 2>&1
+CUDA_VISIBLE_DEVICES=1 python main.py $FTSP --fixed-cbr 1/24 > logs_s10/gpu2_F2_spec24.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXF --cbrs 1/24 --pretrained ${VT}_snrc4_fix1-24_s1/models/last.pt --out results/p3_full_fix2.json > results/p3_full_fix2.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python main.py $FTSP --fixed-cbr 1/8 > logs_s10/gpu2_F6_spec8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXF --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_s1/models/last.pt --out results/p3_full_fix6.json > results/p3_full_fix6.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FTSP --fixed-cbr 1/16 > logs_s10/gpu3_F3_spec16.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXF --cbrs 1/16 --pretrained ${VT}_snrc4_fix1-16_s1/models/last.pt --out results/p3_full_fix3.json > results/p3_full_fix3.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python main.py $FTSP --fixed-cbr 5/48 > logs_s10/gpu3_F5_spec5-48.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXF --cbrs 5/48 --pretrained ${VT}_snrc4_fix5-48_s1/models/last.pt --out results/p3_full_fix5.json > results/p3_full_fix5.txt 2>&1
+CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 1/16 > logs_s10/gpu3_F3_spec16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 1/16 --pretrained ${VT}_snrc4_fix1-16_s1/models/last.pt --out results/p3_full_fix3.json > results/p3_full_fix3.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FTSP --fixed-cbr 5/48 > logs_s10/gpu3_F5_spec5-48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXF --cbrs 5/48 --pretrained ${VT}_snrc4_fix5-48_s1/models/last.pt --out results/p3_full_fix5.json > results/p3_full_fix5.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FTSP --fixed-cbr 1/12 > logs_s10/gpu4_F4_spec12.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXF --cbrs 1/12 --pretrained ${VT}_snrc4_fix1-12_s1/models/last.pt --out results/p3_full_fix4.json > results/p3_full_fix4.txt 2>&1
+CUDA_VISIBLE_DEVICES=3 python main.py $FTSP --fixed-cbr 1/12 > logs_s10/gpu4_F4_spec12.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXF --cbrs 1/12 --pretrained ${VT}_snrc4_fix1-12_s1/models/last.pt --out results/p3_full_fix4.json > results/p3_full_fix4.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FTSP --fixed-cbr 1/48 > logs_s10/gpu5_F1_spec48.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXF --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_s1/models/last.pt --out results/p3_full_fix1.json > results/p3_full_fix1.txt 2>&1 ;
-[ -d $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR ] && CUDA_VISIBLE_DEVICES=5 python main.py $FTD > logs_s10/gpu5_D1_snrc4_flickr.out 2>&1
+CUDA_VISIBLE_DEVICES=4 python main.py $FTSP --fixed-cbr 1/48 > logs_s10/gpu5_F1_spec48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXF --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_s1/models/last.pt --out results/p3_full_fix1.json > results/p3_full_fix1.txt 2>&1 ;
+[ -d $JSCC_DATA_ROOT/Flickr2K/Flickr2K_HR ] && CUDA_VISIBLE_DEVICES=4 python main.py $FTD > logs_s10/gpu5_D1_snrc4_flickr.out 2>&1
 " > /dev/null 2>&1 &
 # check after a minute: every log has a parameter line, 0 unexpected keys, no error
 sleep 60; grep -h "parameters, effective batch\|loaded" logs_s10/*.out; tail -n 2 logs_s10/*.out
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 
 # 10.2 -- CPU, now, ~30 min (while 10.1 trains). Every line keeps its errors (2>&1).
 # 10.2a  R-D points: HEVC intra (HEIC via libheif / x265, the encoder inside BPG) and
@@ -546,7 +549,7 @@ python tools/schedule_sim.py $PC --target 30 --users 16 --slots 48 --policies pa
 #   the prefix model's runs that s8 did not have (same scenarios), for the comparison
 python tools/schedule_sim.py $SIM $B --target 30 --users 16 --slots 48 2>&1 | tee -a results/s10_percbr.txt
 
-# 10.5 -- CPU, when GPU 5's data run is done (if it ran, ~9 h after 10.1): more data
+# 10.5 -- CPU, when GPU 4's data run is done (if it ran, ~9 h after 10.1): more data
 python tools/compare_runs.py ${VT}_snrc4_s1 history/vit_p8d768x10s4_awgn_DIV2K+Flickr2K_256_snrc4_d1 \
   --test --per-snr 2>&1 | tee results/s10_data.txt
 
@@ -576,7 +579,7 @@ cat results/s10_data.txt results/s10_c2_leftovers.txt            # if they ran
 --------------------------------------------------------------------------------
 # Section 10: one model per CBR costs the prefix code 0.17-0.47 dB (the nesting penalty)
 # and, with our abstraction and index, wins mean PSNR by 0.15 dB. Left: (a) can per-length
-# DECODER heads on the unchanged encode-once code recover that penalty (GPUs 2-5, ~4 h)?
+# DECODER heads on the unchanged encode-once code recover that penalty (GPUs 1-4, ~4 h)?
 # (b) the per-CBR target runs again with the spare slots planned (the old baseline left ~10
 # of 24 slots unused), (c) slots taken by other traffic, unknown when encoding, where a
 # fixed code cut short decodes nothing, (d) the digital baseline with the Kodak path fixed.
@@ -592,7 +595,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s11
-nvidia-smi -i 2,3,4,5                          # 2-5 free?
+nvidia-smi -i 1,2,3,4                          # 1-4 free?
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
 U=results/utility_snrc4.json
@@ -609,7 +612,7 @@ MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 1
   --design full --chunks phase --random-profiles 10 --backbone vit"
 ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
 
-# 11.1 -- GPUs 2-5, ~3-4 h each (decoder-only is faster than a full fine-tune) ----------
+# 11.1 -- GPUs 1-4, ~3-4 h each (decoder-only is faster than a full fine-tune) ----------
 #   H48 / H8: a decoder specialised to 1/48 / 1/8 on the frozen encoder: how much of the
 #             specialists' +0.45 / +0.47 dB a decoder alone recovers
 #   HC:       the control: the same decoder-only fine-tune at all rates (more training alone)
@@ -617,20 +620,20 @@ ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
 #             frozen encoder: the deployable form -- one code, a head per received length
 #   each queue then measures its model per phase (like 6b) for the utility and schedules
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FTH --fixed-cbr 1/48 > logs_s11/gpu2_H48.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_frz-enc_h1/models/last.pt --out results/p4_full_h48.json > results/p4_full_h48.txt 2>&1
+CUDA_VISIBLE_DEVICES=1 python main.py $FTH --fixed-cbr 1/48 > logs_s11/gpu2_H48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXH --cbrs 1/48 --pretrained ${VT}_snrc4_fix1-48_frz-enc_h1/models/last.pt --out results/p4_full_h48.json > results/p4_full_h48.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FTH --fixed-cbr 1/8 > logs_s11/gpu3_H8.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_frz-enc_h1/models/last.pt --out results/p4_full_h8.json > results/p4_full_h8.txt 2>&1
+CUDA_VISIBLE_DEVICES=2 python main.py $FTH --fixed-cbr 1/8 > logs_s11/gpu3_H8.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH --cbrs 1/8 --pretrained ${VT}_snrc4_fix1-8_frz-enc_h1/models/last.pt --out results/p4_full_h8.json > results/p4_full_h8.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FTH > logs_s11/gpu4_HC.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained ${VT}_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hc.json > results/p4_full_hc.txt 2>&1
+CUDA_VISIBLE_DEVICES=3 python main.py $FTH > logs_s11/gpu4_HC.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained ${VT}_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hc.json > results/p4_full_hc.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FTH --rate-mod both --mod-lr-mult 4 > logs_s11/gpu5_HL.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH $ALL6 --rate-mod both --pretrained ${VT}_both_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hl.json > results/p4_full_hl.txt 2>&1
+CUDA_VISIBLE_DEVICES=4 python main.py $FTH --rate-mod both --mod-lr-mult 4 > logs_s11/gpu5_HL.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --rate-mod both --pretrained ${VT}_both_snrc4_frz-enc_h1/models/last.pt --out results/p4_full_hl.json > results/p4_full_hl.txt 2>&1
 " > /dev/null 2>&1 &
 # after a minute: "froze the encoder" in every log, only new LoRA tensors missing in HL
 sleep 60; grep -h "froze the\|loaded\|parameters, effective batch" logs_s11/*.out; tail -n 2 logs_s11/*.out
@@ -738,7 +741,7 @@ cat results/s11_heads.txt results/s11_hl_fit.txt results/s11_hl_sched.txt    # a
 #       as JSCC (6 slots = CBR 1/8);  (c) decoded checks of the per-CBR and replan_adv
 #       schedules;  (d) per-length decoders on the shared encoder for the other 4 lengths
 #       (one encode-once code, a decoder per received length).
-# Run 12.0, 12.1 (CPU, seconds: the schedules GPU 5 decodes), start 12.2 (GPUs), do 12.3
+# Run 12.0, 12.1 (CPU, seconds: the schedules GPU 4 decodes), start 12.2 (GPUs), do 12.3
 # (CPU) while they run, then 12.4.
 
 # 12.0 -- setup, ~5 min CPU ---------------------------------------------------------
@@ -751,7 +754,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s12
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
 U=results/utility_snrc4.json
@@ -769,7 +772,7 @@ FTH="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 \
 MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 13 \
   --design full --chunks phase --random-profiles 10 --backbone vit"
 
-# 12.1 -- CPU, seconds: 60 frames of schedules to decode on GPU 5 (12.2)
+# 12.1 -- CPU, seconds: 60 frames of schedules to decode on GPU 4 (12.2)
 python tools/schedule_sim.py $PCB --frames 60 --dump 60 --policies fixed_uni slope_adv \
   --out results/s12_rep_percbr_mean.json
 python tools/schedule_sim.py $PCB --frames 60 --dump 60 --target 30 --margin 0.3 \
@@ -777,27 +780,27 @@ python tools/schedule_sim.py $PCB --frames 60 --dump 60 --target 30 --margin 0.3
 python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --target 30 --margin 0.3 \
   --policies padc_adv plan_adv online replan_adv --out results/s12_rep_prefix_tgt.json
 
-# 12.2 -- GPUs 2-5. GPU 5 first decodes the 12.1 schedules (~15 min), then each card trains
+# 12.2 -- GPUs 1-4. GPU 4 first decodes the 12.1 schedules (~15 min), then each card trains
 #   a decoder of its own for one length on the frozen snrc4 encoder (~3 h, like H48 / H8 of
 #   section 11) and measures it per phase
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FTH --fixed-cbr 1/24 > logs_s12/gpu2_H24.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH --cbrs 1/24 --pretrained ${VT}_snrc4_fix1-24_frz-enc_h1/models/last.pt --out results/p4_full_h24.json > results/p4_full_h24.txt 2>&1
+CUDA_VISIBLE_DEVICES=1 python main.py $FTH --fixed-cbr 1/24 > logs_s12/gpu2_H24.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXH --cbrs 1/24 --pretrained ${VT}_snrc4_fix1-24_frz-enc_h1/models/last.pt --out results/p4_full_h24.json > results/p4_full_h24.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FTH --fixed-cbr 1/16 > logs_s12/gpu3_H16.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH --cbrs 1/16 --pretrained ${VT}_snrc4_fix1-16_frz-enc_h1/models/last.pt --out results/p4_full_h16.json > results/p4_full_h16.txt 2>&1
+CUDA_VISIBLE_DEVICES=2 python main.py $FTH --fixed-cbr 1/16 > logs_s12/gpu3_H16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH --cbrs 1/16 --pretrained ${VT}_snrc4_fix1-16_frz-enc_h1/models/last.pt --out results/p4_full_h16.json > results/p4_full_h16.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FTH --fixed-cbr 1/12 > logs_s12/gpu4_H12.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH --cbrs 1/12 --pretrained ${VT}_snrc4_fix1-12_frz-enc_h1/models/last.pt --out results/p4_full_h12.json > results/p4_full_h12.txt 2>&1
+CUDA_VISIBLE_DEVICES=3 python main.py $FTH --fixed-cbr 1/12 > logs_s12/gpu4_H12.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH --cbrs 1/12 --pretrained ${VT}_snrc4_fix1-12_frz-enc_h1/models/last.pt --out results/p4_full_h12.json > results/p4_full_h12.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s12_rep_percbr_mean_histories.json --out results/s12_dec_percbr_mean.json > results/s12_dec_percbr_mean.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s12_rep_percbr_tgt_histories.json --out results/s12_dec_percbr_tgt.json > results/s12_dec_percbr_tgt.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s12_rep_prefix_tgt_histories.json --out results/s12_dec_prefix_tgt.json > results/s12_dec_prefix_tgt.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FTH --fixed-cbr 5/48 > logs_s12/gpu5_H5-48.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH --cbrs 5/48 --pretrained ${VT}_snrc4_fix5-48_frz-enc_h1/models/last.pt --out results/p4_full_h5-48.json > results/p4_full_h5-48.txt 2>&1
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s12_rep_percbr_mean_histories.json --out results/s12_dec_percbr_mean.json > results/s12_dec_percbr_mean.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s12_rep_percbr_tgt_histories.json --out results/s12_dec_percbr_tgt.json > results/s12_dec_percbr_tgt.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s12_rep_prefix_tgt_histories.json --out results/s12_dec_prefix_tgt.json > results/s12_dec_prefix_tgt.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FTH --fixed-cbr 5/48 > logs_s12/gpu5_H5-48.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH --cbrs 5/48 --pretrained ${VT}_snrc4_fix5-48_frz-enc_h1/models/last.pt --out results/p4_full_h5-48.json > results/p4_full_h5-48.txt 2>&1
 " > /dev/null 2>&1 &
 sleep 60; grep -h "froze the\|loaded" logs_s12/*.out; tail -n 2 logs_s12/*.out
 
@@ -876,21 +879,21 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
 #       off by sd 1-3 dB. JSCC decodes at the true SNR; digital sends at its report minus a
 #       backoff tuned per policy on other frames and loses the blocks the slot could not carry.
 #       The last assumption that favours digital.
-#   (b) the equal training budget (GPUs 2-5, ~5 h): the per-length decoders trained 400 epochs
+#   (b) the equal training budget (GPUs 1-4, ~5 h): the per-length decoders trained 400 epochs
 #       more than the specialists. HF = snrc4 + 400 epochs, encoder and decoder, all CBRs (the
 #       prefix code with the same extra training; trained and measured in section 14, where it
 #       is the control); FS24 / FS16 / FS12 = snrc4 + 400 epochs at one
 #       CBR, encoder and decoder (the same start and budget as the per-length decoders, so
 #       FS - H is the encoder's share at equal budget).
-#   (c) decoded: the per-length-decoder schedules and lost-slot schedules (GPU 5 first, ~40
+#   (c) decoded: the per-length-decoder schedules and lost-slot schedules (GPU 4 first, ~40
 #       min), paired across codecs on the same frames (CPU, seconds: tools/replay_report.py).
 #   (d) the per-length decoders at 10% lost slots, 28 dB and K 16 (CPU, minutes).
 #   (e) headroom (CPU, ~40 min in the background, 13.3d): how much ANY scheduler could add over
 #       ours -- the case for (or against) a learned, e.g. reinforcement-learning, policy.
 #   (f) the frame as a restless bandit (CPU, ~45 min, 13.3e): the nested-model gate, the
 #       Whittle index policy and an upper bound on every causal scheduler.
-# Run 13.0, 13.1 (CPU, seconds: the schedules GPU 5 decodes), start 13.2 (GPUs) and 13.3 (CPU,
-# background), do 13.4 while they run, 13.5 when GPU 5 has decoded, 13.6 when training is done.
+# Run 13.0, 13.1 (CPU, seconds: the schedules GPU 4 decodes), start 13.2 (GPUs) and 13.3 (CPU,
+# background), do 13.4 while they run, 13.5 when GPU 4 has decoded, 13.6 when training is done.
 
 # 13.0 -- setup, ~5 min CPU ---------------------------------------------------------
 cd ~/projects/JSCCwClaude-main
@@ -902,7 +905,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s13
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
 U=results/utility_snrc4.json
@@ -931,7 +934,7 @@ MIXH="--img-size 256 --channel-type awgn --amp --testset Kodak --snrs 1 4 7 10 1
 ALL6="--cbrs 1/48 1/24 1/16 1/12 5/48 1/8"
 TQ="--policies padc_adv plan_adv online replan_adv"
 
-# 13.1 -- CPU, seconds: 60 frames of schedules for GPU 5 to decode. Same seed, frames and
+# 13.1 -- CPU, seconds: 60 frames of schedules for GPU 4 to decode. Same seed, frames and
 #   users as section 12's dumps, so every file holds the same frames (images, mean SNRs,
 #   fades, lost slots): the codecs can be paired frame by frame
 python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --policies fixed_uni slope_adv \
@@ -949,8 +952,8 @@ python tools/schedule_sim.py $HDB --frames 60 --dump 60 --preempt 0.25 --target 
 python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.25 \
   --target 30 --margin 0.3 --policies padc_adv --out results/s13_rep_percbr_lost.json
 
-# 13.2 -- REPLACED BY 16.2 (the same chains -- FS12 on GPU 2, FS24 on GPU 3, the seven decodes
-#   of the 13.1 schedules on GPU 5 -- plus two seed replicates). Launch 16.2, not this.
+# 13.2 -- REPLACED BY 16.2 (the same chains -- FS12 on GPU 1, FS24 on GPU 2, the seven decodes
+#   of the 13.1 schedules on GPU 4 -- plus two seed replicates). Launch 16.2, not this.
 
 # 13.3 -- CPU, in the background (~1 h; two chains): CQI errors of sd 0 / 1 / 2 / 3 dB, the
 #   same frames at every sd. JSCC: prefix code, a decoder per length (hd), one model per CBR.
@@ -1049,7 +1052,7 @@ python tools/schedule_sim.py $HD --preempt 0.1 --target 30 $TQ 2>&1 | tee -a res
 python tools/schedule_sim.py $HD --target 28 $TQ 2>&1 | tee -a results/s13_hd_more.txt
 python tools/schedule_sim.py $HD --target 30 --users 16 --slots 48 $TQ 2>&1 | tee -a results/s13_hd_more.txt
 
-# 13.5 -- CPU, seconds, when GPU 5 has decoded (ls results/s13_dec_*.json: seven files)
+# 13.5 -- CPU, seconds, when GPU 4 has decoded (ls results/s13_dec_*.json: seven files)
 python tools/replay_report.py results/s12_dec_percbr_mean.json results/s13_dec_prefix_mean.json \
   results/s13_dec_hd_mean.json --tags percbr prefix hd --base prefix:slope_adv 2>&1 | tee -a results/s13_replays.txt
 python tools/replay_report.py results/s12_dec_percbr_tgt.json results/s12_dec_prefix_tgt.json \
@@ -1138,7 +1141,7 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 #       SNRs for every code): the code's best response, nothing else changes;
 #   (2) measures the code per phase (~10 min), fits its utility and lets the scheduler re-plan for
 #       it, then decodes those schedules: the full system, the loop closed once.
-# GPU 2 first decodes the original system (snrc4, ~20 min). Decodes take ~20 min per code.
+# GPU 1 first decodes the original system (snrc4, ~20 min). Decodes take ~20 min per code.
 # Optional, CPU only: section 13's CPU blocks (13.3, 13.3d-f, 13.4, with 13.0's variables) do not
 # touch the GPUs and may run while 14.2 trains.
 
@@ -1152,7 +1155,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s14
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
 U=results/utility_snrc4.json
@@ -1186,53 +1189,53 @@ python tools/codesign.py stats results/bank_sa.json results/bank_blind.json resu
 python tools/schedule_sim.py --utility $U $B --frames 150 --dump 150 $MP --out results/s14_s0_mean.json
 python tools/schedule_sim.py --utility $U $B --frames 150 --dump 150 $TP --out results/s14_s0_tgt.json
 
-# 14.2 -- GPUs 2-5, ~5 h each: train, decode the original system's schedules, measure, fit,
-#   re-schedule, decode its own schedules. GPU 2 first decodes snrc4 on the original schedules
+# 14.2 -- GPUs 1-4, ~5 h each: train, decode the original system's schedules, measure, fit,
+#   re-schedule, decode its own schedules. GPU 1 first decodes snrc4 on the original schedules
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_snrc4.json > results/s14_dec_s0_mean_snrc4.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_snrc4.json > results/s14_dec_s0_tgt_snrc4.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-chunks 4 --tag f1 > logs_s14/gpu2_hf.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_hf.json > results/s14_dec_s0_mean_hf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_hf.json > results/s14_dec_s0_tgt_hf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_HF --out results/p5_full_hf.json > results/p5_full_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_snrc4.json > results/s14_dec_s0_mean_snrc4.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_snrc4.json > results/s14_dec_s0_tgt_snrc4.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python main.py $FT --snr-chunks 4 --tag f1 > logs_s14/gpu2_hf.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_hf.json > results/s14_dec_s0_mean_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_hf.json > results/s14_dec_s0_tgt_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_HF --out results/p5_full_hf.json > results/p5_full_hf.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p5_full_hf.json --out results/utility_hf.json --calib 1 13 --belief-out results/belief_hf.json > results/s14_fit_hf.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_hf.json --belief results/belief_hf.json --frames 150 --dump 150 $MP --out results/s14_own_mean_hf.json > results/s14_own_hf.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_hf.json --belief results/belief_hf.json --frames 150 --dump 150 $TP --out results/s14_own_tgt_hf.json >> results/s14_own_hf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_own_mean_hf_histories.json --out results/s14_dec_own_mean_hf.json > results/s14_dec_own_mean_hf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_own_tgt_hf_histories.json --out results/s14_dec_own_tgt_hf.json > results/s14_dec_own_tgt_hf.txt 2>&1
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_own_mean_hf_histories.json --out results/s14_dec_own_mean_hf.json > results/s14_dec_own_mean_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s14_own_tgt_hf_histories.json --out results/s14_dec_own_tgt_hf.json > results/s14_dec_own_tgt_hf.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_blind.json > logs_s14/gpu3_blind.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_blind.json > results/s14_dec_s0_mean_blind.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_blind.json > results/s14_dec_s0_tgt_blind.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_BL --out results/p5_full_blind.json > results/p5_full_blind.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-profiles results/bank_blind.json > logs_s14/gpu3_blind.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_blind.json > results/s14_dec_s0_mean_blind.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_blind.json > results/s14_dec_s0_tgt_blind.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_BL --out results/p5_full_blind.json > results/p5_full_blind.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p5_full_blind.json --out results/utility_blind.json --calib 1 13 --belief-out results/belief_blind.json > results/s14_fit_blind.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_blind.json --belief results/belief_blind.json --frames 150 --dump 150 $MP --out results/s14_own_mean_blind.json > results/s14_own_blind.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_blind.json --belief results/belief_blind.json --frames 150 --dump 150 $TP --out results/s14_own_tgt_blind.json >> results/s14_own_blind.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_own_mean_blind_histories.json --out results/s14_dec_own_mean_blind.json > results/s14_dec_own_mean_blind.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_own_tgt_blind_histories.json --out results/s14_dec_own_tgt_blind.json > results/s14_dec_own_tgt_blind.txt 2>&1
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_own_mean_blind_histories.json --out results/s14_dec_own_mean_blind.json > results/s14_dec_own_mean_blind.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_BL --profiles-json results/s14_own_tgt_blind_histories.json --out results/s14_dec_own_tgt_blind.json > results/s14_dec_own_tgt_blind.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sa.json > logs_s14/gpu4_sa.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_sa.json > results/s14_dec_s0_mean_sa.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_sa.json > results/s14_dec_s0_tgt_sa.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SA --out results/p5_full_sa.json > results/p5_full_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_sa.json > logs_s14/gpu4_sa.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_sa.json > results/s14_dec_s0_mean_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_sa.json > results/s14_dec_s0_tgt_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SA --out results/p5_full_sa.json > results/p5_full_sa.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p5_full_sa.json --out results/utility_sa.json --calib 1 13 --belief-out results/belief_sa.json > results/s14_fit_sa.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_sa.json --belief results/belief_sa.json --frames 150 --dump 150 $MP --out results/s14_own_mean_sa.json > results/s14_own_sa.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_sa.json --belief results/belief_sa.json --frames 150 --dump 150 $TP --out results/s14_own_tgt_sa.json >> results/s14_own_sa.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_own_mean_sa_histories.json --out results/s14_dec_own_mean_sa.json > results/s14_dec_own_mean_sa.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_own_tgt_sa_histories.json --out results/s14_dec_own_tgt_sa.json > results/s14_dec_own_tgt_sa.txt 2>&1
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_own_mean_sa_histories.json --out results/s14_dec_own_mean_sa.json > results/s14_dec_own_mean_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s14_own_tgt_sa_histories.json --out results/s14_dec_own_tgt_sa.json > results/s14_dec_own_tgt_sa.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python main.py $FT --snr-profiles results/bank_sat.json > logs_s14/gpu5_sat.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_sat.json > results/s14_dec_s0_mean_sat.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_sat.json > results/s14_dec_s0_tgt_sat.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SAT --out results/p5_full_sat.json > results/p5_full_sat.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sat.json > logs_s14/gpu5_sat.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_s0_mean_histories.json --out results/s14_dec_s0_mean_sat.json > results/s14_dec_s0_mean_sat.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_s0_tgt_histories.json --out results/s14_dec_s0_tgt_sat.json > results/s14_dec_s0_tgt_sat.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SAT --out results/p5_full_sat.json > results/p5_full_sat.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p5_full_sat.json --out results/utility_sat.json --calib 1 13 --belief-out results/belief_sat.json > results/s14_fit_sat.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_sat.json --belief results/belief_sat.json --frames 150 --dump 150 $MP --out results/s14_own_mean_sat.json > results/s14_own_sat.txt 2>&1 ;
 python tools/schedule_sim.py --utility results/utility_sat.json --belief results/belief_sat.json --frames 150 --dump 150 $TP --out results/s14_own_tgt_sat.json >> results/s14_own_sat.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_own_mean_sat_histories.json --out results/s14_dec_own_mean_sat.json > results/s14_dec_own_mean_sat.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_own_tgt_sat_histories.json --out results/s14_dec_own_tgt_sat.json > results/s14_dec_own_tgt_sat.txt 2>&1
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_own_mean_sat_histories.json --out results/s14_dec_own_mean_sat.json > results/s14_dec_own_mean_sat.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SAT --profiles-json results/s14_own_tgt_sat_histories.json --out results/s14_dec_own_tgt_sat.json > results/s14_dec_own_tgt_sat.txt 2>&1
 " > /dev/null 2>&1 &
 sleep 90; grep -h "loaded\|parameters, effective batch" logs_s14/*.out; tail -n 2 logs_s14/*.out
 #   each run's log names its channel: "config ... snr_profiles": the bank (none for hf)
@@ -1351,7 +1354,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s15
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 cat > logs_s15/env.sh <<'ENV'
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
@@ -1392,36 +1395,36 @@ python tools/codesign.py stats results/bank_lift_k2.json results/bank_lift_k4.js
   results/bank_sa_k16.json results/bank_lift_k24.json 2>&1 | grep -E "^bank|lift" | tee results/s15_lift.txt
 python tools/schedule_sim.py --utility $U $B $K16 --frames 150 --dump 150 $MP --out results/s15_s0_k16.json
 
-# 15.2 -- GPUs 2-5, ~5 h each: train, decode section 14's slots (K 8) and/or the K 16 slots, then
-#   measure the code per phase. GPUs 2, 3 and 5 first decode the K 16 slots with snrc4 / hf / sa
+# 15.2 -- GPUs 1-4, ~5 h each: train, decode section 14's slots (K 8) and/or the K 16 slots, then
+#   measure the code per phase. GPUs 1, 2 and 4 first decode the K 16 slots with snrc4 / hf / sa
 . logs_s15/env.sh
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_snrc4.json > results/s15_dec_k16_snrc4.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 > logs_s15/gpu2_fs16.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_fs16.json > results/s15_dec_s0_mean_fs16.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_fs16.json > results/s15_dec_k16_fs16.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_FS16 --out results/p6_full_fs16.json > results/p6_full_fs16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_snrc4.json > results/s15_dec_k16_snrc4.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 > logs_s15/gpu2_fs16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_fs16.json > results/s15_dec_s0_mean_fs16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $CK_FS16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_fs16.json > results/s15_dec_k16_fs16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_FS16 --out results/p6_full_fs16.json > results/p6_full_fs16.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p6_full_fs16.json > results/s15_fit_fs16.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_hf.json > results/s15_dec_k16_hf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_sa_shuf.json > logs_s15/gpu3_shuf.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SH --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_shuf.json > results/s15_dec_s0_mean_shuf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SH --out results/p6_full_shuf.json > results/p6_full_shuf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_HF --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_hf.json > results/s15_dec_k16_hf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-profiles results/bank_sa_shuf.json > logs_s15/gpu3_shuf.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $CK_SH --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_shuf.json > results/s15_dec_s0_mean_shuf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_SH --out results/p6_full_shuf.json > results/p6_full_shuf.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p6_full_shuf.json > results/s15_fit_shuf.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sa_k16.json > logs_s15/gpu4_k16.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_k16.json > results/s15_dec_k16_k16.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_k16.json > results/s15_dec_s0_mean_k16.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_K16 --out results/p6_full_k16.json > results/p6_full_k16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_sa_k16.json > logs_s15/gpu4_k16.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_k16.json > results/s15_dec_k16_k16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_K16 --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_k16.json > results/s15_dec_s0_mean_k16.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_K16 --out results/p6_full_k16.json > results/p6_full_k16.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p6_full_k16.json > results/s15_fit_k16.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_sa.json > results/s15_dec_k16_sa.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT --snr-profiles results/bank_pf.json > logs_s15/gpu5_pf.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_PF --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_pf.json > results/s15_dec_s0_mean_pf.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_PF --out results/p6_full_pf.json > results/p6_full_pf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA --profiles-json results/s15_s0_k16_histories.json --out results/s15_dec_k16_sa.json > results/s15_dec_k16_sa.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_pf.json > logs_s15/gpu5_pf.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_PF --profiles-json results/s14_s0_mean_histories.json --out results/s15_dec_s0_mean_pf.json > results/s15_dec_s0_mean_pf.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $MIXH $ALL6 --pretrained $CK_PF --out results/p6_full_pf.json > results/p6_full_pf.txt 2>&1 ;
 python tools/utility_fit.py --mixed results/p6_full_pf.json > results/s15_fit_pf.txt 2>&1
 " > /dev/null 2>&1 &
 sleep 90; grep -h "loaded\|parameters, effective batch" logs_s15/*.out; tail -n 2 logs_s15/*.out
@@ -1472,7 +1475,7 @@ cat results/s15_const.txt results/s15_fits.txt              # 15.3c
 
 ================================================================================
  16. SEED REPLICATES OF SECTION 15'S PAIR -- DONE; its section-13 part is section 17
-     (docs/NOTES.md "P2, round 2"; docs/PAPER.md C5-C11; ~5 h on GPUs 2-5, ~2 h CPU)
+     (docs/NOTES.md "P2, round 2"; docs/PAPER.md C5-C11; ~5 h on GPUs 1-4, ~2 h CPU)
 ================================================================================
 # Section 15, decoded on section 14's slots (K 8): sa - fs16 = +0.118 dB [0.110, 0.124] -- of
 # sa's +0.28 over hf, +0.16 is training for the one length slope_adv's quotas give (3 phases)
@@ -1495,7 +1498,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 mkdir -p results logs_s13 logs_s16
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 cat > logs_s16/env.sh <<'ENV'
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
@@ -1530,34 +1533,34 @@ CK_FS2=${VT}_snrc4_fix1-16_s2_f1/models/last.pt
 ENV
 . logs_s16/env.sh
 
-# 16.1 -- CPU, seconds: section 13.1 as written (the 60-frame schedules GPU 5 decodes)
+# 16.1 -- CPU, seconds: section 13.1 as written (the 60-frame schedules GPU 4 decodes)
 . logs_s16/env.sh
 #   -> run the seven schedule_sim.py lines of 13.1
 
-# 16.2 -- GPUs 2-5 (replaces 13.2): FS12 and FS24 (section 13's equal budget), the replicate of
-#   sa on GPU 4, and on GPU 5 section 13's decodes (~40 min), then the replicate of fs16. Each
+# 16.2 -- GPUs 1-4 (replaces 13.2): FS12 and FS24 (section 13's equal budget), the replicate of
+#   sa on GPU 3, and on GPU 4 section 13's decodes (~40 min), then the replicate of fs16. Each
 #   replicate then decodes section 14's slots (~15 min)
 . logs_s16/env.sh
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
+CUDA_VISIBLE_DEVICES=1 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
+CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_sa.json --seed 2 > logs_s16/gpu4_sa_s2.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_SA2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_sa2.json > results/s16_dec_s0_mean_sa2.txt 2>&1
+CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_sa.json --seed 2 > logs_s16/gpu4_sa_s2.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $CK_SA2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_sa2.json > results/s16_dec_s0_mean_sa2.txt 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 --seed 2 > logs_s16/gpu5_fs16_s2.out 2>&1 ;
-CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $CK_FS2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_fs2.json > results/s16_dec_s0_mean_fs2.txt 2>&1
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-chunks 4 --fixed-cbr 1/16 --tag f1 --seed 2 > logs_s16/gpu5_fs16_s2.out 2>&1 ;
+CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $CK_FS2 --profiles-json results/s14_s0_mean_histories.json --out results/s16_dec_s0_mean_fs2.json > results/s16_dec_s0_mean_fs2.txt 2>&1
 " > /dev/null 2>&1 &
 sleep 60; grep -h "loaded\|parameters, effective batch" logs_s13/*.out logs_s16/*.out; tail -n 2 logs_s13/*.out logs_s16/*.out
 
@@ -1566,7 +1569,7 @@ sleep 60; grep -h "loaded\|parameters, effective batch" logs_s13/*.out logs_s16/
 #   abstractions), 13.4 (replays, the per-length decoders at lost slots / 28 dB / K 16) --
 #   each after
 . logs_s16/env.sh
-#   and 13.5 when GPU 5's decodes are done (ls results/s13_dec_*.json: seven files)
+#   and 13.5 when GPU 4's decodes are done (ls results/s13_dec_*.json: seven files)
 
 # 16.4 -- CPU, when ALL of 16.2 is done: section 13.6 as written (after . logs_s16/env.sh), then
 #   the replicates against the first runs, on the same slots and at constant SNR (1/16)
@@ -1611,7 +1614,7 @@ python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
 pip install scipy                              # usually "Requirement already satisfied"
 mkdir -p results logs_s13 logs_s17
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 cat > logs_s17/env.sh <<'ENV'
 VT=history/vit_p8d768x10s4_awgn_DIV2K_256
 SNRC4=${VT}_snrc4_s1/models/last.pt
@@ -1651,7 +1654,7 @@ ls -l results/s13_* ${VT}_snrc4_fix1-12_f1/logs/test_per_image.json   ${VT}_snrc
 #   inputs that must exist (all from earlier sections; send me any line saying "No such file"):
 ls results/utility_hd.json results/belief_hd.json results/utility_percbr.json   results/belief_percbr.json results/rd_heic.json results/p2_full_snrc4.json results/p2_full_s1.json   results/p4_full_h48.json results/p3_full_fix1.json results/s12_dec_percbr_tgt.json   results/s12_dec_prefix_tgt.json results/s12_dec_percbr_mean.json results/utility_hf.json > /dev/null
 
-# 17.1 -- CPU, ~1 min: the 60-frame schedules GPU 5 decodes (section 12's seed and frames, so
+# 17.1 -- CPU, ~1 min: the 60-frame schedules GPU 4 decodes (section 12's seed and frames, so
 #   every file holds the same frames and the codecs pair frame by frame)
 . logs_s17/env.sh
 [ -s results/s13_rep_prefix_mean_histories.json ] || python tools/schedule_sim.py --utility $U $B --frames 60 --dump 60 --policies fixed_uni slope_adv --out results/s13_rep_prefix_mean.json
@@ -1663,23 +1666,23 @@ ls results/utility_hd.json results/belief_hd.json results/utility_percbr.json   
 [ -s results/s13_rep_percbr_lost_histories.json ] || python tools/schedule_sim.py $PCB --frames 60 --dump 60 --preempt 0.25 --preempt-quantile 0.25 --target 30 --margin 0.3 --policies padc_adv --out results/s13_rep_percbr_lost.json
 ls results/s13_rep_*_histories.json | wc -l    # 7
 
-# 17.2 -- GPUs 2, 3, 5: the equal-budget specialists FS12 / FS24 (~4 h each, skipped if their
-#   test already ran) and the seven decodes of 17.1's schedules (~40 min). GPU 4 is free
+# 17.2 -- GPUs 1, 2, 4: the equal-budget specialists FS12 / FS24 (~4 h each, skipped if their
+#   test already ran) and the seven decodes of 17.1's schedules (~40 min). GPU 3 is free
 . logs_s17/env.sh
 nohup bash -c "
-[ -s ${VT}_snrc4_fix1-12_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
+[ -s ${VT}_snrc4_fix1-12_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=1 python main.py $FTF --fixed-cbr 1/12 > logs_s13/gpu2_FS12.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-[ -s ${VT}_snrc4_fix1-24_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=3 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
+[ -s ${VT}_snrc4_fix1-24_f1/logs/test_per_image.json ] || CUDA_VISIBLE_DEVICES=2 python main.py $FTF --fixed-cbr 1/24 > logs_s13/gpu3_FS24.out 2>&1
 " > /dev/null 2>&1 &
 nohup bash -c "
-[ -s results/s13_dec_prefix_mean.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
-[ -s results/s13_dec_hd_mean.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
-[ -s results/s13_dec_hd_tgt.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
-[ -s results/s13_dec_hd_lostm.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
-[ -s results/s13_dec_hd_lost.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
-[ -s results/s13_dec_percbr_lostm.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
-[ -s results/s13_dec_percbr_lost.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1
+[ -s results/s13_dec_prefix_mean.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s13_rep_prefix_mean_histories.json --out results/s13_dec_prefix_mean.json > results/s13_dec_prefix_mean.txt 2>&1 ;
+[ -s results/s13_dec_hd_mean.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_mean_histories.json --out results/s13_dec_hd_mean.json > results/s13_dec_hd_mean.txt 2>&1 ;
+[ -s results/s13_dec_hd_tgt.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_tgt_histories.json --out results/s13_dec_hd_tgt.json > results/s13_dec_hd_tgt.txt 2>&1 ;
+[ -s results/s13_dec_hd_lostm.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lostm_histories.json --out results/s13_dec_hd_lostm.json > results/s13_dec_hd_lostm.txt 2>&1 ;
+[ -s results/s13_dec_hd_lost.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s13_rep_hd_lost_histories.json --out results/s13_dec_hd_lost.json > results/s13_dec_hd_lost.txt 2>&1 ;
+[ -s results/s13_dec_percbr_lostm.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lostm_histories.json --out results/s13_dec_percbr_lostm.json > results/s13_dec_percbr_lostm.txt 2>&1 ;
+[ -s results/s13_dec_percbr_lost.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $SPEC --profiles-json results/s13_rep_percbr_lost_histories.json --out results/s13_dec_percbr_lost.json > results/s13_dec_percbr_lost.txt 2>&1
 " > /dev/null 2>&1 &
 sleep 60; tail -n 2 logs_s13/*.out; ls results/s13_dec_*.txt 2>/dev/null
 
@@ -2047,7 +2050,7 @@ cat results/s19_stream.txt                                         # 19.3
 
 ================================================================================
  20. TO RUN NOW -- C5 with HARQ, the stale-report schedules decoded, the Lagrangian index's
-     delay, margins on stale reports (GPUs 2-5: 20.1, ~30 min; the rest CPU, ~1-1.5 h)
+     delay, margins on stale reports (GPUs 1-4: 20.1, ~30 min; the rest CPU, ~1-1.5 h)
 ================================================================================
 # Why (sections 18-19 are recorded in docs/NOTES.md 5, 6b, 6c and docs/PAPER.md):
 # (1) C5 on stale reports is now the paper's strongest system result (JSCC +2.5 dB and +19
@@ -2083,7 +2086,7 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 python -m pyflakes main.py engine.py configs data net utils tools alloc
 python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new this time: [harq])
 mkdir -p results logs_s20
-nvidia-smi -i 2,3,4,5
+nvidia-smi -i 1,2,3,4
 cat > logs_s20/env.sh <<'ENV'
 . logs_s17/env.sh
 R="1 0.95 0.9 0.8 0.6 0.4 0"
@@ -2096,7 +2099,7 @@ ls logs_s17/env.sh results/utility_hd.json results/belief_hd.json results/rd_hei
 # 20.1 -- the stale-report schedules, decoded by the codec. CPU, ~2 min: 60 frames each (section
 #   12's seed and frames, so they pair frame by frame with section 17's fresh-report decodes),
 #   the aware transmitter of the C5 table, r = 0.8 and 0.6, mean PSNR (pf, fixed_uni,
-#   slope_adv) and the 30 dB target (padc, online, plan_adv). Then GPUs 2, 3, 4 and 5, one
+#   slope_adv) and the 30 dB target (padc, online, plan_adv). Then GPUs 1, 2, 3 and 4, one
 #   decode each with the per-length decoders (~10-20 min each)
 . logs_s20/env.sh
 [ -s results/s20_rep_r80_mean_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --policies pf fixed_uni slope_adv --out results/s20_rep_r80_mean.json
@@ -2104,10 +2107,10 @@ ls logs_s17/env.sh results/utility_hd.json results/belief_hd.json results/rd_hei
 [ -s results/s20_rep_r80_tgt_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --target 30 --policies padc online plan_adv --out results/s20_rep_r80_tgt.json
 [ -s results/s20_rep_r60_tgt_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.6 --cqi-aware --target 30 --policies padc online plan_adv --out results/s20_rep_r60_tgt.json
 ls results/s20_rep_*_histories.json | wc -l    # 4
-nohup bash -c "[ -s results/s20_dec_r80_mean.json ] || CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_mean_histories.json --out results/s20_dec_r80_mean.json > results/s20_dec_r80_mean.txt 2>&1" > /dev/null 2>&1 &
-nohup bash -c "[ -s results/s20_dec_r60_mean.json ] || CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_mean_histories.json --out results/s20_dec_r60_mean.json > results/s20_dec_r60_mean.txt 2>&1" > /dev/null 2>&1 &
-nohup bash -c "[ -s results/s20_dec_r80_tgt.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_tgt_histories.json --out results/s20_dec_r80_tgt.json > results/s20_dec_r80_tgt.txt 2>&1" > /dev/null 2>&1 &
-nohup bash -c "[ -s results/s20_dec_r60_tgt.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_tgt_histories.json --out results/s20_dec_r60_tgt.json > results/s20_dec_r60_tgt.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r80_mean.json ] || CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_mean_histories.json --out results/s20_dec_r80_mean.json > results/s20_dec_r80_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r60_mean.json ] || CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_mean_histories.json --out results/s20_dec_r60_mean.json > results/s20_dec_r60_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r80_tgt.json ] || CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_tgt_histories.json --out results/s20_dec_r80_tgt.json > results/s20_dec_r80_tgt.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r60_tgt.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_tgt_histories.json --out results/s20_dec_r60_tgt.json > results/s20_dec_r60_tgt.txt 2>&1" > /dev/null 2>&1 &
 sleep 60; tail -n 2 results/s20_dec_*.txt
 
 # 20.2 -- CPU, background, four chains (~1 h each): C5 with HARQ. Stale reports r = 1 ... 0 as
