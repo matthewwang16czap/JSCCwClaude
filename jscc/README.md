@@ -172,7 +172,9 @@ from 2P constant decodes, kappa and rho cross-fitted on other images) for `sched
 for the separation baseline (`alloc/digital.py`), which `schedule_sim.py` schedules like
 any utility. `--cqi-error 0 1 2 3` repeats a run with erroneous SNR reports (decisions on the
 reports; JSCC decoded at the true SNR, a digital block lost when its rate exceeds the slot's,
-the digital backoff tuned per policy); `--preempt` loses slots to other traffic; `--fixed-codes`
+the digital backoff tuned per policy; `--harq ir` or `chase` retransmits a lost digital block in
+the user's next slot and combines it, up to `--harq-max` transmissions, as NR does);
+`--preempt` loses slots to other traffic; `--fixed-codes`
 schedules one model per CBR, `--length-checkpoints` (mixed_snr) decodes with one per length.
 `tools/compare_runs.py <run> --test --per-snr` prints a run's absolute SNR x CBR table.
 Co-design (`docs/PROBLEM.md`, section 7): `tools/codesign.py bank --utility U --policy

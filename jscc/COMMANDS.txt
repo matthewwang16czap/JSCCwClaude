@@ -1,11 +1,11 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-18c. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-19. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 2, 3, 4 and 5. GPU 0 (kept free) and GPU 1 (broken) are never used.
 ================================================================================
 
-WHAT TO RUN: SECTIONS 18 AND 19 (CPU only; 18 ~3 h in three background chains, 19 ~2 h in
-two; they can run at the same time). Everything through section 17 is done and recorded in
-docs/NOTES.md.
+WHAT TO RUN: SECTION 20 (20.1 on GPUs 2-5, ~30 min; the rest CPU, ~1-1.5 h in six
+background chains, which can run while the GPUs decode). Everything through section 19 is
+done and recorded in docs/NOTES.md.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -30,12 +30,15 @@ docs/NOTES.md.
   16 section 13 + seed replicates of sa and   replicates done (docs/NOTES.md "P2, round 2");
      fs16                                     its section-13 part moved to 17
   17 section 13's measurements, in full       done (docs/NOTES.md "P1, step 8")
-  18 the scheduler as a restless bandit,      TO RUN NOW (CPU only)
+  18 the scheduler as a restless bandit,      done (docs/NOTES.md 5, 6b)
      re-examined: stale reports (Doppler x
      delay) and many users per slot
-  19 delay: the latency budget at equal        TO RUN NOW (CPU only), with 18
+  19 delay: the latency budget at equal        done (docs/NOTES.md 6c)
      quality, time to the target, continuous
      traffic (a deadline per request)
+  20 C5 with HARQ, the stale-report            TO RUN NOW (GPUs 2-5 for 20.1, the rest
+     schedules decoded, the Lagrangian         CPU)
+     index's delay, margins on stale reports
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -1796,7 +1799,7 @@ cat results/s13_budget.txt                                                     #
 # Decision: section 13's block (C5, C6, C7, RL, ABS, RMAB) -- unchanged.
 
 ================================================================================
- 18. TO RUN NOW -- the scheduler as a restless bandit, re-examined (CPU only, ~3 h)
+ 18. THE SCHEDULER AS A RESTLESS BANDIT, RE-EXAMINED -- DONE (docs/NOTES.md 5, 6b)
 ================================================================================
 # Why (docs/PROBLEM.md section 3; docs/SURVEY.md F5): two assumptions of our restless-bandit
 # frame are tested against what the restless-bandit literature says. (1) The scheduler is
@@ -1936,7 +1939,7 @@ cat results/s18_scale.txt                                          # 18.3
 #         well defined on our programs; the Lagrangian index needs no indexability anyway.
 
 ================================================================================
- 19. TO RUN NOW (with 18) -- delay: the same gains as latency (CPU only, ~2 h)
+ 19. DELAY: THE SAME GAINS AS LATENCY -- DONE (docs/NOTES.md 6c)
 ================================================================================
 # Why (docs/PROBLEM.md section 3, item 7; docs/PAPER.md C14): a frame has ONE deadline, so
 # "delay" is read three ways, and they do not all favour the same rule. (1) The latency
@@ -2041,3 +2044,169 @@ cat results/s19_stream.txt                                         # 19.3
 #         continuous-traffic claim is made with the index policy (a table per image and
 #         mean-SNR class, computed once), and the closed form stays the frame's rule, where the
 #         two tie (19.1, last two lines). Units 4: the same ordering with several requests a slot.
+
+================================================================================
+ 20. TO RUN NOW -- C5 with HARQ, the stale-report schedules decoded, the Lagrangian index's
+     delay, margins on stale reports (GPUs 2-5: 20.1, ~30 min; the rest CPU, ~1-1.5 h)
+================================================================================
+# Why (sections 18-19 are recorded in docs/NOTES.md 5, 6b, 6c and docs/PAPER.md):
+# (1) C5 on stale reports is now the paper's strongest system result (JSCC +2.5 dB and +19
+#     points over HEIC at r = 0.8), but its digital side drops a block the slot could not
+#     carry. NR retransmits it and combines (HARQ), which is exactly what stale reports call
+#     for. tools/schedule_sim.py --harq does it: the user's next slot retransmits the block,
+#     and the receiver combines (ir: the transmissions' efficiency adds, ideal incremental
+#     redundancy; chase: their SNRs add), up to 4 transmissions; the backoff (naive) or an
+#     offset on the aware rate is tuned with HARQ on, per policy and r, on 300 other frames.
+#     On a toy codec, with rates tuned for HARQ (bolder than the report), IR gives digital's
+#     best policy +2.2 dB at r = 0.8 and +3.1 dB at r = 0.6, about half of what stale reports
+#     cost it, and +0.9 dB at 2 dB of CQI error (+1.9 at 3 dB): both axes of C5 must be
+#     restated with it (20.2). The JSCC side needs nothing: a token prefix has no block to lose.
+# (2) The JSCC side of C5 at r < 1 was simulated on the fitted curves; 20.1 decodes those
+#     schedules with the codec itself (the per-length decoders, as in section 17).
+# (3) At scale the scheduler to recommend is the programs' Lagrangian index (0.005 dB from
+#     the bound at K 128); its time to the target was not measured yet (20.3).
+# (4) On stale reports, stopping on the reported SNRs breaks the quality target (naive online
+#     falls below PADC by r = 0.8): does a margin restore it? And 18.1a's r = 0 aware runs
+#     again, after the fix of exact ties (every advantage index tied at r = 0 and the first
+#     user took every spare slot: padc_adv 26.4 dB mean PSNR) (20.4).
+# Everything is skipped if its output exists. Order: 20.0; 20.1 (the dumps, then the four
+# decodes in the background); 20.2-20.4 in the background (six CPU chains, which can run
+# while the GPUs decode); 20.5 when everything is done.
+
+# 20.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new this time: [harq])
+mkdir -p results logs_s20
+nvidia-smi -i 2,3,4,5
+cat > logs_s20/env.sh <<'ENV'
+. logs_s17/env.sh
+R="1 0.95 0.9 0.8 0.6 0.4 0"
+NW=8
+ENV
+. logs_s20/env.sh
+#   inputs that must exist (all from sections 12-19; send me any line saying "No such file"):
+ls logs_s17/env.sh results/utility_hd.json results/belief_hd.json results/rd_heic.json   results/utility_snrc4_nested.json results/belief_snrc4_nested.json   results/s13_dec_hd_mean.json $HDEC > /dev/null
+
+# 20.1 -- the stale-report schedules, decoded by the codec. CPU, ~2 min: 60 frames each (section
+#   12's seed and frames, so they pair frame by frame with section 17's fresh-report decodes),
+#   the aware transmitter of the C5 table, r = 0.8 and 0.6, mean PSNR (pf, fixed_uni,
+#   slope_adv) and the 30 dB target (padc, online, plan_adv). Then GPUs 2, 3, 4 and 5, one
+#   decode each with the per-length decoders (~10-20 min each)
+. logs_s20/env.sh
+[ -s results/s20_rep_r80_mean_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --policies pf fixed_uni slope_adv --out results/s20_rep_r80_mean.json
+[ -s results/s20_rep_r60_mean_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.6 --cqi-aware --policies pf fixed_uni slope_adv --out results/s20_rep_r60_mean.json
+[ -s results/s20_rep_r80_tgt_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --target 30 --policies padc online plan_adv --out results/s20_rep_r80_tgt.json
+[ -s results/s20_rep_r60_tgt_histories.json ] || python tools/schedule_sim.py $HDB --frames 60 --dump 60 --cqi-corr 0.6 --cqi-aware --target 30 --policies padc online plan_adv --out results/s20_rep_r60_tgt.json
+ls results/s20_rep_*_histories.json | wc -l    # 4
+nohup bash -c "[ -s results/s20_dec_r80_mean.json ] || CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_mean_histories.json --out results/s20_dec_r80_mean.json > results/s20_dec_r80_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r60_mean.json ] || CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_mean_histories.json --out results/s20_dec_r60_mean.json > results/s20_dec_r60_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r80_tgt.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r80_tgt_histories.json --out results/s20_dec_r80_tgt.json > results/s20_dec_r80_tgt.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s20_dec_r60_tgt.json ] || CUDA_VISIBLE_DEVICES=5 python tools/mixed_snr.py $REPF --length-checkpoints $HDEC --profiles-json results/s20_rep_r60_tgt_histories.json --out results/s20_dec_r60_tgt.json > results/s20_dec_r60_tgt.txt 2>&1" > /dev/null 2>&1 &
+sleep 60; tail -n 2 results/s20_dec_*.txt
+
+# 20.2 -- CPU, background, four chains (~1 h each): C5 with HARQ. Stale reports r = 1 ... 0 as
+#   in 18.1b (HEIC, 6 slots; the LTE CQI table and the 3 dB-gap code), HARQ with incremental
+#   redundancy, naive (backoff tuned with HARQ) and aware (an offset on the aware rate tuned
+#   with HARQ; with IR the best rates are bolder than the report, so the grids reach -8 dB
+#   naive and -12 dB aware); the CQI-error axis of 17.3a (sd 0 / 1 / 2 / 3 dB) with HARQ;
+#   Chase combining at r = 0.8 / 0.6 for the mean. The JSCC numbers to compare with are 18.1a's
+#   (results/s18_stale_jscc.txt) and 17.3a's (results/s13_cqi_jscc.txt), unchanged
+. logs_s20/env.sh
+nohup bash -c "
+[ -s results/s20_harq_mean.txt ] || {
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr $R --harq ir > results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr $R --harq ir --cqi-aware >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --link shannon --gap-db 3 --cqi-corr $R --harq ir >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --link shannon --gap-db 3 --cqi-corr $R --harq ir --cqi-aware >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-error 0 1 2 3 --harq ir >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --link shannon --gap-db 3 --cqi-error 0 1 2 3 --harq ir >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr 0.8 0.6 --harq chase >> results/s20_harq_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $DH6 --policies pf greedy --cqi-corr 0.8 0.6 --harq chase --cqi-aware >> results/s20_harq_mean.tmp 2>&1 ;
+mv results/s20_harq_mean.tmp results/s20_harq_mean.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s20_harq_tgt.txt ] || {
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-corr $R --harq ir > results/s20_harq_tgt.tmp 2>&1 ;
+mv results/s20_harq_tgt.tmp results/s20_harq_tgt.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s20_harq_tgt_aware.txt ] || {
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-corr $R --harq ir --cqi-aware > results/s20_harq_tgt_aware.tmp 2>&1 ;
+mv results/s20_harq_tgt_aware.tmp results/s20_harq_tgt_aware.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s20_harq_tgt_cqi.txt ] || {
+python tools/schedule_sim.py $DH6 --target 30 --policies padc stop online_pf --cqi-error 0 1 2 3 --harq ir > results/s20_harq_tgt_cqi.tmp 2>&1 ;
+mv results/s20_harq_tgt_cqi.tmp results/s20_harq_tgt_cqi.txt ; }
+" > /dev/null 2>&1 &
+
+# 20.3 -- CPU, background, ~1 h: the time to 30 dB of the programs' indices and the guided
+#   policies (tools/rmab_scale.py --delay: the share at 30 dB by slots T/4 ... T, the mean slot
+#   with misses at T + 1, paired on all users and on the users both bring there): K 8 (one unit
+#   per slot, 300 frames), K 32 (4 units per slot, 100 frames), and K 8 at r = 0.8
+. logs_s20/env.sh
+nohup bash -c "
+[ -s results/s20_rmab_delay.txt ] || {
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --target 30 --delay --out results/s20_rmab_delay8.json > results/s20_rmab_delay.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 32 --frames 100 --workers $NW --target 30 --delay --out results/s20_rmab_delay32.json >> results/s20_rmab_delay.tmp 2>&1 ;
+python tools/rmab_scale.py $NU --users 8 --frames 300 --workers $NW --target 30 --delay --cqi-corr 0.8 >> results/s20_rmab_delay.tmp 2>&1 ;
+mv results/s20_rmab_delay.tmp results/s20_rmab_delay.txt ; }
+" > /dev/null 2>&1 &
+
+# 20.4 -- CPU, background, ~1 h: quality targets on stale reports (hd, 2000 frames, as 18.1a).
+#   (a) margins: every policy aims at 30.5 or 31 dB, r = 0.95 / 0.8 / 0.6, naive and aware;
+#   (b) 18.1a's r = 0 aware runs again after the tie fix (the advantage-timed policies change;
+#   rr, pf, fixed_uni, fixed_slope and padc must reproduce 18.1a's r = 0 aware numbers exactly)
+. logs_s20/env.sh
+nohup bash -c "
+[ -s results/s20_margin.txt ] || {
+python tools/schedule_sim.py $HD --target 30 --margin 0.5 --policies padc online plan_adv replan_adv --cqi-corr 0.95 0.8 0.6 > results/s20_margin.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --margin 1 --policies padc online plan_adv replan_adv --cqi-corr 0.95 0.8 0.6 >> results/s20_margin.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --margin 0.5 --policies padc online plan_adv replan_adv --cqi-corr 0.95 0.8 0.6 --cqi-aware >> results/s20_margin.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --margin 1 --policies padc online plan_adv replan_adv --cqi-corr 0.95 0.8 0.6 --cqi-aware >> results/s20_margin.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --target 30 --policies pf padc padc_adv online plan_adv replan_adv --cqi-corr 0 --cqi-aware >> results/s20_margin.tmp 2>&1 ;
+python tools/schedule_sim.py $HD --policies rr pf fixed_uni fixed_slope slope_adv --cqi-corr 0 --cqi-aware >> results/s20_margin.tmp 2>&1 ;
+mv results/s20_margin.tmp results/s20_margin.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s20_*.tmp
+
+# 20.5 -- reading (send back everything it prints) ------------------------------------------
+#   first the decoded replays, when the four decodes are done (results/s20_dec_*.json exist):
+. logs_s20/env.sh
+python tools/replay_report.py results/s20_dec_r80_mean.json --base pf 2>&1 | tee results/s20_replays.txt
+python tools/replay_report.py results/s20_dec_r60_mean.json --base pf 2>&1 | tee -a results/s20_replays.txt
+python tools/replay_report.py results/s20_dec_r80_tgt.json --base padc 2>&1 | tee -a results/s20_replays.txt
+python tools/replay_report.py results/s20_dec_r60_tgt.json --base padc 2>&1 | tee -a results/s20_replays.txt
+python tools/replay_report.py results/s13_dec_hd_mean.json results/s20_dec_r80_mean.json   results/s20_dec_r60_mean.json --tags fresh r80 r60 --base fresh:slope_adv 2>&1 | tee -a results/s20_replays.txt
+#   then the CPU chains:
+cat results/s20_harq_mean.txt results/s20_harq_tgt.txt results/s20_harq_tgt_aware.txt   results/s20_harq_tgt_cqi.txt                                    # 20.2
+cat results/s20_rmab_delay.txt                                                           # 20.3
+cat results/s20_margin.txt                                                               # 20.4
+#   (a chain still running shows as a missing file: its partial output is the .tmp of the
+#   same name; `ls results/s20_*.tmp` lists the ones not finished)
+
+# Decision (what the results would change; docs/PAPER.md):
+#   20.1  the model's error on the decoded stale-report schedules within the abstraction's
+#         0.05-0.09 dB and unbiased at r = 0.8 / 0.6: the JSCC side of C5's physical axis, and
+#         C3 / C4 on stale reports, stand as decoded. An error that grows as r falls would mean
+#         stale schedules serve slots where the curves are less accurate (deep fades); the
+#         stale-report table is then restated from the decodes.
+#   20.2  JSCC's lead over the best digital system with HARQ (naive or aware, its best policy)
+#         at r = 0.8 and at 2 dB of CQI error: if it stays at ~1 dB / 10 points or more, C5 is
+#         stated with HARQ, the baseline NR would actually run (the old numbers become "without
+#         HARQ"). If HARQ closes most of it, C5 is restated: JSCC matches digital with HARQ
+#         without retransmissions or rate selection, and the abstract changes. Chase below IR
+#         is expected (IR is the favourable case).
+#   20.3  the Lagrangian index at least as early as the Whittle index (2.9 slots before PADC on
+#         the same users in 19.1): the recommended scheduler then carries both the
+#         near-optimality and the delay claim; if it is later, the paper recommends the Whittle
+#         index where delay within the deadline matters and the Lagrangian index for quality.
+#   20.4  a margin that brings naive online back above PADC at r = 0.8: the fix for stale
+#         reports is one number. If not, the rule is stated as found: on stale reports, decide
+#         on the posterior and plan the spare slots (plan_adv, aware).

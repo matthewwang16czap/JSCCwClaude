@@ -1,4 +1,4 @@
-# Results notes (condensed 2026-10-15)
+# Results notes (condensed 2026-10-15; sections 18-19 added 2026-10-19)
 
 What the experiments established, by topic; the last section indexes every experiment round.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
@@ -118,7 +118,38 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 With error-free CQI JSCC is on par (a code 3 dB from capacity is 0.5 dB ahead). With errors
 (decisions on the reports; JSCC decodes at the true SNR, digital backs off 1-6 dB at its best,
 tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 to 3 dB, digital
-2.3 dB: from 1 dB of CQI error on, JSCC is ahead even of the 3 dB-gap code.
+2.3 dB: from 1 dB of CQI error on, JSCC is ahead even of the 3 dB-gap code. Caveat found
+2026-10-19: digital here has no HARQ (a lost block's slot is wasted). With HARQ-IR and its rates
+tuned for it, on a toy codec digital's best policy gains +0.1 / +0.9 / +1.9 dB at 1 / 2 / 3 dB of
+error, so this lead may shrink to well under 1 dB; COMMANDS 20.2 measures it.
+
+**Stale reports: the physical axis (COMMANDS 18.1, 2026-10-19).** A report taken tau before its
+slot has correlation r = |J0(2 pi f_D tau)| with it (3.5 GHz, 5 ms-old reports: r 0.98 at 3 km/h,
+0.76 at 10, 0.50 at 15; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). Best policy of each system at
+each r, and the better of a naive transmitter (takes the reports as exact; digital with its
+backoff tuned per policy) and an aware one (decides on each slot's posterior: JSCC its expected
+distortion, digital the rate of best expected goodput); 2000 frames, the same frames and true
+slots at every r; simulated on the fitted curves (JSCC decodes at the true SNR; a digital block
+the slot cannot carry is lost):
+
+| report correlation r | 1 | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+|---|---|---|---|---|---|---|---|
+| mean PSNR, hd / HEIC + CQI table / 3 dB-gap code | 31.63 / 31.29 / 32.13 | 31.51 / 30.07 / 30.51 | 31.38 / 29.48 / 29.93 | 31.09 / 28.62 / 29.03 | 30.60 / 27.32 / 27.72 | 30.27 / 26.31 / 26.70 | 30.00 / 26.53 / 25.93 |
+| hd minus HEIC (dB) | +0.34 | +1.44 | +1.89 | **+2.48** | +3.27 | +3.96 | +3.48 |
+| hd minus the 3 dB-gap code (dB) | -0.50 | +0.99 | +1.44 | +2.06 | +2.88 | +3.57 | +4.07 |
+| at 30 dB, hd / HEIC (%) | 77.2 / 74.4 | 75.4 / 63.0 | 73.9 / 58.2 | 70.3 / 51.2 | 64.0 / 43.7 | 59.4 / 41.0 | 56.7 / 40.9 |
+| hd minus HEIC (points) | +2.8 | +12.4 | +15.7 | **+19.1** | +20.3 | +18.4 | +15.8 |
+
+So at 10 km/h with 5 ms-old reports (r ~0.76) JSCC leads by ~2.6 dB and ~19 points, at 3 km/h
+(r ~0.98) by ~0.8 dB. From r = 1 to 0 JSCC loses 1.6 dB, HEIC 4.8 (its backoff grows to 2-7 dB
+and it still loses 7-50% of its blocks); a code 3 dB from capacity falls behind from r = 0.95.
+The JSCC side is decoded at r = 0.8 / 0.6 in COMMANDS 20.1 (pending). The digital side
+drops a block the slot could not carry; NR would retransmit it and combine (HARQ), which is
+what stale reports call for: `schedule_sim.py --harq ir|chase` (built 2026-10-19) does it,
+and on a toy codec (stand-in R-D curves; rates tuned with HARQ on, which makes them bolder than
+the report) digital's best policy gains +2.2 dB at r = 0.8 and +3.1 dB at r = 0.6, about half of
+what stale reports cost it. The lead above is an upper estimate, possibly by 1 dB or more,
+until COMMANDS 20.2 measures it with HARQ.
 
 ## 6. The scheduler-made channel (scheduler-aware training)
 
@@ -149,73 +180,118 @@ tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 
   the phase the scheduler favours (PF code: phase 2 most sensitive; slope_adv code: phase 1;
   shuffled: flatter). An unequal error protection learned from the scheduler.
 
-## 6b. The scheduler as a restless bandit, re-examined (2026-10-18; COMMANDS 18 pending)
+## 6b. The scheduler as a restless bandit, re-examined (COMMANDS 18, run 2026-10-19)
 
-Built from reading the restless-bandit literature (docs/SURVEY.md F5; docs/PROBLEM.md section 3,
-item 6): our frame is a PLANNING restless bandit (every user's state reported each slot, the
-quality model calibrated), not a learning one; two assumptions are now testable.
+Our frame is a PLANNING restless bandit (every user's state reported each slot, the quality
+model calibrated), not a learning one (docs/SURVEY.md F5; docs/PROBLEM.md section 3, item 6).
+Two assumptions tested: fresh reports, and one user per slot. Methods: stale reports h_rep =
+r h + sqrt(1 - r^2) e (`alloc/csi.py`; the users' programs decide on the report through a
+report-to-channel kernel and the bound holds for every scheduler that sees only such reports;
+program and simulation agreed within 0.02 dB on the stand-in); the Whittle index as the top of
+its indifference range; B = K/8 units per slot (`tools/rmab_scale.py`) with PF, our rule, the
+Whittle and the Lagrangian (LP-priority) index, the CMU blog's ID-guided policy and its
+random-order baseline.
 
-* Stale reports (`alloc/csi.py`; `schedule_sim.py --cqi-corr r [--cqi-aware]`; `codesign.py bank
-  --cqi-corr`; `Arm(cqi_corr=r)`): h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau). The user's
-  program decides on the report through a report-to-channel kernel; its value matches direct
-  simulation of one user (r = 1 / 0.8 / 0.4: 30.706 / 30.090 / 29.366 program, 30.715 / 30.099 /
-  29.350 +- 0.03 simulated, stand-in), so the bound holds on stale reports.
-* The index where now and later are alike: the indifference price is a range; the index is now
-  its top (identical results with fresh reports on the exact small frames; at r = 0 it is the
-  user's expected marginal gain). The bottom of the range (a plain sign test) let the
-  programs' interpolation error pick users: -0.5 dB at r = 0 on the stand-in, now fixed.
-* Many users per slot (`tools/rmab_scale.py`): B = K/8 units per slot, PF / our rule / Whittle /
-  Lagrangian index (gain at the bound's per-slot prices, ties by Whittle) against the bound, and
-  the CMU blog's ID-guided policy (each user's ideal action at the bound's prices, conflicts in a
-  fixed order per frame) with its random-order baseline.
-* The CMU blog (Hong 2026, read in full): every policy = one program per user + a conflict rule;
-  the rule decides near-optimality (random fails, ID ordering is provably near-optimal for
-  average reward). Stand-in, K 16 with 2 units per slot, 4 frames: at 30 dB ID-guided beats
-  random-guided by +9.4 points [6.3, 15.6] (persistency); for the mean the indices (0.10 dB from
-  the bound) beat our rule (0.18) and the guided policies (0.26-0.29): value ranking matters
-  where rewards are smooth. Indexability on the grid: 1-4% of states non-monotone for the mean
-  objective, 18% for the target (1 program): the Lagrangian index, which needs none, is the
-  safer method for the target.
-* Stand-in only (the smoke utility, 40-60 frames, NOT the codec; for direction, not for the
-  paper): as r falls 1 / 0.8 / 0.5 / 0, PF - RR +0.87 / +0.38 / -0.01 / -0.2 dB and the advantage
-  timing over PF timing on the same quotas +0.32 / +0.29 / +0.11 / -0.04: the opportunistic part
-  vanishes, the served-SNR lift +2.5 -> +0.9 -> -0.8 -> -2.0 dB (no selection). Aware vs naive
-  transmitter: slope_adv +0.02 +- 0.06 (r 0.5), +0.04 +- 0.05 (r 0.8); Whittle -0.04 +- 0.07,
-  -0.07 +- 0.04 (the programs on the right model are not better as an index policy). K 16 with
-  2 units per slot (3 frames): Whittle / Lagrangian 0.06 dB from the bound, our rule 0.17.
+* **The opportunistic part fades with the reports, and at K 8 nothing else is there** (hd, 2000
+  frames, mean PSNR; naive / aware transmitter):
 
-## 6c. Delay (2026-10-18; COMMANDS 19 pending)
+  | r | 1 | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+  |---|---|---|---|---|---|---|---|
+  | slope_adv - PF (dB) | +0.475 | +0.471 / +0.493 | +0.452 / +0.498 | +0.385 / +0.475 | +0.256 / +0.342 | +0.148 / +0.190 | +0.078 / -0.011 |
+  | PF - RR (dB) | +1.16 | +1.02 | +0.89 | +0.65 | +0.29 | +0.08 | -0.08 / 0.00 |
+  | advantage timing on the same quotas (dB) | +0.437 | +0.434 / +0.450 | +0.410 / +0.449 | +0.336 / +0.426 | +0.187 / +0.318 | +0.073 / +0.190 | -0.01 |
 
-Asked: would delay advantages make the case stronger? The frame has one deadline, so delay is
-read three ways (docs/PROBLEM.md section 3, item 7; tools in parentheses):
+  The content part (fixed_slope - fixed_uni: lengths) is 0.000 at every r: at K 8, T 24 the
+  equal-slope quotas give 3 phases to 99.9% of users, so all of our rule's gain is how it
+  values slots. An aware transmitter keeps the whole gain over PF down to r = 0.8 and 72% of it
+  at r = 0.6 (naive: 81% and 54%). At r = 0 every policy is round robin (30.00 dB).
+* **The scheduler-made channel is a fresh-report effect** (banks of 4000 frames, slope_adv): the
+  SNR lift of phases 1 / 2 / 3 over random selection, +5.0 / +4.5 / +3.6 dB with fresh reports,
+  keeps 91% of itself at r = 0.95, 65% at 0.8, 36% at 0.6 and 8% at 0.3. Even at r = 0.95, 58% of
+  the phases go out in another slot than with fresh reports.
+* **Quality target: stopping on reported SNRs breaks** (hd, 30 dB):
 
-* The latency budget at equal quality (`tools/latency.py`): each policy's quality against the
-  frame length T, inverted. The direct translation of the gains.
-* Time to the target within a frame (`schedule_sim.py --delay`): the share of users at the
-  target by every slot (a CDF over all users), the mean slot with misses at T + 1, and the slot
-  on the users two policies both bring there; plus the first decodable phase and the PSNR
-  averaged over the frame (progressive display), where the deadline objective is not on our side.
-* Continuous traffic (`tools/stream_sim.py`): Poisson arrivals, a deadline per request, a
-  request leaves when its rule is done; share at the target within d slots for every d,
-  capacity at a share, delay on the same requests. With one deadline for all it serves a frame
-  exactly as schedule_sim does (pf_len, padc, stop, stop_adv, online; checked slot by slot).
-* Stand-in only (the smoke utility, NOT the codec; direction, not for the paper): latency, K 8:
-  PF needs 27.0 slots for slope_adv's mean PSNR at 24 (11% fewer for ours), PADC 21.0 for
-  online's 30 dB share at 16 (24% fewer). Frame, T 24: online 15 / 42 / 72 / 89% at 30 dB by
-  slots 6 / 12 / 18 / 24 (PADC 12 / 41 / 69 / 81), 0.5 slots earlier on average with misses
-  counted, no slower on the same users (+0.1 [-0.1, +0.4]); slope_adv's first phase 1.6 slots
-  later than PF's and its PSNR over the frame 0.9 dB lower. The Whittle index in the frame (40
-  frames): 36 / 63 / 82 / 88% by slots 6 / 12 / 18 / 24 at the same final share as online, 3.5
-  slots ahead of PADC on the same users (its index ~ the success gain per remaining phase: the
-  shortest remaining need first). Traffic, D 24, 0.3 requests per
-  slot: online 85% at 30 dB vs PADC 52%, ahead at every d, 1.9 slots slower on the requests
-  both serve (its deadline guard lets requests wait until their slack runs out; p90 delay = the
-  deadline). The Whittle index with arrivals (each request's program, its own deadline), 0.35
-  requests per slot: 85.0% (online 84.9), 58.5% within D/4 (online 36.1), mean delay 5.9 slots
-  (online 10.0), 1.7 [1.3, 2.2] FASTER than PADC on the same requests: with deadlines that
-  differ, the program's index carries the delay advantage the closed form misses. Toy model of
-  the explainer (4 users): 10% fewer slots than PF for the mean, 33% fewer than PADC at 30 dB;
-  ahead at every slot from T 12.
+  | r | 1 | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+  |---|---|---|---|---|---|---|---|
+  | online, naive / aware (%) | 76.4 | 69.8 / 72.2 | 65.8 / 70.0 | 59.0 / 65.3 | 49.1 / 58.7 | 43.3 / 54.9 | 39.2 / 53.0 |
+  | plan_adv, naive / aware | 77.2 | 75.1 / 75.4 | 72.1 / 73.9 | 66.4 / 70.3 | 56.8 / 64.0 | 50.3 / 58.9 | 45.7 / 54.4 |
+  | PADC, naive / aware | 67.8 | 66.5 / 66.1 | 65.0 / 64.8 | 62.9 / 62.1 | 59.3 / 58.8 | 57.3 / 57.5 | 56.1 / 56.7 |
+
+  A user served at a reported peak looks done although its true slot was worse: naive online
+  loses 7 points already at r = 0.95 and falls below PADC by r = 0.8 (replan_adv, which also
+  stops on the reports, the same). Deciding on the posterior and planning the spare slots
+  before the frame (plan_adv, aware) keeps +8 points over PADC to r = 0.8 and +5 at r = 0.6; at
+  r = 0 PADC is best. At r = 0 with an aware transmitter every advantage index tied and the
+  first user took every spare slot (padc_adv mean PSNR 26.4 dB); ties now go to PF.
+* **The bound and the indices on stale reports** (K 8, nested utility, 300 frames, mean): the
+  bound falls with r (31.68 / 31.43 / 30.85 / 30.18 dB at r = 1 / 0.9 / 0.7 / 0.4) and our rule's
+  gap to it shrinks (0.25 / 0.25 / 0.21 / 0.12 dB): less information, less to gain. The
+  Lagrangian index stays the best policy (+0.065 dB [0.052, 0.079] over our rule with fresh
+  reports, +0.005 / +0.041 / +0.033 stale); the Whittle index falls below our rule (-0.06 /
+  -0.12 / -0.15) and below PF at r = 0.4: its price-range convention is fragile when the
+  reports say little. Aware vs naive at r = 0.7: our rule +0.04 dB. At 30 dB and r = 0.7 the
+  bound is loose (71.4% against 59.9% for the best policy: each program knows its own true
+  state) and the guided policies collapse (ID 35.6%, random 46.3%): with flat ideal actions the
+  order alone decides.
+* **Many users per slot: the theory's regime holds** (B = K/8, 100 frames per K):
+
+  | K (B units) | 8 (1) | 16 (2) | 32 (4) | 64 (8) | 128 (16) |
+  |---|---|---|---|---|---|
+  | gap to the bound, mean PSNR (dB): Lagrangian / Whittle / ours / PF | 0.207 / 0.265 / 0.267 / 0.710 | 0.090 / 0.130 / 0.211 / 0.610 | 0.039 / 0.066 / 0.178 / 0.571 | 0.009 / 0.029 / 0.152 / 0.529 | 0.005 / 0.016 / 0.155 / 0.515 |
+  | the same, ID / random guided (dB) | 0.580 / 0.564 | 0.389 / 0.358 | 0.245 / 0.243 | 0.160 / 0.137 | 0.110 / 0.090 |
+  | gap at 30 dB (points): Lagrangian / Whittle / ID / random / PF | 1.6 / 5.7 / 4.3 / 5.1 / 14.7 | 1.9 / 4.1 / 3.5 / 4.2 / 14.1 | 1.4 / 3.0 / 3.0 / 3.6 / 14.4 | 1.7 / 2.9 / 3.0 / 3.1 / 13.8 | 1.5 / 2.4 / 2.6 / 3.1 / 13.2 |
+
+  The index policies converge to the bound faster than 1/sqrt(K) (Lagrangian gap x sqrt(K):
+  0.59 -> 0.06): with 16 units per slot the Lagrangian index is within 0.005 dB of the best
+  possible scheduler. Our closed form plateaus 0.15 dB below the bound, so at scale the
+  programs' indices are worth +0.14 dB over it (+0.19 dB already at K 8 with 25% of units lost;
+  there the Lagrangian index is 0.000 from the bound at K 128). At 30 dB the Lagrangian index
+  stays ~1.5 points from the bound at every K; ID beats random by +0.5 to +0.7 points
+  (persistency, the blog's lesson, modest here), and for the mean value ranking beats both
+  guided policies. Grid states where the decision flips back as the price rises: 1-1.7% (mean),
+  6-13% (target).
+
+## 6c. Delay (COMMANDS 19, run 2026-10-19)
+
+A frame has one deadline, so delay is read three ways (docs/PROBLEM.md section 3, item 7): the
+latency budget at equal quality (`tools/latency.py`), time to the target within a frame
+(`schedule_sim.py --delay`), and continuous traffic with a deadline per request
+(`tools/stream_sim.py`, which serves a frame exactly as schedule_sim does when all deadlines
+coincide). snrc4 with the calibrated transmitter, K 8, 2000 frames; the Whittle index on the
+nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
+
+* **The latency budget (the headline).** For the mean PSNR our rule reaches at T = 16 / 24, PF
+  needs 17.6 / 29.5 slots: 9.3% [8.7, 9.9] / 18.6% [16.3, 20.7] fewer slots for ours (31 dB takes
+  PF 24.5 slots, ours 21.5). For online's share at 30 dB at T = 16 (66.8%) PADC needs 26.0 slots
+  (38.6% [34.9, 41.9] fewer for ours), PF 27.4; online's share at T = 24 (74.0%) no other policy
+  reaches within 40 slots (PADC saturates near 70%). 60% at 30 dB takes online 12.4 slots, PADC
+  17.0, PF 21.5.
+* **Time to 30 dB inside the frame** (T 24, % of all users by slots 6 / 12 / 18 / 24): online 18.3
+  / 42.1 / 61.9 / 74.0, PADC 19.5 / 48.9 / 61.6 / 65.6, PF 16.2 / 33.3 / 53.6 / 63.5. Online trails
+  PADC in the first half and overtakes in the last quarter (T 16 and 32 alike): its mean slot
+  with misses at T + 1 is 0.36 [0.27, 0.45] later than PADC's, and 1.8 slots later on the users
+  both bring to 30 dB. The **Whittle index** is ahead at every slot: 38.4 / 60.0 / 69.3 / 72.8
+  (PADC 20.1 / 48.4 / 60.8 / 64.6, online 17.6 / 41.2 / 60.7 / 72.6 on the same 500 frames), 2.6
+  slots earlier than PADC with misses counted, 2.9 [2.7, 3.1] earlier on the same users, at
+  online's final share. With the target reward a user's index is about its success gain per
+  remaining phase, so it serves the shortest remaining need first, weighted by the channel.
+  For the mean, slope_adv's first phase comes at slot 6.7 (PF 4.5) and its PSNR over the frame
+  is 1.3 dB lower (25.0 vs 26.2): the deadline objective does not reward early coarse images.
+* **Continuous traffic** (30 dB, D 16 / 24 / 32, 0.1-0.45 requests per slot, 20000 slots): at the
+  frame's load (~0.33 per slot, D 24) online brings 70-71% of requests to 30 dB, PADC 46%,
+  stop_adv 66-68%, PF timing with stopping 58-62%, content-blind lengths 51-53%. Online's share
+  RISES with load, from 66% at 0.1 requests per slot (a request mostly alone, served in every
+  slot: no choice of slot) to 71% at 0.3 (multiuser diversity); PADC stays near 45%. Capacity
+  at 60% of requests at 30 dB: online >= 0.45 per slot at every D, stop_adv 0.38 / 0.43 / 0.45,
+  stop 0.28 / 0.32 / 0.35, PADC and content-blind lengths never (about a third of requests cannot
+  reach 30 dB at any load, so 70% and more is out of reach for every policy). Online's delay is
+  long: its p90 is the deadline at high load and it is 2.9 to 7 slots slower than PADC on the
+  same requests (its deadline guard waits for the slack to run out). The **Whittle index**
+  (nested, 10000 slots, D 24, 0.3 / 0.4 requests per slot): 68.3 / 68.8% at 30 dB (online 70.5 /
+  69.3, PADC 45.0 / 45.2), 57.3 / 54.1% within D/4 (online 39.2 / 27.3, PADC 38.4 / 34.9), mean
+  delay 4.2 / 4.8 slots (online 8.0 / 11.1), and 0.6 / 1.0 slots FASTER than PADC on the same
+  requests; D 16 alike. With 4 units per slot the ordering is the same (online +21 to +30 points
+  over PADC).
 
 ## 7. Open
 
@@ -226,6 +302,12 @@ read three ways (docs/PROBLEM.md section 3, item 7; tools in parentheses):
    target. GPU.
 3. Optional: a Jacobian probe (the decoder's per-chunk Jacobian energy against the fitted C rho:
    the first-order mechanism behind the abstraction); the codec gap (more data).
+4. The scheduler to recommend at scale is the programs' Lagrangian index (0.005 dB from the bound
+   at K 128, robust to stale reports); its time to the target is measured in COMMANDS 20.3.
+5. Quality targets on stale reports: stopping needs the posterior; does a margin restore online?
+   (COMMANDS 20.4). The decoded check of the stale-report schedules: COMMANDS 20.1 (GPU).
+6. Digital with HARQ (incremental redundancy, Chase combining; built 2026-10-19): C5 on stale
+   reports and CQI errors again, COMMANDS 20.2. The stale-report lead is the one at stake.
 
 ## 8. Experiment index
 
@@ -242,5 +324,5 @@ read three ways (docs/PROBLEM.md section 3, item 7; tools in parentheses):
 | P2, round 1 | 14 | 10-14 | scheduler-trained code +0.28 dB on the same slots; nothing at the target; one round suffices |
 | P2, round 2 | 15, 16 | 10-14 | +0.16 is the length, +0.08-0.12 the channel (two seeds); codes learn their scheduler |
 | P1, step 8 | 17 (= 13) | 10-14 | MMSE abstraction ~9x MIESM; CQI errors: JSCC clearly ahead; scheduler certified; equal budget |
-| RMAB re-examined | 18 | 10-18 (pending) | stale reports (static vs opportunistic part, JSCC vs digital, lift, bound) and many users per slot (gap vs K) |
-| Delay | 19 | 10-18 (pending) | latency budget at equal quality; time to the target in a frame; continuous traffic (reliability within d, capacity, same-request delay) |
+| RMAB re-examined | 18 | 10-19 | stale reports: JSCC over digital +0.3 -> +2.5 dB / +19 points at r 0.8; the opportunistic part and the lift fade; aware + plan_adv for the target; with many units the indices reach the bound (0.005 dB at K 128), our closed form plateaus at 0.15 |
+| Delay | 19 | 10-19 | latency budget 9-19% (mean, vs PF) and 39% (30 dB, vs PADC) shorter; the Whittle index reaches 30 dB first (2.9 slots before PADC, same users) at online's share; traffic: online +25 points over PADC, the Whittle index with half its delay |

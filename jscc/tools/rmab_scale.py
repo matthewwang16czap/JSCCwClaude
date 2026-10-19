@@ -36,6 +36,10 @@ with phases left, as in tools/schedule_sim.py):
     rand_guided the same ideal actions, conflicts broken in a fresh random order every slot
                 (the blog's failing baseline: no persistency)
 
+--delay (with --target): also when each user's decoded image reaches the target, per policy
+the share of users there by slots T/4, T/2, 3T/4 and T (a CDF over all users) and the mean slot
+with misses counted at T + 1 (docs/PROBLEM.md section 3, item 7).
+
 Channel: i.i.d. Rayleigh per user and slot (the programs' model); each unit lost to other
 traffic with probability --preempt. --cqi-corr r: stale reports (alloc/csi.py); the
 transmitter knows r (adv: expected distortion; whittle, lagrange and the bound: programs
@@ -94,8 +98,10 @@ def top(score, claim, n, tie=None):
 
 def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_star=None,
         prices=None, order=None, rng=None):
-    """One frame under one policy: the delivered (true) SNR lists of the users. `order`: the
-    frame's fixed user order (id_guided); `rng`: the random orders of rand_guided."""
+    """One frame under one policy: the delivered (true) SNR lists of the users and, with a
+    target, the slot (1-based) each user's decoded image first reaches it (inf: never).
+    `order`: the frame's fixed user order (id_guided); `rng`: the random orders of
+    rand_guided."""
     K, T = snr.shape
     P = util.P
     goal = o.target
@@ -110,6 +116,7 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
         dec, typ = np.clip(seen, *o.snr_clip), np.asarray(means, dtype=np.float64)
     hist = [[] for _ in range(K)]
     out = [[] for _ in range(K)]
+    reach = np.full(K, np.inf)
     served = np.zeros(K)
     quota = None
     if policy == "adv":                        # quotas for the units expected, not the realised
@@ -131,6 +138,7 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
             score = pf
         elif policy == "adv":
             claim &= np.array([len(h) < q for h, q in zip(hist, quota)])
+            tie = pf                                      # exact ties (useless reports): PF
             for k in np.flatnonzero(claim):
                 score[k] = (belief.psnr(imgs[k], hist[k] + [float(g[k])])
                             - belief.psnr(imgs[k], hist[k] + [float(typ[k])]))
@@ -165,7 +173,9 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
             hist[k].append(float(g[k]))
             out[k].append(float(snr[k, t]))
             served[k] += r[k] / T
-    return out
+            if goal is not None and not np.isfinite(reach[k]) and util.psnr(int(imgs[k]), out[k]) >= goal:
+                reach[k] = t + 1
+    return out, reach
 
 
 def _score(util, imgs, hist, target):
@@ -199,10 +209,11 @@ def _work(args):
     for p in o.policies:
         if p == "adv" and o.target is not None:
             continue
-        h = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star, prices,
-                order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
-                rng=np.random.default_rng([o.seed, K, f, 8]))
+        h, reach = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star,
+                       prices, order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
+                       rng=np.random.default_rng([o.seed, K, f, 8]))
         res[p] = _score(util, imgs, h, o.target)
+        res[p + "_reach"] = reach.tolist()
         res[p + "_phases"] = float(np.mean([len(x) for x in h]))
     if f < o.index_frames:
         res["nonindexable"] = float(np.mean([a.indexability() for a in arms[:o.index_arms]]))
@@ -230,6 +241,8 @@ def main():
     ap.add_argument("--target", type=float, default=None,
                     help="score the share of users at this PSNR (adv is not run)")
     ap.add_argument("--policies", nargs="+", default=list(POLICIES), choices=POLICIES)
+    ap.add_argument("--delay", action="store_true",
+                    help="with --target: when each user reaches it (a CDF by slot, mean slot)")
     ap.add_argument("--price-steps", type=int, default=10,
                     help="subgradient steps on a price per slot for the bound (0: one price)")
     ap.add_argument("--index-frames", type=int, default=1,
@@ -245,6 +258,8 @@ def main():
         ap.error("--cqi-corr is a correlation in [0, 1]")
     if not 0.0 <= o.preempt < 1.0:
         ap.error("--preempt is in [0, 1)")
+    if o.delay and o.target is None:
+        ap.error("--delay needs --target")
     util = load_utility(o.utility)
     if getattr(util, "kind", "") == "digital":
         ap.error("the programs need a token-prefix utility")
@@ -294,6 +309,8 @@ def main():
                 d = np.array([r[a] - r[b] for r in res])
                 lo, hi = bootstrap(d, seed=o.seed)
                 print(f"  {a} - {b}: {scale * d.mean():+.3f} {unit} [{scale * lo:+.3f}, {scale * hi:+.3f}]")
+        if o.delay:
+            report_delay(o, res, pols, row)
         ni = [r["nonindexable"] for r in res if "nonindexable" in r]
         if ni:
             print(f"  indexability: the decision flips back as the price rises at "
@@ -310,6 +327,38 @@ def main():
         with open(o.out, "w") as f:
             json.dump({"args": vars(o), "per_K": {str(k): v for k, v in table.items()}}, f, indent=1)
         print(f"wrote {o.out}")
+
+
+def report_delay(o, res, pols, row):
+    """--delay: per policy the share of users at the target by T/4, T/2, 3T/4 and T, and the
+    mean slot each reaches it with misses at T + 1, with paired CIs over frames."""
+    T = o.slots
+    cut = sorted({max(1, int(round(T * f))) for f in (0.25, 0.5, 0.75, 1.0)})
+    print(f"  delay: users at {o.target:g} dB by slot {', '.join(map(str, cut))} (% of all "
+          f"users), mean slot reached (misses at T + 1 = {T + 1})")
+    per = {p: np.array([r[p + "_reach"] for r in res], dtype=np.float64) for p in pols}
+    for p in pols:
+        tt = per[p]
+        by = [float(np.mean(tt <= c)) for c in cut]
+        slot = np.minimum(tt, T + 1).mean(1)              # per frame
+        row[p + "_by"] = by
+        row[p + "_slot"] = float(slot.mean())
+        print(f"    {p:12s} " + " ".join(f"{100 * b:5.1f}%" for b in by) + f"   {slot.mean():6.2f}")
+    for a, b in (("lagrange", "whittle"), ("whittle", "pf"), ("lagrange", "pf"),
+                 ("id_guided", "rand_guided"), ("lagrange", "id_guided")):
+        if a in pols and b in pols:
+            d = np.minimum(per[a], T + 1).mean(1) - np.minimum(per[b], T + 1).mean(1)
+            lo, hi = bootstrap(d, seed=o.seed)
+            both = np.isfinite(per[a]) & np.isfinite(per[b])     # the same users: no selection
+            same = [float((per[a][f][both[f]] - per[b][f][both[f]]).mean())
+                    for f in range(len(res)) if both[f].any()]
+            line = f"    mean slot {a} - {b}: {d.mean():+.2f} [{lo:+.2f}, {hi:+.2f}]"
+            if len(same) > 1:
+                slo, shi = bootstrap(same, seed=o.seed)
+                line += (f"; on the users both bring there {np.mean(same):+.2f} "
+                         f"[{slo:+.2f}, {shi:+.2f}] ({int(both.sum())} users)")
+                row[f"same_{a}_{b}"] = float(np.mean(same))
+            print(line)
 
 
 if __name__ == "__main__":
