@@ -173,28 +173,32 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         0.52. At 30 dB the Lagrangian index stays ~1.5 points from the bound at every K, which
         the theory does not predict. Two leads (2026-10-20): Hao, Xu and Tong's Figs. 3-4 show
         the same flat gap when ties are not broken by the relaxation's own randomized policy
-        (ours go to the Whittle index); and alloc/whittle.lagrangian_bound's subgradient step
-        grows with the unit imbalance; at B = 4 and 8 the per-slot prices never improved on the
-        best constant price (smoke stand-in: 0.007 dB per user for the mean; the stand-in's
-        target does not bind). One-unit results are unaffected. Diagnosis owed: docs/PAPER.md,
-        owed item 9. So the theory's regime holds, and at scale the programs' index is the
-        scheduler to use; the closed form is its cheap approximation (one unit per slot: a tie).
-        On stale reports (K 8) the Lagrangian index stays best and the Whittle index degrades
-        (-0.15 dB against our rule at r = 0.4): its price-range convention is fragile when the
-        reports say little.
+        (ours go to the Whittle index), and McDowell et al. (read in full; citing Chakraborty,
+        Sun, Hou and Eryilmaz 2026) report the same for the multi-action per-slot knapsack,
+        where an LP-priority tie rule restores asymptotic optimality; and
+        alloc/whittle.lagrangian_bound's subgradient step grows with the unit imbalance; at B =
+        4 and 8 the per-slot prices never improved on the best constant price (smoke stand-in:
+        0.007 dB per user for the mean; the stand-in's target does not bind). One-unit results
+        are unaffected. Diagnosis owed: docs/PAPER.md, owed item 9. So the theory's regime
+        holds, and at scale the programs' index is the scheduler to use; the closed form is its
+        cheap approximation (one unit per slot: a tie). On stale reports (K 8) the Lagrangian
+        index stays best and the Whittle index degrades (-0.15 dB against our rule at r = 0.4):
+        its price-range convention is fragile when the reports say little.
      c. THE INDEX WHERE NOW AND LATER ARE ALIKE. When a later slot is as good as this one
-        (useless reports, or no deadline pressure yet) taking and leaving the slot are worth
-        the same over a whole range of prices and the indifference price is not unique; the
-        index is defined as the top of that range (the largest price at which taking it is
-        still optimal), located by the gain's slope -1 past it. At r = 0 it is then the
-        user's expected marginal gain, falling with the phases held (what a static
-        allocation needs); with fresh reports nothing changes (identical to the previous
-        definition on the exact small frames). Taking the bottom of the range, as a plain
-        sign test does, lets the programs' interpolation error pick the users (seen on the
-        stand-in: very unequal counts, -0.5 dB). The convention is ours: Yu, Xu and Tong's
-        Whittle index (TAC 2018, Def. 2) is the smallest subsidy at which resting is optimal,
-        the bottom of the range; Hao, Xu and Tong define their priority as a supremum, but with
-        the future prices fixed the indifference point is unique there (full texts, 2026-10-20).
+        (useless reports, or no deadline pressure yet) taking and leaving the slot are worth the
+        same over a whole range of prices and the indifference price is not unique; the index is
+        defined as the top of that range (the largest price at which taking it is still
+        optimal), located by the gain's slope -1 past it. At r = 0 it is then the user's
+        expected marginal gain, falling with the phases held (what a static allocation needs);
+        with fresh reports nothing changes (identical to the previous definition on the exact
+        small frames). Taking the bottom of the range, as a plain sign test does, lets the
+        programs' interpolation error pick the users (seen on the stand-in: very unequal counts,
+        -0.5 dB). The convention is ours: Yu, Xu and Tong's Whittle index (TAC 2018, Def. 2) is
+        the smallest subsidy at which resting is optimal, the bottom of the range; Hao, Xu and
+        Tong define their priority as a supremum, but with the future prices fixed the
+        indifference point is unique there (full texts, 2026-10-20). A published rule in the
+        same spirit: McDowell et al.'s LP-priority tie rule keeps the larger codelength among
+        tied maximisers, resolving indifference toward the more active action.
      d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
         SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
         an ideal action (take or leave this slot at the price lambda*_t), and a rule decides

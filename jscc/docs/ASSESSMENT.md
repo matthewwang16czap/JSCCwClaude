@@ -247,6 +247,21 @@ IEEE Transactions on Wireless Communications (TWC).
    uniform-tie curve stays flat below the bound, the shape of our 30 dB gap; our price solver's
    step does not scale with B (at B = 4 and 8 it never improved on the constant price). No
    one-unit result changes; the diagnosis is owed item 9 in `docs/PAPER.md`.
+22. **Full texts, batch 2 (2026-10-20): the nearest learned-code scheduler lacks our arm.** Five
+   more PDFs read page by page (same file). McDowell et al. (2608.28441) schedule a meta-learned
+   VIB code per fading slot with a Lagrangian multi-action bandit, LP-priority ties and a decoded
+   task reward, so "no paper schedules a learned code slot by slot" is false; but each slot
+   carries a fresh, self-contained codeword (nothing accumulates), the reward decays with age,
+   there is no deadline, CSI is perfect, and the slot values are learned by RL for lack of an
+   abstraction. Our arm claim is now worded as phases that accumulate across slots, and the
+   abstraction is what makes each program exact. Their physical layer is trained over -5 to
+   20 dB and frozen, so C8-C10 are untouched. DeepJSCC-l (TWC 2021) is the origin of encode once
+   with a decoder per length (C6 stays a system verdict) and gives C12 its mechanism; DRJSCC
+   adds a second observation. Shisher et al. (JSAIT 2023) plot the relaxation's bound against
+   system scale, and McDowell et al. report that ties decide asymptotic optimality in the
+   multi-action knapsack, which supports the tie lead on our 30 dB gap. A BUPT case study
+   (2609.02924) has digital beating SwinJSCC from 7 dB up with exact SNR on AWGN, consistent with
+   C5. The two 2026 EESM preprints are now the main unread risk to C12.
 
 ## 1. Your four points, checked
 

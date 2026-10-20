@@ -395,6 +395,10 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    31.6951 (no gain at B 4 and 8); 60 steps divided by the supply 31.9319 / 31.3302 / 31.6882.
    The stand-in's 30 dB target does not bind (prices 0). One-unit runs are unaffected. Plan:
    docs/PAPER.md, owed item 9. CPU.
+   Batch 2 of the full texts (2026-10-20) adds the multi-action counterpart: McDowell et al.,
+   citing Chakraborty, Sun, Hou and Eryilmaz (2026, in preparation), report that the per-slot
+   knapsack with arbitrary ties is not asymptotically optimal and an LP-priority tie rule fixes
+   it. The tie rule is the first suspect to test.
 
 ## 8. Experiment index
 
