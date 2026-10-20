@@ -72,8 +72,9 @@ phases left, so every policy can use the whole frame. Policies:
     lagrange     (both objectives) the Lagrangian (LP-priority) index: the same programs
                  priced at the per-slot prices lambda*_t that minimise the frame's Lagrangian
                  bound (alloc/whittle.lagrangian_bound); serve the user whose program gains
-                 most from taking this slot at that price (Hu and Frazier; Brown and Smith;
-                 needs no indexability), ties by the Whittle index; with --target only users
+                 most from taking this slot at that price (Hao, Xu and Tong's Lagrangian
+                 priority policy, IEEE TAC; Hu and Frazier; Brown and Smith; needs no
+                 indexability), ties by the Whittle index; with --target only users
                  with a positive Whittle index claim the slot, the rest goes to PF (as
                  tools/rmab_scale.py, which it reproduces with one unit per slot)
 

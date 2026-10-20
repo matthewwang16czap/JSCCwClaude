@@ -25,9 +25,10 @@ with phases left, as in tools/schedule_sim.py):
                 quota, top B (mean objective only)
     whittle     the Whittle index of each user's program, top B
     lagrange    the Lagrangian (LP-priority) index: each user's gain from this slot in its own
-                program priced at the bound's optimal prices lambda*_t (Hu and Frazier;
-                Brown and Smith), ties (users who would take a later unit as well) broken by
-                the Whittle index, top B
+                program priced at the bound's optimal prices lambda*_t (Hao, Xu and Tong's
+                Lagrangian priority policy; Hu and Frazier; Brown and Smith), ties (users who
+                would take a later unit as well) broken by the Whittle index, top B (their
+                theorem breaks ties at random by the relaxation's own policy instead)
     id_guided   the CMU blog's ID policy (Hong et al., Math. Oper. Res. 2025): a user WANTS the
                 slot if taking it is optimal in its program at lambda*_t (its ideal action);
                 when more users want it than there are units, the ones first in a fixed order

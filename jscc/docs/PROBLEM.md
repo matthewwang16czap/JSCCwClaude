@@ -156,25 +156,32 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         COMMANDS 20.2), and the JSCC side holds decoded (20.1).
         The bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to
         it shrinks: less information, less to gain.
-     b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and
-        Smith 2020; Zhang and Frazier 2021; Gast, Gaujal and Yan 2023) is asymptotic in the
-        number of arms with a fixed share served per period: there, Lagrangian (LP-priority)
-        index policies lose O(1/sqrt(N)) per arm against the Lagrangian bound, without
-        indexability. A downlink TTI has many resource units (subband groups): B units per
-        slot, each one phase, a user at most one per slot, is exactly that regime, with the
+     b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and Smith
+        2020; Zhang and Frazier 2021; Hao, Xu and Tong, IEEE TAC, read in full 2026-10-20: our
+        Lagrangian index is their Lagrangian priority policy; Gast, Gaujal and Yan 2023) is
+        asymptotic in the number of arms with a fixed share served per period: there, Lagrangian
+        (LP-priority) index policies lose O(1/sqrt(N)) per arm against the Lagrangian bound,
+        without indexability. A downlink TTI has many resource units (subband groups): B units
+        per slot, each one phase, a user at most one per slot, is exactly that regime, with the
         bound's supply term (1 - p) B T lam. Our K 8, one-unit frame is its hardest point.
-        `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with
-        B = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's
-        gain at the bound's per-slot prices, ties broken by the Whittle index). Measured (mean
-        PSNR, gap to the bound per user, K 8 / 16 / 32 / 64 / 128): Lagrangian 0.207 / 0.090 /
-        0.039 / 0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed
-        form 0.267 -> 0.155, a plateau (its continuation is a typical slot, not the price);
-        PF 0.71 -> 0.52. At 30 dB the Lagrangian index stays ~1.5 points from the bound at
-        every K. So the theory's regime holds, and at scale the programs' index is the
-        scheduler to use; the closed form is its cheap approximation (one unit per slot: a
-        tie). On stale reports (K 8) the Lagrangian index stays best and the Whittle index
-        degrades (-0.15 dB against our rule at r = 0.4): its price-range convention is
-        fragile when the reports say little.
+        `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with B
+        = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's gain at
+        the bound's per-slot prices, ties broken by the Whittle index). Measured (mean PSNR, gap
+        to the bound per user, K 8 / 16 / 32 / 64 / 128): Lagrangian 0.207 / 0.090 / 0.039 /
+        0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed form 0.267
+        -> 0.155, a plateau (its continuation is a typical slot, not the price); PF 0.71 ->
+        0.52. At 30 dB the Lagrangian index stays ~1.5 points from the bound at every K, which
+        the theory does not predict. Two leads (2026-10-20): Hao, Xu and Tong's Figs. 3-4 show
+        the same flat gap when ties are not broken by the relaxation's own randomized policy
+        (ours go to the Whittle index); and alloc/whittle.lagrangian_bound's subgradient step
+        grows with the unit imbalance; at B = 4 and 8 the per-slot prices never improved on the
+        best constant price (smoke stand-in: 0.007 dB per user for the mean; the stand-in's
+        target does not bind). One-unit results are unaffected. Diagnosis owed: docs/PAPER.md,
+        owed item 9. So the theory's regime holds, and at scale the programs' index is the
+        scheduler to use; the closed form is its cheap approximation (one unit per slot: a tie).
+        On stale reports (K 8) the Lagrangian index stays best and the Whittle index degrades
+        (-0.15 dB against our rule at r = 0.4): its price-range convention is fragile when the
+        reports say little.
      c. THE INDEX WHERE NOW AND LATER ARE ALIKE. When a later slot is as good as this one
         (useless reports, or no deadline pressure yet) taking and leaving the slot are worth
         the same over a whole range of prices and the indifference price is not unique; the
@@ -184,7 +191,10 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         allocation needs); with fresh reports nothing changes (identical to the previous
         definition on the exact small frames). Taking the bottom of the range, as a plain
         sign test does, lets the programs' interpolation error pick the users (seen on the
-        stand-in: very unequal counts, -0.5 dB).
+        stand-in: very unequal counts, -0.5 dB). The convention is ours: Yu, Xu and Tong's
+        Whittle index (TAC 2018, Def. 2) is the smallest subsidy at which resting is optimal,
+        the bottom of the range; Hao, Xu and Tong define their priority as a supremum, but with
+        the future prices fixed the indifference point is unique there (full texts, 2026-10-20).
      d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
         SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
         an ideal action (take or leave this slot at the price lambda*_t), and a rule decides

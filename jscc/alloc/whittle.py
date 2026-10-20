@@ -221,8 +221,9 @@ class Arm:
 
     def gain_at(self, Wp, prices, t, n, Y, snr):
         """The gain of taking slot t at this SNR (report) in the program priced at `prices`
-        (Wp = priced(prices)): the Lagrangian index of Hu and Frazier / Brown and Smith,
-        well defined without indexability."""
+        (Wp = priced(prices)): the Lagrangian index of Hu and Frazier / Brown and Smith, at the
+        bound's prices Hao, Xu and Tong's Lagrangian priority value (minus lambda_t), well
+        defined without indexability."""
         if n >= self.P or t >= self.T:
             return -np.inf
         lam = float(np.broadcast_to(np.asarray(prices, dtype=np.float64), (self.T,))[t])
@@ -277,7 +278,11 @@ def lagrangian_bound(arms, T, p_lost=0.0, refine=12, per_slot=0, units=1):
     constant price (the grid minimum refined by golden-section search between its
     neighbours), then, with per_slot > 0, that many projected subgradient steps on a price
     per slot (the gradient: the slots' supply (1 - p) B minus the users' expected demand).
-    Returns (bound, prices: a constant or (T,))."""
+    Returns (bound, prices: a constant or (T,)).
+    Known weakness (2026-10-20, docs/PAPER.md owed item 9): the step is not divided by B, so
+    it grows with B; at B = 4 and 8 the steps never improved on the constant price (smoke
+    stand-in; dividing by the supply gains 0.007 dB per user for the mean).
+    B = 1 is unaffected."""
     lams = arms[0].lams
     supply = (1.0 - p_lost) * units
     f = supply * T * lams + sum(a.W[0, :, 0, 0] for a in arms)

@@ -233,6 +233,20 @@ IEEE Transactions on Wireless Communications (TWC).
    the earliness option; section 21 runs it on the main frames and decodes it. On stale
    reports, the target rule needs a 0.5-1 dB margin besides the posterior. Remaining risks:
    one test set and PSNR only (owed), and the Lagrangian index not yet decoded (section 21).
+21. **Full texts, batch 1 (2026-10-20): the method is imported, the arm is not.** Five uploaded
+   PDFs read page by page
+   (`research_notes/Related work for JSCC scheduling/fulltext_readings.md`). Hao, Xu and Tong (IEEE TAC) define our Lagrangian index ("the
+   greatest tax under which it is optimal to activate the arm", future prices at the relaxation's
+   optimum), so the paper presents it as their policy applied to a new arm. Hosseini and Panwar
+   already plot their LP relaxation's value beside the policies (20 users, "the optimum"), so the
+   certificate is new evidence for a new arm, not a new kind of evidence. Yu, Xu and Tong's
+   asymptotics are light-traffic and their Whittle index takes the bottom of the indifference
+   range (the top-of-range convention is ours). Fu and van der Schaar's file was their
+   single-user paper; the multi-user one is still unread. One finding for the code: Hao, Xu and
+   Tong's theorem needs exact prices and ties randomized by the relaxation's policy, and their
+   uniform-tie curve stays flat below the bound, the shape of our 30 dB gap; our price solver's
+   step does not scale with B (at B = 4 and 8 it never improved on the constant price). No
+   one-unit result changes; the diagnosis is owed item 9 in `docs/PAPER.md`.
 
 ## 1. Your four points, checked
 

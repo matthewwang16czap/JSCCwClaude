@@ -386,6 +386,15 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
 5. Done 2026-10-20: margins on stale reports (aware + plan_adv + 0.5-1 dB), the decoded
    stale-report schedules, digital with HARQ (C5 restated: +1.3 dB at 2 dB CQI error, +1.7 dB /
    +15.5 points at r = 0.8).
+6. The 30 dB gap of the Lagrangian index (~1.5 points below the bound at every K, B = K/8;
+   section 6b). Two leads from 2026-10-20: Hao, Xu and Tong (IEEE TAC, read in full) get the
+   same flat gap when ties are not broken by the relaxation's randomized policy (ours go to the
+   Whittle index); and `alloc/whittle.lagrangian_bound`'s subgradient step is not divided by B.
+   Smoke stand-in check (8 images, P 6, T 24, one draw per K, mean PSNR per user): constant
+   price 31.9393 / 31.3366 / 31.6951 dB at K 8 / 32 / 64; 60 steps as coded 31.9319 / 31.3366 /
+   31.6951 (no gain at B 4 and 8); 60 steps divided by the supply 31.9319 / 31.3302 / 31.6882.
+   The stand-in's 30 dB target does not bind (prices 0). One-unit runs are unaffected. Plan:
+   docs/PAPER.md, owed item 9. CPU.
 
 ## 8. Experiment index
 
