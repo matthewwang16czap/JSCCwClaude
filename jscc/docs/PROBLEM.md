@@ -151,8 +151,9 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         to r = 0.8 and saves the quality target (stopping on the reports breaks: a user served
         at a reported peak looks done although its slot was worse; aware plan_adv keeps +8
         points over PADC at r = 0.8). JSCC's lead over digital grows with report age, the
-        physical axis of C5: +0.3 dB at r = 1, +2.5 dB / +19 points at 0.8, +3.3 / +20 at 0.6
-        (digital without HARQ; with retransmission and combining, `--harq`, COMMANDS 20.2).
+        physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5 points at 0.8, +1.7 / +14 at 0.6
+        against digital with incremental-redundancy HARQ (without it: +2.5 / +19, +3.3 / +20;
+        COMMANDS 20.2), and the JSCC side holds decoded (20.1).
         The bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to
         it shrinks: less information, less to gain.
      b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and

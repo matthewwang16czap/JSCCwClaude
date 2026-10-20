@@ -1,14 +1,14 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-19. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-20. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: SECTION 20 (20.1 on GPUs 1-4, ~30 min; the rest CPU, ~1-1.5 h in six
-background chains, which can run while the GPUs decode). Everything through section 19 is
-done and recorded in docs/NOTES.md.
+WHAT TO RUN: SECTION 21 (21.1 on GPUs 1-4, ~30 min after ~15 min of CPU; the rest CPU,
+~1-1.5 h in seven background chains, which can run while the GPUs decode). Everything through
+section 20 is done and recorded in docs/NOTES.md.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -39,9 +39,11 @@ done and recorded in docs/NOTES.md.
   19 delay: the latency budget at equal        done (docs/NOTES.md 6c)
      quality, time to the target, continuous
      traffic (a deadline per request)
-  20 C5 with HARQ, the stale-report            TO RUN NOW (GPUs 1-4 for 20.1, the rest
-     schedules decoded, the Lagrangian         CPU)
+  20 C5 with HARQ, the stale-report            done (docs/NOTES.md 5, 6b, 6c)
+     schedules decoded, the Lagrangian
      index's delay, margins on stale reports
+  21 the Lagrangian index on the main          TO RUN NOW (GPUs 1-4 for 21.1, the rest
+     frames, its latency budget, decoded       CPU)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2049,8 +2051,8 @@ cat results/s19_stream.txt                                         # 19.3
 #         two tie (19.1, last two lines). Units 4: the same ordering with several requests a slot.
 
 ================================================================================
- 20. TO RUN NOW -- C5 with HARQ, the stale-report schedules decoded, the Lagrangian index's
-     delay, margins on stale reports (GPUs 1-4: 20.1, ~30 min; the rest CPU, ~1-1.5 h)
+ 20. C5 WITH HARQ, THE STALE-REPORT SCHEDULES DECODED, THE LAGRANGIAN INDEX'S DELAY,
+     MARGINS -- DONE (docs/NOTES.md 5, 6b, 6c)
 ================================================================================
 # Why (sections 18-19 are recorded in docs/NOTES.md 5, 6b, 6c and docs/PAPER.md):
 # (1) C5 on stale reports is now the paper's strongest system result (JSCC +2.5 dB and +19
@@ -2213,3 +2215,140 @@ cat results/s20_margin.txt                                                      
 #   20.4  a margin that brings naive online back above PADC at r = 0.8: the fix for stale
 #         reports is one number. If not, the rule is stated as found: on stale reports, decide
 #         on the posterior and plan the spare slots (plan_adv, aware).
+
+================================================================================
+ 21. TO RUN NOW -- the Lagrangian index on the main frames and decoded by the codec
+     (GPUs 1-4: 21.1, ~30 min after ~15 min of CPU dumps; the rest CPU, ~1-1.5 h)
+================================================================================
+# Why (section 20 is recorded in docs/NOTES.md 5, 6b, 6c; docs/PAPER.md C3-C14): the programs'
+# Lagrangian index is the scheduler the measurements point to (closest to the bound at every
+# K, robust to stale reports, the most users at 30 dB by the deadline in 20.3). So far it ran
+# only in tools/rmab_scale.py, on its own frames, never decoded. It is now a policy of
+# tools/schedule_sim.py (--policies lagrange: each user's program priced at the per-slot prices
+# that minimise the frame's Lagrangian bound; it schedules exactly as rmab_scale's with one unit
+# per slot, a smoke check). Section 21 runs it beside our closed form, the Whittle index, PADC
+# and online on the main frames (the nested utility of snrc4, the calibrated transmitter),
+# under CQI errors, stale reports and lost slots, measures its latency budget, and decodes its
+# schedules (and, for the first time, the Whittle index's) with the codec. It costs ~2 s per
+# frame on one core, hence 500 frames per run (300 per frame length for the latency budget).
+# Everything is skipped if its output exists. Order: 21.0; 21.1 (the dumps, then the four
+# decodes in the background); 21.2-21.3 in the background (seven CPU chains, which can run while
+# the GPUs decode); 21.4 when everything is done.
+
+# 21.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: the lagrange check)
+mkdir -p results logs_s21
+nvidia-smi -i 1,2,3,4
+cat > logs_s21/env.sh <<'ENV'
+. logs_s17/env.sh
+NUB="--utility results/utility_snrc4_nested.json --belief results/belief_snrc4_nested.json"
+ENV
+. logs_s21/env.sh
+#   inputs that must exist (all from sections 13-17; send me any line saying "No such file"):
+ls logs_s17/env.sh results/utility_snrc4_nested.json results/belief_snrc4_nested.json $SNRC4 > /dev/null
+
+# 21.1 -- decoded: CPU first (~15 min; the programs are solved per frame), 60 frames each (the
+#   seed and frames of sections 12-20): mean PSNR (pf, slope_adv, whittle, lagrange) and the
+#   30 dB target (padc, online, whittle, lagrange), fresh reports and r = 0.8 with the aware
+#   transmitter (plan_adv for online there). Then GPUs 1, 2, 3 and 4 decode one file each with
+#   the prefix code snrc4 itself (~10-20 min each)
+. logs_s21/env.sh
+[ -s results/s21_rep_nu_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --policies pf slope_adv whittle lagrange --out results/s21_rep_nu_mean.json
+[ -s results/s21_rep_nu_tgt_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --target 30 --policies padc online whittle lagrange --out results/s21_rep_nu_tgt.json
+[ -s results/s21_rep_nu_r80_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --policies pf slope_adv whittle lagrange --out results/s21_rep_nu_r80_mean.json
+[ -s results/s21_rep_nu_r80_tgt_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --target 30 --policies padc plan_adv whittle lagrange --out results/s21_rep_nu_r80_tgt.json
+ls results/s21_rep_*_histories.json | wc -l    # 4
+nohup bash -c "[ -s results/s21_dec_nu_mean.json ] || CUDA_VISIBLE_DEVICES=1 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s21_rep_nu_mean_histories.json --out results/s21_dec_nu_mean.json > results/s21_dec_nu_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s21_dec_nu_tgt.json ] || CUDA_VISIBLE_DEVICES=2 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s21_rep_nu_tgt_histories.json --out results/s21_dec_nu_tgt.json > results/s21_dec_nu_tgt.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s21_dec_nu_r80_mean.json ] || CUDA_VISIBLE_DEVICES=3 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s21_rep_nu_r80_mean_histories.json --out results/s21_dec_nu_r80_mean.json > results/s21_dec_nu_r80_mean.txt 2>&1" > /dev/null 2>&1 &
+nohup bash -c "[ -s results/s21_dec_nu_r80_tgt.json ] || CUDA_VISIBLE_DEVICES=4 python tools/mixed_snr.py $REPF --pretrained $SNRC4 --profiles-json results/s21_rep_nu_r80_tgt_histories.json --out results/s21_dec_nu_r80_tgt.json > results/s21_dec_nu_r80_tgt.txt 2>&1" > /dev/null 2>&1 &
+sleep 60; tail -n 2 results/s21_dec_*.txt
+
+# 21.2 -- CPU, background, five chains (~50 min each): the Lagrangian index on the main frames
+#   (K 8, T 24, 500 frames, --delay), beside pf, slope_adv and the Whittle index (mean) or PADC,
+#   online / plan_adv / replan_adv and the Whittle index (30 dB): fresh reports, 2 dB CQI errors,
+#   25% of slots lost, stale reports (r = 0.8, aware; the target with section 20's 0.5 dB
+#   margin) and a tight frame (T 16)
+. logs_s21/env.sh
+nohup bash -c "
+[ -s results/s21_lag_mean.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv whittle lagrange --delay > results/s21_lag_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv whittle lagrange --cqi-error 2 >> results/s21_lag_mean.tmp 2>&1 ;
+mv results/s21_lag_mean.tmp results/s21_lag_mean.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s21_lag_mean_more.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv whittle lagrange --preempt 0.25 > results/s21_lag_mean_more.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv whittle lagrange --cqi-corr 0.8 --cqi-aware >> results/s21_lag_mean_more.tmp 2>&1 ;
+mv results/s21_lag_mean_more.tmp results/s21_lag_mean_more.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s21_lag_tgt.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange --delay > results/s21_lag_tgt.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange --cqi-error 2 >> results/s21_lag_tgt.tmp 2>&1 ;
+mv results/s21_lag_tgt.tmp results/s21_lag_tgt.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s21_lag_tgt_more.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online replan_adv whittle lagrange --preempt 0.25 > results/s21_lag_tgt_more.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --margin 0.5 --policies padc plan_adv whittle lagrange --cqi-corr 0.8 --cqi-aware >> results/s21_lag_tgt_more.tmp 2>&1 ;
+mv results/s21_lag_tgt_more.tmp results/s21_lag_tgt_more.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s21_lag_t16.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --slots 16 --policies pf slope_adv whittle lagrange > results/s21_lag_t16.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --slots 16 --target 30 --policies padc online plan_adv whittle lagrange --delay >> results/s21_lag_t16.tmp 2>&1 ;
+mv results/s21_lag_t16.tmp results/s21_lag_t16.txt ; }
+" > /dev/null 2>&1 &
+
+# 21.3 -- CPU, background, two chains (~1-1.5 h each): the latency budget of the Lagrangian
+#   index (tools/latency.py: each policy's quality at T = 12 ... 32, 300 frames per length; the
+#   length every other policy needs to match the Lagrangian index at T = 16 and 24)
+. logs_s21/env.sh
+nohup bash -c "
+[ -s results/s21_latency_mean.txt ] || {
+python tools/latency.py $NUB --frames 300 --slots 12 16 20 24 28 32 --policies pf slope_adv lagrange --ref lagrange --at 16 24 --levels 30 31 --out results/s21_latency_mean.json > results/s21_latency_mean.tmp 2>&1 ;
+mv results/s21_latency_mean.tmp results/s21_latency_mean.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s21_latency_tgt.txt ] || {
+python tools/latency.py $NUB --frames 300 --target 30 --slots 12 16 20 24 28 32 --policies padc online whittle lagrange --ref lagrange --at 16 24 --levels 60 70 --out results/s21_latency_tgt.json > results/s21_latency_tgt.tmp 2>&1 ;
+mv results/s21_latency_tgt.tmp results/s21_latency_tgt.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s21_*.tmp
+
+# 21.4 -- reading (send back everything it prints) ------------------------------------------
+#   first the decoded replays, when the four decodes are done (results/s21_dec_*.json exist):
+. logs_s21/env.sh
+python tools/replay_report.py results/s21_dec_nu_mean.json --base slope_adv 2>&1 | tee results/s21_replays.txt
+python tools/replay_report.py results/s21_dec_nu_tgt.json --base padc 2>&1 | tee -a results/s21_replays.txt
+python tools/replay_report.py results/s21_dec_nu_r80_mean.json --base slope_adv 2>&1 | tee -a results/s21_replays.txt
+python tools/replay_report.py results/s21_dec_nu_r80_tgt.json --base padc 2>&1 | tee -a results/s21_replays.txt
+#   then the CPU chains:
+cat results/s21_lag_mean.txt results/s21_lag_mean_more.txt                       # 21.2, mean
+cat results/s21_lag_tgt.txt results/s21_lag_tgt_more.txt results/s21_lag_t16.txt  # 21.2, target
+cat results/s21_latency_mean.txt results/s21_latency_tgt.txt                     # 21.3
+#   (a chain still running shows as a missing file: its partial output is the .tmp of the
+#   same name; `ls results/s21_*.tmp` lists the ones not finished)
+
+# Decision (what the results would change; docs/PAPER.md C3, C4, C13, C14):
+#   21.1  lagrange - slope_adv decoded about as simulated (+0.06 dB at one unit per slot in
+#         section 18) and the model's error on its schedules as small as on ours (|bias| < 0.05
+#         dB): the index is safe to present as the scheduler. A larger error on the programs'
+#         schedules than on ours would mean they exploit the model's errors (they optimise it
+#         harder); then the paper presents the closed form as the scheduler and the index as
+#         the near-optimality certificate.
+#   21.2  the Lagrangian index at least ties online / plan_adv at 30 dB on the main frames and
+#         under CQI errors, lost slots and stale reports: one scheduler for both objectives, the
+#         paper's method section is the programs plus their index. Where online or replan_adv
+#         wins (lost slots: they re-plan what each user needs), that is stated as the closed
+#         form's advantage.
+#   21.3  the latency budget against the Lagrangian index: how many more slots PF and PADC need
+#         for its quality (the C14 headline, restated with the recommended scheduler).

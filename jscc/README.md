@@ -187,7 +187,9 @@ bank, per image a history of that length; run-name suffix `prof-sa`); `codesign.
 Stale reports (`alloc/csi.py`): `schedule_sim.py --cqi-corr 1 0.9 0.6 0` gives every slot a
 report of correlation r with its channel (r = J0(2 pi f_D tau)), the true slots unchanged;
 policies take reports as exact unless `--cqi-aware` (decisions on each slot's posterior; the
-whittle policy's programs decide on the report). `tools/rmab_scale.py --users 8 16 32 64 128`
+whittle policy's programs decide on the report). `schedule_sim.py --policies whittle lagrange`
+run the users' programs as policies (the Whittle index; the Lagrangian index at the bound's per-slot
+prices, the scheduler the measurements recommend). `tools/rmab_scale.py --users 8 16 32 64 128`
 runs PF, our rule, the Whittle and Lagrangian indices, the ID-guided policy of the restless-
 bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8 units
 per slot (`--cqi-corr`, `--target`, `--preempt` too).

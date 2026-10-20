@@ -69,6 +69,13 @@ phases left, so every policy can use the whole frame. Policies:
                  indifference price for this slot is highest (with --target, a slot nobody
                  gains from goes to PF). Exact for a --nested utility, an approximation
                  otherwise
+    lagrange     (both objectives) the Lagrangian (LP-priority) index: the same programs
+                 priced at the per-slot prices lambda*_t that minimise the frame's Lagrangian
+                 bound (alloc/whittle.lagrangian_bound); serve the user whose program gains
+                 most from taking this slot at that price (Hu and Frazier; Brown and Smith;
+                 needs no indexability), ties by the Whittle index; with --target only users
+                 with a positive Whittle index claim the slot, the rest goes to PF (as
+                 tools/rmab_scale.py, which it reproduces with one unit per slot)
 
 All policies see the same images, mean SNRs and fades (common random numbers). Reported per
 policy: mean PSNR at the deadline, the 5th percentile over users, the worst user of a frame on
@@ -128,9 +135,9 @@ import numpy as np  # noqa: E402
 from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
-                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle")
+                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle", "lagrange")
 TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
-                   "online_pf", "online", "replan_adv", "whittle")
+                   "online_pf", "online", "replan_adv", "whittle", "lagrange")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
 NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
                 "online", "replan_adv")
@@ -223,6 +230,26 @@ def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0):
                           p_lost=1.0 - p_avail, clip=clip, cqi_corr=cqi_corr)
                       for i, m in zip(imgs, means)]
     return _ARMS[key]
+
+
+_PRICED = {}
+PRICE_STEPS = 10                                              # subgradient steps (rmab_scale's)
+
+
+def priced_for(arms, T, p_lost):
+    """The lagrange policy: the per-slot prices lambda*_t that minimise the frame's
+    Lagrangian bound (one unit per slot) and every program priced at them, cached with the
+    frame's programs."""
+    from alloc.whittle import lagrangian_bound
+    key = id(arms)
+    hit = _PRICED.get(key)
+    if hit is None or hit[0] is not arms:
+        if len(_PRICED) > 8:
+            _PRICED.clear()
+        _, prices = lagrangian_bound(arms, T, p_lost, per_slot=PRICE_STEPS)
+        hit = (arms, prices, [a.priced(prices) for a in arms])
+        _PRICED[key] = hit
+    return hit[1], hit[2]
 
 
 _AWARE = {}
@@ -432,7 +459,10 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
     arms = (arms_for(belief, imgs, means, T, goal, offset, p_avail, clip,
                      1.0 if aware is None or seen is None else aware)
-            if policy == "whittle" else None)
+            if policy in ("whittle", "lagrange") else None)
+    prices = Wp = None
+    if policy == "lagrange":
+        prices, Wp = priced_for(arms, T, 1.0 - p_avail)
     rest = None                                               # online: phases still needed
     if policy in ("stop", "stop_adv", "online_pf", "online", "replan_adv"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
@@ -483,11 +513,25 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 ok = below
         if arms is not None:                                  # the Whittle index (alloc/whittle.py)
             idx = np.full(K, -np.inf)
+            lg = np.full(K, -np.inf)
             for j in np.flatnonzero(ok):
                 n, Y = arms[j].state(hist[j])
                 x = g[j] if arms[j].kern is None else seen[j, t]     # stale: the report itself
                 idx[j] = arms[j].index(t, n, Y, float(x))
-            if np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
+                if Wp is not None:                            # the Lagrangian index
+                    lg[j] = arms[j].gain_at(Wp[j], prices, t, n, Y, float(x))
+            if policy == "lagrange":
+                cl = ok & np.isfinite(lg)
+                if target is not None:                        # only users the slot helps
+                    cl &= idx > 1e-12
+                if cl.any():                                  # the largest gain at lambda*_t, in
+                    q = np.where(cl, np.round(lg / (0.5 * float(arms[0].lams[1]))), -np.inf)
+                    cand = np.flatnonzero(q >= q.max())       # the programs' precision; ties by
+                    ok = np.zeros(K, dtype=bool)              # the Whittle index, then the first
+                    ok[cand[int(np.argmax(idx[cand]))]] = True
+                else:
+                    ok = has                                  # nobody claims it: leftover (PF)
+            elif np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
                 ok = idx >= idx.max()                         # served below (ties: first)
             else:
                 ok = has                                      # nobody gains: leftover (PF)
@@ -502,7 +546,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             k = next(j for j in order if ok[j])
         elif policy == "maxsnr":
             k = int(np.argmax(np.where(ok, g, -np.inf)))
-        elif policy in PF_TIMING or policy == "whittle":      # whittle: ok is its choice
+        elif policy in PF_TIMING or policy in ("whittle", "lagrange"):   # ok is their choice
             r = rate(g)
             k = int(np.argmax(np.where(ok, r / (served + 1e-3 * r.mean()), -np.inf)))
         else:

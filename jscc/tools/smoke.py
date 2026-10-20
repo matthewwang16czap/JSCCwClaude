@@ -983,6 +983,24 @@ def check_stale_csi():
                                          and all(np.isfinite(v[p]) for p in rs.POLICIES)
                                          for k, v in res.items()),
        "tools/rmab_scale.py: B = K / 8 units per slot, every policy and the bound per K")
+    from types import SimpleNamespace
+
+    from tools.schedule_sim import PRICE_STEPS, arms_for
+    same = True
+    for target, r in ((None, 1.0), (30.0, 1.0), (None, 0.7), (30.0, 0.7)):
+        for imgs, means, snr, belief, avail, seen in draw_frames(
+                u, 4, 10, 2, (0.0, 15.0), "rayleigh", (-2.0, 22.0), seed=5, cqi_corr=r):
+            h1 = run_frame(u, belief, imgs, means, snr, "lagrange", target=target, seen=seen,
+                           aware=r if r < 1 else None)
+            arms = arms_for(belief, imgs, means, 10, target, 0.0, 1.0, (-2.0, 22.0), r)
+            _, pr = lagrangian_bound(arms, 10, 0.0, per_slot=PRICE_STEPS)
+            o = SimpleNamespace(target=target, cqi_naive=False, cqi_corr=r,
+                                snr_clip=(-2.0, 22.0), preempt=0.0)
+            h2, _ = rs.run(o, u, belief, imgs, means, snr, np.ones(10, dtype=int), seen,
+                           "lagrange", 1, arms, [a.priced(pr) for a in arms], pr)
+            same &= h1 == h2
+    ok(same, "schedule_sim's lagrange policy schedules exactly as tools/rmab_scale.py's with one "
+             "unit per slot (mean and target, fresh and stale reports)")
 
 
 def check_harq():

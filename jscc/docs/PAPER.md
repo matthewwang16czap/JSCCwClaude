@@ -1,4 +1,4 @@
-# Paper plan (IEEE TWC), condensed 2026-10-15, story revised 2026-10-18 and 2026-10-19
+# Paper plan (IEEE TWC), condensed 2026-10-15, story revised 2026-10-18, -19 and -20
 
 Every number is in `docs/NOTES.md` (section numbers below). Earlier versions of this plan, with
 the framings that were tried and dropped, are in git: `git show ec9cc68:jscc/docs/PAPER.md`.
@@ -29,20 +29,23 @@ code only ever sees the slots the scheduler gives it. We show that
    (+0.46 dB over PF and +11 points over PADC's rule, decoded; ties the Whittle index at 8 users,
    within 0.23 dB of the best causal scheduler there) but plateaus 0.15 dB below the bound at
    scale. Read as latency, the gains are a 9-19% shorter frame for the same mean PSNR and a 39%
-   shorter one for the same share at 30 dB; and the Whittle index brings users to 30 dB 2.9 slots
-   before PADC at the same final share (with requests arriving over time: our closed form's
-   success with half its delay);
+   shorter one for the same share at 30 dB. At a quality target the Lagrangian index brings
+   the most users there by the deadline (+2.8 points over the Whittle index) and is ahead of
+   PADC at every slot (so far on other frames; COMMANDS 21 pairs them); the Whittle index is
+   the earliest (2.9 slots before PADC on the same
+   users; with requests arriving over time, our closed form's success with half its delay);
 3. with fresh reports the scheduler makes the code's channel (selection lifts the first phases
    ~5 dB above random), the right channel to train for: +0.1 dB beyond rate specialisation, and
    the codes learn their scheduler's fade statistics; the lift keeps 65% of itself at report
    correlation 0.8 and 8% at 0.3, so this is a low-mobility effect;
-4. under realistic CSI this JSCC system beats HEVC intra with tuned link adaptation, the more so
-   the older the reports: +0.3 dB / +3 points with fresh reports, +1.6 dB / +15 points at 2 dB
-   CQI error, and +2.5 dB / +19 points at report correlation 0.8 (about 10 km/h with 5 ms-old
-   reports at 3.5 GHz), ahead even of a code 3 dB from capacity from r = 0.95 (digital without
-   HARQ so far; with it, COMMANDS 20.2, the lead will be smaller). There the opportunistic part
-   of every scheduler fades, and stopping rules must decide on the posterior of each slot, not
-   on its report.
+4. under realistic CSI this JSCC system beats HEVC intra with tuned link adaptation and HARQ
+   (incremental redundancy), the more so the older the reports: +0.3 dB / +3 points with fresh
+   reports, +1.3 dB / +13 points at 2 dB CQI error, and +1.7 dB / +15.5 points at report
+   correlation 0.8 (about 10 km/h with 5 ms-old reports at 3.5 GHz), ahead even of a code 3 dB
+   from capacity with HARQ from r = 0.95; decoded by the codec, the JSCC side holds. JSCC
+   degrades gracefully (0.5 dB from fresh reports to r = 0.8) where digital, even with HARQ,
+   loses 1.9 dB. There the opportunistic part of every scheduler fades, and stopping rules must
+   decide on the posterior of each slot, not on its report, and aim 0.5-1 dB above the target.
 
 What sections 18-19 changed (2026-10-19; docs/NOTES.md 5, 6b, 6c): item 2's scheduler is now the
 programs' index, with the closed form as its cheap approximation (they tie at 8 users with one
@@ -53,9 +56,15 @@ form's online rule wins only at the deadline (it trails PADC early in the frame)
 scoped to fresh reports, measured. Item 4 gains its physical axis, the paper's strongest system
 result. New caveats, stated: stopping on reported SNRs breaks with stale reports (an aware
 transmitter and plan_adv fix most of it), the Whittle index degrades on stale reports (the
-Lagrangian index does not), and the first coarse image comes later than under PF. Open: the
-digital baseline drops a block the slot could not carry; with HARQ (built the same day,
-COMMANDS 20.2) it recovers part of that, and item 4's stale-report lead is restated with it.
+Lagrangian index does not), and the first coarse image comes later than under PF.
+
+What section 20 changed (2026-10-20; NOTES 5, 6b, 6c): digital now has HARQ, and item 4 is quoted
+with it; HARQ took 0.3 dB off the lead at 2 dB CQI error and 0.75 dB at r = 0.8, so C5 holds as
+the system result (+1.7 dB / +15.5 points at r = 0.8, not +2.5 / +19). The stale-report
+schedules decode as simulated. The Lagrangian index is the scheduler to present: best share at
+the target and ahead of PADC at every slot; the Whittle index is earlier, so the delay claim
+names both (a trade-off between final share and earliness). On stale reports the target rule
+gains a margin.
 
 Earlier (2026-10-18, the doc "Scheduling Learned Image Codes as a Restless Bandit",
 https://claude.ai/code/artifact/0801c93d-9404-4fb3-acd8-e88c03641f8f): item 2 restated as
@@ -73,17 +82,17 @@ codec itself decoding the schedules.
 | 1. Link abstraction | C1 | A piecewise-trained prefix code decodes slot-split prefixes, and its distortion is additive over slots: D = Dsrc + C sum_j rho_j phi(n_j) | held-out 0.03-0.07 dB per image and phase; constant-SNR decoders do not obey it | 1, 2 | done |
 | | C2 | It is a usable link-to-system model | scheduled histories decoded within 0.05-0.09 dB, no bias; calibrated from 12 decodes per image (0.03-0.06 dB); holds for prefix, per-length decoders and per-CBR codes | 2 | done |
 | | C12 | Learned codes need their own abstraction, and training decides it | sensitivity-weighted MMSE 0.055 dB vs MIESM 0.49, EESM 0.19; a constant-SNR-trained code obeys no rule | 2 | done: the anchor |
-| 2. Scheduling on it | C3 | Mean PSNR: the advantage index | +0.465 dB [0.39, 0.53] decoded over PF, +0.46 for the 5th-percentile user, robust over K, T, curve errors, correlation; content-aware lengths only +0.05. Stale reports: +0.385 / +0.256 dB over PF at r = 0.8 / 0.6 (an aware transmitter: +0.475 / +0.342); all of it is how slots are valued (the content part is 0.000 at K 8, T 24) | 3, 6b | done; decoded at r = 0.8 / 0.6 pending (COMMANDS 20.1) |
-| | C4 | Quality target: admission + stopping on realised SNRs + index timing | +11.0 points [8.3, 13.8] decoded over PADC's rule, +14 over PF; sizing +5, stopping +4, timing +3, admission +2. Stale reports: stopping on the reports breaks (naive online -7 points at r = 0.95, below PADC by 0.8); deciding on the posterior and planning the spare slots (plan_adv, aware) keeps +8 points over PADC at r = 0.8, +5 at 0.6; PADC is best at r = 0 | 3, 6b | done; margins on stale reports pending (20.3) |
-| | C13 | Near-optimal, with a theory | two-number user state, finite-horizon restless bandit; one program per user (relaxation) + a conflict rule; Lagrangian bound: our rule within 0.26 dB of any causal scheduler at K 8 (mean; the clairvoyant optimum, +0.23, is the tighter cap), 2-5.5 points at the target. In the theory's regime (B = K/8 units per slot) the Lagrangian index's gap falls 0.21 -> 0.005 dB from K 8 to 128 (faster than 1/sqrt(K)), Whittle 0.27 -> 0.016, our closed form plateaus at 0.15, PF 0.52; at 30 dB the Lagrangian index stays ~1.5 points from the bound. On stale reports the bound holds and the Lagrangian index stays best (the Whittle index degrades: 0.15 dB below our rule at r = 0.4). Conflict rules: value ranking (indices) for the mean; for the target ID beats random by +0.5-0.7 points but trails the Lagrangian index | 3, 6b | done |
-| | C14 | Delay: the same gains as latency | latency budget (`tools/latency.py`): our rule needs 9.3% [8.7, 9.9] / 18.6% [16.3, 20.7] fewer slots than PF for its mean PSNR at T 16 / 24, online 38.6% [34.9, 41.9] fewer than PADC for its share at 30 dB at T 16 (PADC never reaches its T 24 share). Time to 30 dB in the frame (`--delay`): the Whittle index is ahead at every slot (38 / 60 / 69 / 73% of users by T/4 ... T; PADC 20 / 48 / 61 / 65), 2.9 [2.7, 3.1] slots before PADC on the same users, at online's final share (its index ~ success gain per remaining phase: shortest remaining need first); online trails PADC in the first half and wins at the deadline. Continuous traffic (`tools/stream_sim.py`, 30 dB, D 24, the frame's load): online 70-71% vs PADC 46%, capacity at 60% >= 0.45 requests per slot vs never; the Whittle index 68% with about half online's delay (4.2 vs 8.0 slots), faster than PADC on the same requests. The first coarse image comes later (slot 6.7 vs PF 4.5) | 3, 6c | done; the Lagrangian index's time to the target pending (20.2) |
-| | C7 | Which QoS policy when | plan_adv with known slots, under CQI errors (online loses 13 points at 3 dB error) and on stale reports (aware: 70.3% vs online 65.3% at r = 0.8), replan_adv with lost slots; the Whittle index when delay within the deadline matters | 3, 5, 6b, 6c | done |
+| 2. Scheduling on it | C3 | Mean PSNR: the advantage index | +0.465 dB [0.39, 0.53] decoded over PF, +0.46 for the 5th-percentile user, robust over K, T, curve errors, correlation; content-aware lengths only +0.05. Stale reports: +0.385 / +0.256 dB over PF at r = 0.8 / 0.6 (an aware transmitter: +0.475 / +0.342; decoded +0.500 [0.40, 0.61] / +0.361 [0.25, 0.48]); all of it is how slots are valued (the content part is 0.000 at K 8, T 24) | 3, 5, 6b | done |
+| | C4 | Quality target: admission + stopping on realised SNRs + index timing | +11.0 points [8.3, 13.8] decoded over PADC's rule, +14 over PF; sizing +5, stopping +4, timing +3, admission +2. Stale reports: stopping on the reports breaks (naive online -7 points at r = 0.95, below PADC by 0.8); deciding on the posterior, planning the spare slots (plan_adv, aware) and a 0.5-1 dB margin keeps +8 points over PADC at r = 0.8 and +6 at 0.6 (decoded without margin: +10.6 [7.5, 14.0] / +5.2 [1.7, 8.8]); PADC is best at r = 0 | 3, 6b | done |
+| | C13 | Near-optimal, with a theory | two-number user state, finite-horizon restless bandit; one program per user (relaxation) + a conflict rule; Lagrangian bound: our rule within 0.26 dB of any causal scheduler at K 8 (mean; the clairvoyant optimum, +0.23, is the tighter cap), 2-5.5 points at the target. In the theory's regime (B = K/8 units per slot) the Lagrangian index's gap falls 0.21 -> 0.005 dB from K 8 to 128 (faster than 1/sqrt(K)), Whittle 0.27 -> 0.016, our closed form plateaus at 0.15, PF 0.52; at 30 dB the Lagrangian index is 1.4-2.2 points from the bound, 2.8 above the Whittle index at K 8. On stale reports the bound holds and the Lagrangian index stays best (the Whittle index degrades: 0.15 dB below our rule at r = 0.4). Conflict rules: value ranking (indices) for the mean; for the target ID beats random by +0.5-0.7 points but trails the Lagrangian index | 3, 6b, 6c | done in rmab_scale; on the main frames and decoded: COMMANDS 21 |
+| | C14 | Delay: the same gains as latency | latency budget (`tools/latency.py`): our rule needs 9.3% [8.7, 9.9] / 18.6% [16.3, 20.7] fewer slots than PF for its mean PSNR at T 16 / 24, online 38.6% [34.9, 41.9] fewer than PADC for its share at 30 dB at T 16 (PADC never reaches its T 24 share). Time to 30 dB in the frame (`--delay`): the Whittle index is the earliest (38 / 60 / 69 / 73% of users by T/4 ... T; PADC 20 / 48 / 61 / 65), 2.9 [2.7, 3.1] slots before PADC on the same users; the Lagrangian index ends highest (32 / 56 / 70 / 77%: ahead of PADC and online at every slot, 1.25 slots behind Whittle on the same users); online trails PADC in the first half and wins at the deadline. Continuous traffic (`tools/stream_sim.py`, 30 dB, D 24, the frame's load): online 70-71% vs PADC 46%, capacity at 60% >= 0.45 requests per slot vs never; the Whittle index 68% with about half online's delay (4.2 vs 8.0 slots), faster than PADC on the same requests. The first coarse image comes later (slot 6.7 vs PF 4.5) | 3, 6c | done; the Lagrangian index's latency budget: COMMANDS 21 |
+| | C7 | Which QoS policy when | plan_adv with known slots, under CQI errors (online loses 13 points at 3 dB error) and on stale reports (aware, with a 0.5-1 dB margin: 71.1% vs online 67.4% at r = 0.8), replan_adv with lost slots; the Lagrangian index for the most users at the target, the Whittle index when earliness within the deadline matters | 3, 5, 6b, 6c | done |
 | 3. The scheduler-made channel | C8 | Training for it pays | +0.28 dB on the same slots over the same-budget control; +0.08-0.12 beyond length specialisation (two seeds); nothing at the target. A fresh-report effect: the lift (+5.0 / +4.5 / +3.6 dB, phases 1-3) keeps 65% of itself at r = 0.8 and 8% at 0.3, so the claim is for low mobility | 6, 6b | holds, small; scoped to fresh reports |
 | | C9 | The physical channel is the wrong training channel | blind slots -0.04 dB vs generic training, -0.32 vs the scheduler's channel | 6 | done |
 | | C10 | A code per scheduler; codes learn their scheduler; one round is the fixed point | PF-trained code wins under PF slots; kappa tracks the deep-fade rate, rho the favoured phase; channel unchanged after retraining | 6 | done |
 | | C11 | It grows with the number of users | the lift grows like an order statistic; the decoded gain only +0.12 to +0.15 dB (K 8 to 16) | 6 | weak: a remark |
 | 4. System verdicts | C6 | Encode once + a decoder per length is the JSCC system to use | best on mean PSNR and with lost slots (+0.78 dB, +1.9 points decoded vs per-CBR), ties per-CBR at the target; at equal budget a decoder per length recovers about half of the nesting penalty | 4 | done |
-| | C5 | Against digital under realistic CSI | on par with error-free CQI; at 1 / 2 / 3 dB CQI error +1.0 / +1.6 / +2.3 dB and +9 / +15 / +19 points over HEIC; on stale reports (r = J0(2 pi f_D tau); digital with tuned backoff or the goodput-optimal rate) +1.4 / +2.5 / +3.3 dB and +12 / +19 / +20 points at r = 0.95 / 0.8 / 0.6, about +2.6 dB at 10 km/h with 5 ms-old reports; ahead of a 3 dB-gap code from 1 dB of CQI error and from r = 0.95. All against digital WITHOUT HARQ: with HARQ-IR (rates tuned for it) a toy codec's digital gains +0.9 dB at 2 dB CQI error and +2.2 at r = 0.8, so both axes may shrink to about +1 dB or less | 5 | at stake: with HARQ (20.2) and decoded (20.1) pending |
+| | C5 | Against digital under realistic CSI | on par with error-free CQI (+0.3 dB). Against HEIC with tuned link adaptation AND incremental-redundancy HARQ: +0.9 / +1.3 / +1.6 dB and +8.5 / +12.9 / +15.1 points at 1 / 2 / 3 dB CQI error; on stale reports (r = J0(2 pi f_D tau)) +1.3 / +1.7 / +1.7 dB and +11.8 / +15.5 / +14.2 points at r = 0.95 / 0.8 / 0.6, about +1.7 dB at 10 km/h with 5 ms-old reports; ahead of a 3 dB-gap code with HARQ from 2 dB of CQI error (+1.0) and from r = 0.95 (+0.9). HARQ took 0.3 dB (2 dB error) and 0.75 dB (r = 0.8) off the leads without it (+1.6, +2.5). The JSCC side holds decoded at r = 0.8 / 0.6 | 5 | done |
 
 ## Prior work: what is known and what is new (docs/SURVEY.md, F-F4)
 
@@ -125,11 +134,10 @@ co-design idea worth a tenth of a dB: engineering. Three results changed that:
   frame is a restless bandit, and our simple index is certified near-optimal by an upper bound
   on every causal scheduler; with many units per slot the programs' index reaches that bound
   (0.005 dB at 128 users). Heuristics became analysed policies.
-* **A practical verdict** (C5; at stake until COMMANDS 20.2 adds HARQ to digital, see
-  ASSESSMENT 19): under the CSI errors real systems have, JSCC with these
-  schedulers beats digital with tuned link adaptation by 1.6 dB and 15 points at 2 dB CQI
-  error, and by 2.5 dB and 19 points with reports as old as 10 km/h and 5 ms make them (digital
-  without HARQ; with it pending): a concrete answer to "why JSCC in a cellular downlink?".
+* **A practical verdict** (C5): under the CSI errors real systems have, JSCC with these
+  schedulers beats digital with tuned link adaptation and incremental-redundancy HARQ by 1.3 dB
+  and 13 points at 2 dB CQI error, and by 1.7 dB and 15.5 points with reports as old as 10 km/h
+  and 5 ms make them: a concrete answer to "why JSCC in a cellular downlink?".
 
 The reverse interface (C8-C10) completes the picture: modest in dB, clean in mechanism. The
 evidence standard is high throughout: decoded by the real codec, paired CIs, three code
@@ -184,21 +192,20 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    leaves (+0.13 dB / +3-4 points ex post). CPU; I build it.
 2. Second test set (CLIC) and a perceptual metric (MS-SSIM / LPIPS) for the main tables. GPU,
    about a day, if CLIC is on the server.
-3. HARQ with combining in the digital baseline: built 2026-10-19 (`schedule_sim.py --harq ir|
-   chase`: the user's next slot retransmits a lost block and the receiver combines, up to 4
-   transmissions; the backoff, or an offset on the aware rate, tuned with it). On a toy codec,
-   with its rates tuned (bolder than the report), digital's best policy gains +2.2 dB at r = 0.8
-   and +3.1 at 0.6, half of its stale-report loss: C5's stale-report lead may shrink to about
-   +1 dB. Measured in COMMANDS 20.2.
+3. Done 2026-10-20: HARQ in the digital baseline (`schedule_sim.py --harq ir|chase`), measured
+   in COMMANDS 20.2 (NOTES 5): C5 restated with it.
 4. Optional: a Jacobian probe (the first-order mechanism behind section 4); a better codec
    (more data) for the absolute numbers.
 5. Writing and figures.
 6. Done 2026-10-19: COMMANDS 18 (stale reports, many users per slot; NOTES 5, 6b) and 19
    (delay; NOTES 6c).
-7. COMMANDS section 20 (built 2026-10-19): 20.1 the stale-report schedules decoded by the codec
-   (GPUs 1-4, ~30 min); 20.2 C5 with HARQ, stale reports and CQI errors (CPU, ~1.5 h); 20.3 the
-   time to the target of the Lagrangian index and the guided policies; 20.4 margins for
-   quality targets on stale reports, and the r = 0 aware rerun after the tie fix.
+7. Done 2026-10-20: COMMANDS 20 (HARQ, decoded stale-report schedules, the Lagrangian index's
+   delay, margins; NOTES 5, 6b, 6c).
+8. COMMANDS section 21 (built 2026-10-20): the Lagrangian index as `schedule_sim.py --policies
+   lagrange` on the main frames (mean and target, CQI errors, stale reports, lost slots, a
+   tight frame), its latency budget, and its schedules (and the Whittle index's) decoded by the
+   codec on GPUs 1-4. If it holds decoded, it is the paper's scheduler and our closed form its
+   approximation.
 
 ## Expected reviewer objections
 
@@ -207,12 +214,12 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | Kodak only, PSNR only | CLIC and MS-SSIM / LPIPS (owed, item 2) |
 | The codec is ~0.8 dB behind the best published one | every claim is relative; the abstraction and the schedulers hold on three code families |
 | Gains are moderate | the claims are the abstraction, certified optimality and the CSI verdict, not a single gain |
-| The digital baseline is weak | HEIC with tuned backoff (or, on stale reports, the rate of best expected goodput), lost blocks counted, plus a 3 dB-gap code and capacity; ideal-CQI results reported too; with HARQ (incremental redundancy or Chase combining, COMMANDS 20.2) |
+| The digital baseline is weak | HEIC with the LTE CQI table, the backoff (or, on stale reports, an offset on the rate of best expected goodput) tuned per policy, incremental-redundancy HARQ with up to 4 transmissions (Chase combining is worse), lost blocks counted, plus a 3 dB-gap code with the same HARQ and capacity; ideal-CQI results reported too. HARQ narrows the stale-report lead from +2.5 to +1.7 dB at r = 0.8; it does not close it |
 | TDMA, one user per slot | a slot is any resource unit (a group of RBs over a TTI); with B = K/8 units per slot, the regime of the index-policy theory, the Lagrangian index's gap to the bound falls from 0.21 dB at K 8 to 0.005 at K 128, and the ordering of every policy is the same as with one unit (NOTES 6b) |
 | Why an index and not the ID policy of the recent theory (Hong et al.)? | both are the same relaxation with a different conflict rule; their theorems are for average reward, ours is a finite horizon where index policies need no attractor condition; measured: for the mean the indices beat both guided policies at every K (0.005 vs 0.09-0.11 dB from the bound at K 128); at 30 dB ID beats its random-order baseline by +0.5-0.7 points (persistency) but stays behind the Lagrangian index (2.6 vs 1.5 points from the bound at K 128) |
 | Is the Whittle index well defined (indexability)? | the Lagrangian index (gain at the bound's prices) needs no indexability and is the best policy we run, with fresh and stale reports and at every K; on the programs' grid 1-1.7% of states flip back as the price rises for the mean, 6-13% for the target; the Whittle index takes the top of the indifference range where now and later are alike |
-| Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds. Measured: JSCC's lead over digital grows with report age (+2.5 dB / +19 points at r = 0.8, about 10 km/h with 5 ms-old reports at 3.5 GHz); our gain over PF keeps 81% of itself at r = 0.8 (all of it with an aware transmitter); quality-target stopping must use the posterior; the scheduler-made channel is a low-mobility effect (NOTES 5, 6b) |
-| A scheduler that waits for peaks must add delay | the deadline is the latency budget: the same mean PSNR with 9-19% fewer slots than PF, the same share at 30 dB with 39% fewer than PADC (C14). Within the frame the Whittle index brings users to 30 dB earlier than PADC at every slot (2.9 slots on the same users) at our rule's final share, and with requests arriving over time keeps online's success with about half its delay. Our closed-form online rule does wait: it trails PADC early in the frame and wins at the deadline. Slower only for the first coarse image (slot 6.7 vs PF's 4.5), which the deadline objective does not reward; a per-slot reward in the same programs covers that if an application needs it |
+| Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds. Measured: JSCC's lead over digital with HARQ grows with report age (+1.7 dB / +15.5 points at r = 0.8, about 10 km/h with 5 ms-old reports at 3.5 GHz); our gain over PF keeps 81% of itself at r = 0.8 (all of it with an aware transmitter; +0.50 dB decoded); quality-target stopping must use the posterior and a 0.5-1 dB margin; the scheduler-made channel is a low-mobility effect (NOTES 5, 6b) |
+| A scheduler that waits for peaks must add delay | the deadline is the latency budget: the same mean PSNR with 9-19% fewer slots than PF, the same share at 30 dB with 39% fewer than PADC (C14). Within the frame both program indices bring users to 30 dB earlier than PADC at every slot: the Whittle index earliest (2.9 slots on the same users), the Lagrangian index with the highest final share (+2.8 points over Whittle, 1.25 slots later than it); with requests arriving over time the Whittle index keeps online's success with about half its delay. Our closed-form online rule does wait: it trails PADC early in the frame and wins at the deadline. Slower only for the first coarse image (slot 6.7 vs PF's 4.5), which the deadline objective does not reward; a per-slot reward in the same programs covers that if an application needs it |
 | Why not learn the scheduler (bandits, RL)? | the model is known: every user reports its channel each slot (full, not bandit, feedback) and the quality model is calibrated from 12 decodes per image; learning restless bandits address a different information structure; and any learned causal policy is capped by our bound (+0.26 dB mean) |
 | "The MMSE form is SoftCast's" | yes for linear analog codes, by construction; the finding is that a learned nonlinear code obeys it only when trained for it, and that this, not MIESM, is the abstraction for scheduling learned codes |
 | Analog symbols are not NR-compatible | a 6G mode (as all DeepJSCC work assumes); the scheduler and abstraction need only per-slot noise, so they carry over to quantised (DeepJSCC-Q-style) codes, to measure |

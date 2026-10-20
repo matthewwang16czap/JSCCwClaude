@@ -219,6 +219,20 @@ IEEE Transactions on Wireless Communications (TWC).
    (+1.6 dB at 2 dB error, the verdict of entry 16) is exposed the same way: the toy's digital
    gains +0.9 dB there with HARQ (+1.9 at 3 dB). So C5 as a whole is at stake in 20.2; the
    paper's spine (C12, C13, C14) does not depend on it, but "why JSCC in a downlink" does.
+20. **Section 20 measured (2026-10-20): C5 survives HARQ, and the scheduler question is settled.**
+   With incremental-redundancy HARQ, tuned for it, digital recovers 0.3 dB at 2 dB CQI error and
+   0.75 dB at r = 0.8, far less than the toy codec suggested: JSCC still leads by +1.3 dB / +13
+   points and +1.7 dB / +15.5 points, and leads a 3 dB-gap code with HARQ from r = 0.95. The
+   reason is clean: JSCC loses 0.5 dB from fresh reports to r = 0.8, digital 1.9 dB even with
+   HARQ. Those are now the numbers to quote; the +2.5 dB of entry 19 becomes "without HARQ". The
+   stale-report schedules decode as simulated (decoded slope_adv - PF +0.50 dB at r = 0.8,
+   model error unbiased, MAE 0.08-0.12 dB), so C5's physical axis rests on the codec. The
+   Lagrangian index brings the most users to 30 dB (+2.8 points over the Whittle index) and is
+   ahead of PADC at every slot; the Whittle index is earlier. That makes the Lagrangian index
+   the paper's scheduler, with the closed form as its approximation and the Whittle index as
+   the earliness option; section 21 runs it on the main frames and decodes it. On stale
+   reports, the target rule needs a 0.5-1 dB margin besides the posterior. Remaining risks:
+   one test set and PSNR only (owed), and the Lagrangian index not yet decoded (section 21).
 
 ## 1. Your four points, checked
 
