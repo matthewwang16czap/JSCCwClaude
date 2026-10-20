@@ -137,6 +137,24 @@ per-slot knapsack with arbitrary ties is not asymptotically optimal: ties decide
 and Tong (owed item 9). A BUPT case study (arXiv 2609.02924) finds digital ahead of SwinJSCC
 from 7 dB up on AWGN with the SNR known exactly, which fits C5's ideal-CQI near-tie.
 
+Full texts, batch 3 (2026-10-20; same file) narrow one claim and sharpen three. (h) The bound on
+stale reports is the standard belief-state relaxation: Ouyang, Eryilmaz and Shroff (arXiv
+1108.3768, INFOCOM 2012) bound every policy for ARQ-revealed Markov channels the same way, and
+plot the bound against N (Whittle's index policy meets it by N = 50). C13's stale part is
+therefore an application, new in its observation model (every user reports every slot through
+a Gaussian kernel, i.i.d. fading, no exploration value) and its finite horizon, not in the kind
+of guarantee. Their memoryless-channel result (feedback worthless, the index policy uniform
+random; arXiv 1009.3959) is the counterpart of our r = 0 limit. (i) Le Ny, Feron and Dahleh
+prove a relaxation bound tight (periodic switching within O(eps)) for Kalman-filter scheduling,
+a deterministic problem; our frame cannot time-share, so its gap is measured. Le Ny et al. and
+Ouyang et al. also define the Whittle index as an infimum (the bottom of the range): our
+top-of-range choice is a deliberate departure, to state and justify. (j) The PI index is
+c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best state (Ayesta, Erausquin and Jacko);
+RB and PB are approximate relatives, not special cases. Our PI-type baseline would be g_k(s) /
+E[(g_k(S') - g_k(s))^+] (owed item 10). (k) ABG (Ma et al.) fits single-SNR quality curves of
+learned codes with an exponent near 1 (three of four networks), the MMSE shape of our per-slot
+term at one SNR; one SNR per image throughout, so the composition rule (C1, C12) stays ours.
+
 * Known: the Gaussian MMSE; for LINEAR analog codes (SoftCast) the distortion is a sum of
   per-component MMSE errors by construction, and ParCast puts important components on good
   subchannels; digital link abstraction by EESM / MIESM; single-link adaptive DeepJSCC (PADC,
@@ -194,8 +212,9 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    SNR-varying training (CFA-JSCC, DRJSCC, euJSCC); semantic resource allocation; opportunistic
    scheduling and restless bandits (PF, RaDiO, Hosseini-Panwar, Yu-Xu-Tong, Hao-Xu-Tong,
    Shisher et al., Borkar et al.); learned codes under a scheduler (McDowell et al.); layered
-   codes and a decoder per length (DeepJSCC-l); link abstraction (EESM, MIESM).
-   `docs/SURVEY.md`.
+   codes and a decoder per length (DeepJSCC-l); partially observed downlinks (Ouyang et al.);
+   flow-level index rules (PI); proved-tight bounds (Le Ny et al.); link abstraction (EESM,
+   MIESM; single-SNR quality fits such as ABG). `docs/SURVEY.md`.
 3. System model: K users, T slots, deadline, block fading, CQI with errors, lost slots,
    encode-once prefix codes with per-length decoders; mean PSNR and share at a target.
 4. The link abstraction: the model and why MMSE, the training condition, transmitter
@@ -260,6 +279,10 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    bind). No one-unit result changes (all of schedule_sim, COMMANDS 21). Plan: supply-scaled
    steps (more of them), a tie rule drawn from the relaxation, finer fade bins in the programs,
    and frames on the programs' own discrete channel, in `tools/rmab_scale.py`. CPU.
+10. A PI-type ratio baseline (Ayesta, Erausquin and Jacko; formula known since 2026-10-20):
+   serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted PSNR gain of user
+   k's next phase at slot SNR s, S' from k's own fading; infinite at the top of the range, ties
+   by the largest gain. In `schedule_sim.py` and `rmab_scale.py`, mean objective. Not built. CPU.
 
 ## Expected reviewer objections
 
@@ -274,7 +297,8 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | The Lagrangian index and the bound are prior art | yes, and the paper says so: the policy is Hao, Xu and Tong's Lagrangian priority policy (with Hu and Frazier's and Brown and Smith's indices), the bound is Hawkins's Lagrangian relaxation, a relaxation value beside the policies is in Hosseini and Panwar's SVC bandit, and Shisher, Ji, Hou and Sun plot one against system scale beside their "net gain" policy (the Lagrangian index in another name); RaDiO had per-unit programs under a price in 2001. What is new is the arm they apply to (a learned prefix code graded by each slot's SNR, two-number state from the validated abstraction), the bound kept valid on stale reports, and its measured gap against K on a decoded reward. Departures from their theorem's conditions (approximate prices, Whittle-index ties) are stated with their measured cost |
 | McDowell et al. (2026) already schedule a learned code with a restless bandit | they give each sensor a codelength per fading slot, but every slot carries a fresh, self-contained codeword of the newest observation, so nothing accumulates across slots; their reward decays with age, there is no deadline, CSI is perfect, and slot values are learned by RL because no abstraction compresses the state. Our arm is a prefix whose phases accumulate across slots toward a terminal quality, and the abstraction makes each user's program exact (a two-number state, solved on a CPU). Their transceiver is trained over -5 to 20 dB and frozen, so it never sees its scheduler's channel (C8-C10) |
 | Is the Whittle index well defined (indexability)? | the Lagrangian index (gain at the bound's prices) needs no indexability and is the best policy we run, with fresh and stale reports and at every K; on the programs' grid 1-1.7% of states flip back as the price rises for the mean, 6-13% for the target; the Whittle index takes the top of the indifference range where now and later are alike |
-| Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds. Measured: JSCC's lead over digital with HARQ grows with report age (+1.7 dB / +15.5 points at r = 0.8, about 10 km/h with 5 ms-old reports at 3.5 GHz); our gain over PF keeps 81% of itself at r = 0.8 (all of it with an aware transmitter; +0.50 dB decoded); quality-target stopping must use the posterior and a 0.5-1 dB margin; the scheduler-made channel is a low-mobility effect (NOTES 5, 6b) |
+| Whittle indices and relaxation bounds under imperfect CSI already exist (Ouyang et al.) | yes: for channels whose state a scheduled user reveals at the end of the slot, with Markov memory, so scheduling buys information; their bound covers every policy with that information and their index policy meets it as N grows. Ours applies the same relaxation to a different information structure: every user reports every slot through a Gaussian report kernel over i.i.d. fading, so reports have no exploration value, and the frame has a deadline with a terminal quality reward. The claim is the model and what it predicts (the opportunistic part fades as r falls; stopping needs the posterior and a margin), not the kind of bound |
+| Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds (the standard belief-state relaxation). Measured: JSCC's lead over digital with HARQ grows with report age (+1.7 dB / +15.5 points at r = 0.8, about 10 km/h with 5 ms-old reports at 3.5 GHz); our gain over PF keeps 81% of itself at r = 0.8 (all of it with an aware transmitter; +0.50 dB decoded); quality-target stopping must use the posterior and a 0.5-1 dB margin; the scheduler-made channel is a low-mobility effect (NOTES 5, 6b) |
 | A scheduler that waits for peaks must add delay | the deadline is the latency budget: the same mean PSNR with 9-19% fewer slots than PF, the same share at 30 dB with 39% fewer than PADC (C14). Within the frame both program indices bring users to 30 dB earlier than PADC at every slot: the Whittle index earliest (2.9 slots on the same users), the Lagrangian index with the highest final share (+2.8 points over Whittle, 1.25 slots later than it); with requests arriving over time the Whittle index keeps online's success with about half its delay. Our closed-form online rule does wait: it trails PADC early in the frame and wins at the deadline. Slower only for the first coarse image (slot 6.7 vs PF's 4.5), which the deadline objective does not reward; a per-slot reward in the same programs covers that if an application needs it |
 | Why not learn the scheduler (bandits, RL)? | the model is known: every user reports its channel each slot (full, not bandit, feedback) and the quality model is calibrated from 12 decodes per image; learning restless bandits address a different information structure; and any learned causal policy is capped by our bound (+0.26 dB mean) |
 | "The MMSE form is SoftCast's" | yes for linear analog codes, by construction; the finding is that a learned nonlinear code obeys it only when trained for it, and that this, not MIESM, is the abstraction for scheduling learned codes |

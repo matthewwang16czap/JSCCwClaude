@@ -262,6 +262,20 @@ IEEE Transactions on Wireless Communications (TWC).
    multi-action knapsack, which supports the tie lead on our 30 dB gap. A BUPT case study
    (2609.02924) has digital beating SwinJSCC from 7 dB up with exact SNR on AWGN, consistent with
    C5. The two 2026 EESM preprints are now the main unread risk to C12.
+23. **Full texts, batch 3 (2026-10-20): the stale-report bound is standard, the report model is
+   not.** Five more PDFs read page by page (same file). Ouyang, Eryilmaz and Shroff (1108.3768)
+   bound every policy for ARQ-revealed Markov channels by the same belief-state relaxation we
+   use on stale reports, and plot it against N (met by N = 50), so the stale part of C13 is an
+   application: new in its observation model (every user reports every slot, no exploration
+   value) and finite horizon. Their companion paper (1009.3959) compares with the exact optimum
+   on 4-5 users and finds the index policy uniform random on a memoryless channel, the
+   counterpart of our r = 0 limit. Le Ny, Feron and Dahleh prove a relaxation bound tight by
+   periodic switching in a deterministic problem, which our frame cannot do, so our gap stays a
+   measurement. Both papers, like Yu, Xu and Tong, take the Whittle index as an infimum: our
+   top-of-range choice must be presented as a deliberate departure. Ayesta, Erausquin and Jacko
+   give the exact PI formula (RB and PB are relatives, not special cases), which makes the
+   PI-type baseline cheap (owed item 10). ABG (2504.21055) is single-SNR and per network, with
+   an MMSE-shaped curve (exponent near 1); C1 and C12 unchanged.
 
 ## 1. Your four points, checked
 

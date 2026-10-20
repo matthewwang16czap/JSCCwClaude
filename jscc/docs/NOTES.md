@@ -399,6 +399,10 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    citing Chakraborty, Sun, Hou and Eryilmaz (2026, in preparation), report that the per-slot
    knapsack with arbitrary ties is not asymptotically optimal and an LP-priority tie rule fixes
    it. The tie rule is the first suspect to test.
+7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
+   full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
+   state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
+   PSNR gain of user k's next phase at slot SNR s. Not built (docs/PAPER.md, owed item 10). CPU.
 
 ## 8. Experiment index
 

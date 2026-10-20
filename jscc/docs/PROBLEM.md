@@ -125,37 +125,42 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
      calibrated at the transmitter. The learning-RMAB papers (unknown pay-off processes, only
      the played arm observed: Grunewalder and Khaleghi, JMLR 2019; Gornet and Sinopoli 2024)
      answer a question we do not have, but they point at the two assumptions that matter:
-     a. STALE REPORTS. A report is taken before the slot: h_rep = r h + sqrt(1 - r^2) e,
-        r = |J0(2 pi f_D tau)| (3.5 GHz, 5 ms-old reports: 0.98 at 3 km/h, 0.76 at 10, 0.50
-        at 15, ~0 at 24, below 0.3 beyond; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). The arm is
-        then partially observed, but nothing else changes: given the
-        report, h ~ CN(r h_rep, 1 - r^2) (the Kalman predictor of a Gauss-Markov channel), so
-        the user's program decides on the report's fading bin and draws the slot's true gain
-        from a report-to-channel kernel (`alloc/csi.py`, `Arm(cqi_corr=r)`, checked against
-        simulation: the program's value matches the simulated value at r = 1 / 0.8 / 0.4).
-        The decomposition and the bound survive: (1 - p) T lam + sum_k W_k(lam; r) bounds
-        every scheduler that sees only such reports (the user's program may even know its
-        own true Y). What a scheduler gains by switching between users is bounded by what its
+     a. STALE REPORTS. A report is taken before the slot: h_rep = r h + sqrt(1 - r^2) e, r =
+        |J0(2 pi f_D tau)| (3.5 GHz, 5 ms-old reports: 0.98 at 3 km/h, 0.76 at 10, 0.50 at 15,
+        ~0 at 24, below 0.3 beyond; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). The arm is then
+        partially observed, but nothing else changes: given the report, h ~ CN(r h_rep, 1 - r^2)
+        (the Kalman predictor of a Gauss-Markov channel), so the user's program decides on the
+        report's fading bin and draws the slot's true gain from a report-to-channel kernel
+        (`alloc/csi.py`, `Arm(cqi_corr=r)`, checked against simulation: the program's value
+        matches the simulated value at r = 1 / 0.8 / 0.4). The decomposition and the bound
+        survive: (1 - p) T lam + sum_k W_k(lam; r) bounds every scheduler that sees only such
+        reports (the user's program may even know its own true Y). This is the standard
+        belief-state relaxation of a partially observed restless bandit, not a new kind of
+        bound: Ouyang, Eryilmaz and Shroff bound every policy the same way for ARQ-revealed
+        Markov channels and plot the bound against N (read in full 2026-10-20); ours is new in
+        the observation model (every user reports every slot, no exploration value) and the
+        finite horizon. What a scheduler gains by switching between users is bounded by what its
         information says about the current slot (Grunewalder and Khaleghi, Prop. 9), so as r
         falls the opportunistic part of every gain and the lift of the channel the scheduler
-        makes must vanish, and only the static, content part (how many phases each user
-        gets) remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR
-        of its expected distortion, exact for the additive model's MSE; digital: the rate of
-        best expected goodput); a "naive" one takes the reports as exact, as schedulers do
-        today. Measured (COMMANDS 18.1-18.2, `docs/NOTES.md` 5 and 6b): as predicted, the
-        opportunistic part fades and at K 8, T 24 it is all there is (the content part is 0.000
-        at every r): slope_adv - PF +0.475 dB at r = 1, +0.385 / +0.256 at r = 0.8 / 0.6 (aware
-        +0.475 / +0.342), ~0 at r = 0. The lift of the scheduler-made channel (+5.0 / +4.5 /
-        +3.6 dB, phases 1-3) keeps 65% of itself at r = 0.8, 8% at 0.3. Unlike the stand-in
-        suggested, the aware transmitter is worth something: it keeps the whole gain over PF
-        to r = 0.8 and saves the quality target (stopping on the reports breaks: a user served
-        at a reported peak looks done although its slot was worse; aware plan_adv keeps +8
-        points over PADC at r = 0.8). JSCC's lead over digital grows with report age, the
-        physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5 points at 0.8, +1.7 / +14 at 0.6
-        against digital with incremental-redundancy HARQ (without it: +2.5 / +19, +3.3 / +20;
-        COMMANDS 20.2), and the JSCC side holds decoded (20.1).
-        The bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to
-        it shrinks: less information, less to gain.
+        makes must vanish, and only the static, content part (how many phases each user gets)
+        remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR of its
+        expected distortion, exact for the additive model's MSE; digital: the rate of best
+        expected goodput); a "naive" one takes the reports as exact, as schedulers do today.
+        Measured (COMMANDS 18.1-18.2, `docs/NOTES.md` 5 and 6b): as predicted, the opportunistic
+        part fades and at K 8, T 24 it is all there is (the content part is 0.000 at every r):
+        slope_adv - PF +0.475 dB at r = 1, +0.385 / +0.256 at r = 0.8 / 0.6 (aware +0.475 /
+        +0.342), ~0 at r = 0 (the counterpart of Ouyang et al.'s memoryless channel, where
+        feedback is worthless and their index policy is uniform random). The lift of the
+        scheduler-made channel (+5.0 / +4.5 / +3.6 dB, phases 1-3) keeps 65% of itself at r =
+        0.8, 8% at 0.3. Unlike the stand-in suggested, the aware transmitter is worth something:
+        it keeps the whole gain over PF to r = 0.8 and saves the quality target (stopping on the
+        reports breaks: a user served at a reported peak looks done although its slot was worse;
+        aware plan_adv keeps +8 points over PADC at r = 0.8). JSCC's lead over digital grows
+        with report age, the physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5 points at
+        0.8, +1.7 / +14 at 0.6 against digital with incremental-redundancy HARQ (without it:
+        +2.5 / +19, +3.3 / +20; COMMANDS 20.2), and the JSCC side holds decoded (20.1). The
+        bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to it
+        shrinks: less information, less to gain.
      b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and Smith
         2020; Zhang and Frazier 2021; Hao, Xu and Tong, IEEE TAC, read in full 2026-10-20: our
         Lagrangian index is their Lagrangian priority policy; Gast, Gaujal and Yan 2023) is
@@ -194,11 +199,12 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         small frames). Taking the bottom of the range, as a plain sign test does, lets the
         programs' interpolation error pick the users (seen on the stand-in: very unequal counts,
         -0.5 dB). The convention is ours: Yu, Xu and Tong's Whittle index (TAC 2018, Def. 2) is
-        the smallest subsidy at which resting is optimal, the bottom of the range; Hao, Xu and
-        Tong define their priority as a supremum, but with the future prices fixed the
-        indifference point is unique there (full texts, 2026-10-20). A published rule in the
-        same spirit: McDowell et al.'s LP-priority tie rule keeps the larger codelength among
-        tied maximisers, resolving indifference toward the more active action.
+        the smallest subsidy at which resting is optimal, the bottom of the range, and so are Le
+        Ny, Feron and Dahleh's (Def. 4) and Ouyang et al.'s (eq. 10); Hao, Xu and Tong define
+        their priority as a supremum, but with the future prices fixed the indifference point is
+        unique there (full texts, 2026-10-20). A published rule in the same spirit: McDowell et
+        al.'s LP-priority tie rule keeps the larger codelength among tied maximisers, resolving
+        indifference toward the more active action.
      d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
         SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
         an ideal action (take or leave this slot at the price lambda*_t), and a rule decides
