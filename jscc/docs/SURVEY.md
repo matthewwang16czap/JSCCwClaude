@@ -1,5 +1,8 @@
 # Related work: adaptive-length token communication, rate-adaptive deep JSCC
 
+Cross-field related-work survey (2026-10-20, eight fields, closest prior work and novelty per contribution): `reports/Related work for JSCC scheduling.md` at the repository root, notes in `research_notes/Related work for JSCC scheduling/`.
+
+
 Survey for `docs/ASSESSMENT.md` (2026-10-08). The sandbox that wrote it cannot open
 arxiv.org, so most entries come from abstracts and search summaries, not full texts. Read the
 entries marked **read in full** before claiming novelty against them. DeepJSCC-MIMO was read in

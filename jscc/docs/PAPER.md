@@ -96,6 +96,12 @@ codec itself decoding the schedules.
 
 ## Prior work: what is known and what is new (docs/SURVEY.md, F-F4)
 
+Updated by the cross-field survey of 2026-10-20 (`reports/Related work for JSCC scheduling.md`):
+the per-user-program + price + index recipe is prior art (RaDiO, Fu and van der Schaar,
+Hosseini and Panwar, Yu-Xu-Tong, Hao-Xu-Tong, Shisher et al.); what no work has is our arm (a
+learned prefix code graded by each slot's SNR), the validated abstraction for it, the numerical
+certificate, the stale-report program, the HARQ digital baseline and scheduler-aware training.
+
 * Known: the Gaussian MMSE; for LINEAR analog codes (SoftCast) the distortion is a sum of
   per-component MMSE errors by construction, and ParCast puts important components on good
   subchannels; digital link abstraction by EESM / MIESM; single-link adaptive DeepJSCC (PADC,
