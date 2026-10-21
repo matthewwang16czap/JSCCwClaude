@@ -302,6 +302,14 @@ IEEE Transactions on Wireless Communications (TWC).
    for it are new, and four claims rest on abstracts (Fu and van der Schaar 0903.0207, the two
    EESM preprints, Mohajer et al.); they are worded "to our knowledge" or conceded
    (docs/PAPER.md, owed item 12). Next technical step: the 30 dB diagnosis (owed item 9).
+26. **The TWC story rewritten after the survey (2026-10-21, docs/PAPER.md).** The thesis is now the
+   link abstraction as the interface that lets existing scheduling theory reach learned codes
+   (the EESM analogy), not "a certified near-optimal index": the index, bound and decomposition
+   are imported and attributed; what is ours is the abstraction and its training dependence, the
+   arm it creates, the measured results on a decoded reward, the CSI verdict against digital with
+   HARQ, and scheduler-made training. "Near-optimal" is kept for mean PSNR only; the 30 dB target
+   is reported as measured, with its diagnosis, until owed item 9 runs. The title drops
+   "Near-Optimal Index Scheduling".
 
 ## 1. Your four points, checked
 
