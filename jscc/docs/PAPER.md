@@ -155,6 +155,26 @@ E[(g_k(S') - g_k(s))^+] (owed item 10). (k) ABG (Ma et al.) fits single-SNR qual
 learned codes with an exponent near 1 (three of four networks), the MMSE shape of our per-slot
 term at one SNR; one SNR per image throughout, so the composition rule (C1, C12) stays ours.
 
+Full texts, batch 4 (2026-10-21; same file) answer one referee question and sharpen two points.
+(l) Layered HARQ (Steiner and Shamai, IEEE TWC 2008), the theoretical digital competitor the
+survey named, is designed for no transmit CSI; its gains need a channel fixed between rounds
+(the first feedback reveals the gain) and few retransmissions (two-level coding nearly matches
+single-level IR from 4 rounds; at high SNR IR with 10 rounds nearly matches its throughput at
+>3x the delay). Our digital chain has CQI, retransmits in newly faded slots and allows 4 IR
+rounds: the argument for omitting it, with one caveat, our 0-15 dB operating range, where it
+gains most (~3 dB over outage with one retransmission). A two-layer check at r <= 0.6 is owed
+item 11 (optional). Its eq. (6) is our IR rule (accumulated MI >= rate, from Caire and Tuninetti
+2001). (m) Tang, Wang, Song and Song (AoI, arXiv 1912.05947) resolve conflicts uniformly at
+random among the users whose relaxed policy wants the slot and prove it O(1/sqrt(N)) optimal:
+the conflict rule does not matter there because a deferred sensor waits at bounded cost. It
+matters in our frame because of the deadline and the all-or-nothing target (our random-guided
+rule: 3.1 points from the bound at K 128, the Lagrangian index 1.5), which points the 30 dB
+diagnosis (owed item 9) at the tie rule. (n) Hou, Borkar and Kumar guarantee per-client
+long-run delivery ratios across frames by debts; our admission maximises each frame's share
+and could starve persistent hard users; our frames redraw users (reviewer row). ProgressFTX
+(one device, no CSIT, a one-step stopping threshold) has no multi-device version; Kriouile and
+Assaad's belief is over the source, not the channel.
+
 * Known: the Gaussian MMSE; for LINEAR analog codes (SoftCast) the distortion is a sum of
   per-component MMSE errors by construction, and ParCast puts important components on good
   subchannels; digital link abstraction by EESM / MIESM; single-link adaptive DeepJSCC (PADC,
@@ -213,8 +233,10 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    scheduling and restless bandits (PF, RaDiO, Hosseini-Panwar, Yu-Xu-Tong, Hao-Xu-Tong,
    Shisher et al., Borkar et al.); learned codes under a scheduler (McDowell et al.); layered
    codes and a decoder per length (DeepJSCC-l); partially observed downlinks (Ouyang et al.);
-   flow-level index rules (PI); proved-tight bounds (Le Ny et al.); link abstraction (EESM,
-   MIESM; single-SNR quality fits such as ABG). `docs/SURVEY.md`.
+   flow-level index rules (PI); proved-tight bounds (Le Ny et al.); deadline QoS with debts
+   (Hou, Borkar and Kumar); age-of-information pipelines (Tang et al.); progressive stopping on
+   one link (ProgressFTX); layered HARQ (Steiner and Shamai); link abstraction (EESM, MIESM;
+   single-SNR quality fits such as ABG). `docs/SURVEY.md`.
 3. System model: K users, T slots, deadline, block fading, CQI with errors, lost slots,
    encode-once prefix codes with per-length decoders; mean PSNR and share at a target.
 4. The link abstraction: the model and why MMSE, the training condition, transmitter
@@ -283,6 +305,12 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted PSNR gain of user
    k's next phase at slot SNR s, S' from k's own fading; infinite at the top of the range, ties
    by the largest gain. In `schedule_sim.py` and `rmab_scale.py`, mean objective. Not built. CPU.
+11. Optional: a two-layer superposition digital baseline with IR per layer (Steiner and Shamai),
+   at report correlation r <= 0.6, where our 0-15 dB users sit in its best range. An ideal
+   successively refinable source (base layer at R1, the quality of R1 + R2 when the refinement
+   also decodes) makes it an optimistic stand-in for a scalable codec; power split and rates
+   tuned per policy like the single-layer backoff. In `alloc/digital.py`. Only if a referee asks.
+   CPU.
 
 ## Expected reviewer objections
 
@@ -291,9 +319,10 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | Kodak only, PSNR only | CLIC and MS-SSIM / LPIPS (owed, item 2) |
 | The codec is ~0.8 dB behind the best published one | every claim is relative; the abstraction and the schedulers hold on three code families |
 | Gains are moderate | the claims are the abstraction, certified optimality and the CSI verdict, not a single gain |
-| The digital baseline is weak | HEIC with the LTE CQI table, the backoff (or, on stale reports, an offset on the rate of best expected goodput) tuned per policy, incremental-redundancy HARQ with up to 4 transmissions (Chase combining is worse), lost blocks counted, plus a 3 dB-gap code with the same HARQ and capacity; ideal-CQI results reported too. HARQ narrows the stale-report lead from +2.5 to +1.7 dB at r = 0.8; it does not close it |
+| The digital baseline is weak | HEIC with the LTE CQI table, the backoff (or, on stale reports, an offset on the rate of best expected goodput) tuned per policy, incremental-redundancy HARQ with up to 4 transmissions (Chase combining is worse), lost blocks counted, plus a 3 dB-gap code with the same HARQ and capacity; ideal-CQI results reported too. HARQ narrows the stale-report lead from +2.5 to +1.7 dB at r = 0.8; it does not close it. Layered (superposition) HARQ, the theoretical competitor without transmit CSI (Steiner and Shamai), gains most with no CSIT, a channel fixed between rounds and one retransmission; ours has CQI, newly faded retransmission slots and 4 IR rounds, where its gain nearly vanishes; a two-layer check at r <= 0.6 is ready to run if asked (owed item 11) |
 | TDMA, one user per slot | a slot is any resource unit (a group of RBs over a TTI); with B = K/8 units per slot, the regime of the index-policy theory, the Lagrangian index's gap to the bound falls from 0.21 dB at K 8 to 0.005 at K 128, and the ordering of every policy is the same as with one unit (NOTES 6b) |
-| Why an index and not the ID policy of the recent theory (Hong et al.)? | both are the same relaxation with a different conflict rule; their theorems are for average reward, ours is a finite horizon where index policies need no attractor condition; measured: for the mean the indices beat both guided policies at every K (0.005 vs 0.09-0.11 dB from the bound at K 128); at 30 dB ID beats its random-order baseline by +0.5-0.7 points (persistency) but stays behind the Lagrangian index (2.6 vs 1.5 points from the bound at K 128) |
+| Why an index and not the ID policy of the recent theory (Hong et al.)? | both are the same relaxation with a different conflict rule; their theorems are for average reward, ours is a finite horizon where index policies need no attractor condition; measured: for the mean the indices beat both guided policies at every K (0.005 vs 0.09-0.11 dB from the bound at K 128); at 30 dB ID beats its random-order baseline by +0.5-0.7 points (persistency) but stays behind the Lagrangian index (2.6 vs 1.5 points from the bound at K 128). The conflict rule matters here because of the deadline: for age of information, random selection among the users that want the slot is provably asymptotically optimal (Tang et al.), since a deferred user loses little; under a terminal all-or-nothing target it can lose its last good slot |
+| Admission by smallest need starves hard users | within a frame it maximises the share at the target, the objective; across frames, a user who is always hard (cell edge) could be refused frame after frame. Per-user debts carried across frames (Hou, Borkar and Kumar's largest-debt-first, feasibility optimal for long-run delivery ratios) are the standard remedy and fit on top of any of our rules; our simulations redraw users every frame, so they do not test this, and the paper says so |
 | The Lagrangian index and the bound are prior art | yes, and the paper says so: the policy is Hao, Xu and Tong's Lagrangian priority policy (with Hu and Frazier's and Brown and Smith's indices), the bound is Hawkins's Lagrangian relaxation, a relaxation value beside the policies is in Hosseini and Panwar's SVC bandit, and Shisher, Ji, Hou and Sun plot one against system scale beside their "net gain" policy (the Lagrangian index in another name); RaDiO had per-unit programs under a price in 2001. What is new is the arm they apply to (a learned prefix code graded by each slot's SNR, two-number state from the validated abstraction), the bound kept valid on stale reports, and its measured gap against K on a decoded reward. Departures from their theorem's conditions (approximate prices, Whittle-index ties) are stated with their measured cost |
 | McDowell et al. (2026) already schedule a learned code with a restless bandit | they give each sensor a codelength per fading slot, but every slot carries a fresh, self-contained codeword of the newest observation, so nothing accumulates across slots; their reward decays with age, there is no deadline, CSI is perfect, and slot values are learned by RL because no abstraction compresses the state. Our arm is a prefix whose phases accumulate across slots toward a terminal quality, and the abstraction makes each user's program exact (a two-number state, solved on a CPU). Their transceiver is trained over -5 to 20 dB and frozen, so it never sees its scheduler's channel (C8-C10) |
 | Is the Whittle index well defined (indexability)? | the Lagrangian index (gain at the bound's prices) needs no indexability and is the best policy we run, with fresh and stale reports and at every K; on the programs' grid 1-1.7% of states flip back as the price rises for the mean, 6-13% for the target; the Whittle index takes the top of the indifference range where now and later are alike |

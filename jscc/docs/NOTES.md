@@ -403,6 +403,12 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
    PSNR gain of user k's next phase at slot SNR s. Not built (docs/PAPER.md, owed item 10). CPU.
+8. Optional, only if a referee asks: a two-layer superposition digital baseline with IR per layer
+   (Steiner and Shamai, IEEE TWC 2008, read in full 2026-10-21) at r <= 0.6, where our 0-15 dB
+   users sit in its best range (docs/PAPER.md, owed item 11). Its full text supports omitting
+   it otherwise: it is designed for no transmit CSI, and its gain needs a channel fixed between
+   rounds and few retransmissions, while our chain has CQI, newly faded retransmission slots and
+   4 IR rounds.
 
 ## 8. Experiment index
 

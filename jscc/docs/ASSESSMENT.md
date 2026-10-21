@@ -276,6 +276,20 @@ IEEE Transactions on Wireless Communications (TWC).
    give the exact PI formula (RB and PB are relatives, not special cases), which makes the
    PI-type baseline cheap (owed item 10). ABG (2504.21055) is single-SNR and per network, with
    an MMSE-shaped curve (exponent near 1); C1 and C12 unchanged.
+24. **Full texts, batch 4 (2026-10-21): the digital objection is answered, and the deadline is why
+   ties matter.** Five more PDFs read page by page (same file). Steiner and Shamai's layered HARQ,
+   the theoretical competitor the survey named for C5, is designed for no transmit CSI and gains
+   most with one retransmission over a channel fixed between rounds; our digital chain has CQI,
+   newly faded retransmission slots and 4 IR rounds, so omitting it is defensible except at
+   r <= 0.6 in our 0-15 dB range (an optional check, owed item 11); its eq. (6) is our IR rule.
+   Tang, Wang, Song and Song resolve conflicts at random and prove it asymptotically optimal for
+   age of information, which isolates the deadline and the all-or-nothing target as the reason
+   our random-guided rule and Hao, Xu and Tong's uniform ties fall short (the 30 dB diagnosis,
+   owed item 9). Hou, Borkar and Kumar's per-client debts across frames expose a fairness
+   limitation of our smallest-need admission, now stated. ProgressFTX has no multi-device
+   version; Kriouile and Assaad's belief is over the source, not the channel. Five papers that
+   can still move a verdict remain unread (Fu and van der Schaar 0903.0207, the two EESM
+   preprints, Mohajer et al., Hu and Frazier).
 
 ## 1. Your four points, checked
 
