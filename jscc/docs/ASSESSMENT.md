@@ -290,6 +290,18 @@ IEEE Transactions on Wireless Communications (TWC).
    version; Kriouile and Assaad's belief is over the source, not the channel. Five papers that
    can still move a verdict remain unread (Fu and van der Schaar 0903.0207, the two EESM
    preprints, Mohajer et al., Hu and Frazier).
+25. **Full texts, batch 5, and the survey closed (2026-10-21).** The user could not obtain more;
+   23 full texts were read in five batches. He et al. confirm that progressive pseudo-analog
+   transmission schedules one stream only (with important chunks repeated and combined by MRC,
+   an option our code lacks). Gast, Gaujal and Yan and Zhang and Frazier give the scaling
+   theory in the text: our mean-PSNR result is their non-degenerate O(1) total gap; our flat
+   30 dB gap is a total gap linear in K, which no LP-compatible policy has, and the likely cause
+   is our tie rule among users indifferent at the bound's prices (a priority order, where the
+   theory needs the relaxation's own fractions); a stand-in check puts the price-solver slack at
+   only ~0.15 points per user. Final verdict: the method is imported, the arm and the evidence
+   for it are new, and four claims rest on abstracts (Fu and van der Schaar 0903.0207, the two
+   EESM preprints, Mohajer et al.); they are worded "to our knowledge" or conceded
+   (docs/PAPER.md, owed item 12). Next technical step: the 30 dB diagnosis (owed item 9).
 
 ## 1. Your four points, checked
 

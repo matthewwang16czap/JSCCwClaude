@@ -175,6 +175,20 @@ and could starve persistent hard users; our frames redraw users (reviewer row). 
 (one device, no CSIT, a one-step stopping threshold) has no multi-device version; Kriouile and
 Assaad's belief is over the source, not the channel.
 
+Full texts, batch 5, the last (2026-10-21; same file; the survey is closed there, with the four
+claims that rest on abstracts and how to word them). (o) Gast, Gaujal and Yan (Math. Oper. Res.
+2024): a policy is asymptotically optimal iff it reproduces the relaxation's activations
+(LP-compatible); otherwise a per-user gap remains; no priority rule is LP-compatible when
+several states are mixed; degeneracy only slows the decay to 1/sqrt(K). Our Lagrangian index is
+their LP index. (p) Zhang and Frazier (arXiv 2107.11911): gaps are totals; fluid-priority
+policies (LP categories, the LP's quotas in neutral states, the index within categories) are
+O(1) total when non-degenerate and O(sqrt(N)) otherwise. Our mean result (total 1.66 -> 0.64 dB,
+K 8 -> 128) is the O(1) regime; our flat 30 dB gap is a total gap linear in K, outside every
+guarantee, which points at our tie rule (owed item 9, reordered). A budget shared at random by
+all users (our lost slots) is outside their theorems. (q) He et al. (IEEE TMM 2017): one
+stream, important chunks retransmitted with MRC, greedy per-packet scheduling; the analog
+negative holds, and repeating a phase is an option our code lacks (reviewer row).
+
 * Known: the Gaussian MMSE; for LINEAR analog codes (SoftCast) the distortion is a sum of
   per-component MMSE errors by construction, and ParCast puts important components on good
   subchannels; digital link abstraction by EESM / MIESM; single-link adaptive DeepJSCC (PADC,
@@ -294,17 +308,32 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
    codec on GPUs 1-4. If it holds decoded, it is the paper's scheduler and our closed form its
    approximation.
 9. The 30 dB gap (the Lagrangian index ~1.5 points below the bound at every K with B = K/8),
-   after COMMANDS 21. Hao, Xu and Tong's full text shows the same flat gap when ties are not
-   broken by the relaxation's own randomized policy; and the price solver's subgradient step
-   does not scale with B; at B = 4 and 8 it never improved on the constant price (checked on the
-   smoke stand-in, 2026-10-20: 0.007 dB per user for the mean; the stand-in's target does not
-   bind). No one-unit result changes (all of schedule_sim, COMMANDS 21). Plan: supply-scaled
-   steps (more of them), a tie rule drawn from the relaxation, finer fade bins in the programs,
-   and frames on the programs' own discrete channel, in `tools/rmab_scale.py`. CPU.
+   after COMMANDS 21. A per-user gap that does not shrink is a total gap linear in K: the policy
+   is not LP-compatible (Gast, Gaujal and Yan, Thm 2) or the bound is not the LP of the problem
+   the policy faces; degeneracy alone would still give 1/sqrt(K) per user. Evidence so far: Hao,
+   Xu and Tong measure flat gaps when ties among indifferent arms ignore the relaxation's
+   fractions, Gast et al. prove that such a rule cannot be LP-compatible when several arms are
+   mixed, and McDowell et al. report the same for the multi-action knapsack; the price solver's step does
+   not scale with B (at B = 4 and 8 it never improved on the constant price), but on the smoke
+   stand-in, where a 29 dB target binds (T 10), proper per-slot prices lower the bound by only
+   0.07 / 0.15 points per user at K 8 / 32 (2026-10-21), so prices are not the main cause. No
+   one-unit result changes (all of schedule_sim, COMMANDS 21). Plan, in order, in
+   `tools/rmab_scale.py` (CPU): (a) the relaxation's tie rule: users indifferent at lambda*_t
+   (zero gain within the programs' precision) are activated with the probability their own
+   program assigns at the kink, so that expected demand meets the supply (water-filling /
+   Brown and Smith's proportional split / Hao, Xu and Tong's phi*), with `demand()` mixing at the
+   kink too; (b) the bound's discretisation of the 0/1 reward: finer Y grid and fade bins;
+   (c) supply-scaled price steps; (d) LP-update: re-solve the prices from the current state
+   every few slots. Pass: the 30 dB per-user gap shrinks with K (at least like 1/sqrt(K)).
 10. A PI-type ratio baseline (Ayesta, Erausquin and Jacko; formula known since 2026-10-20):
    serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted PSNR gain of user
    k's next phase at slot SNR s, S' from k's own fading; infinite at the top of the range, ties
    by the largest gain. In `schedule_sim.py` and `rmab_scale.py`, mean objective. Not built. CPU.
+12. Wording of the claims that rest on texts the survey could not obtain (survey report, end of
+   the reading section): "to our knowledge" for the first validation of EESM / MIESM on a
+   learned code (two 2026 EESM preprints unread) and for the digital chain with CQI-table link
+   adaptation plus IR-HARQ (Mohajer et al. unread); Fu and van der Schaar (JSAC 2010) cited from
+   its abstract for the multi-user decomposition we concede anyway.
 11. Optional: a two-layer superposition digital baseline with IR per layer (Steiner and Shamai),
    at report correlation r <= 0.6, where our 0-15 dB users sit in its best range. An ideal
    successively refinable source (base layer at R1, the quality of R1 + R2 when the refinement
@@ -330,5 +359,6 @@ families, two seeds where it matters, digital with tuned backoff and lost blocks
 | Real CSI is stale, not just noisy | the outdated-CSI model h_rep = r h + sqrt(1 - r^2) e, r = J0(2 pi f_D tau): the programs decide on the report and the bound still holds (the standard belief-state relaxation). Measured: JSCC's lead over digital with HARQ grows with report age (+1.7 dB / +15.5 points at r = 0.8, about 10 km/h with 5 ms-old reports at 3.5 GHz); our gain over PF keeps 81% of itself at r = 0.8 (all of it with an aware transmitter; +0.50 dB decoded); quality-target stopping must use the posterior and a 0.5-1 dB margin; the scheduler-made channel is a low-mobility effect (NOTES 5, 6b) |
 | A scheduler that waits for peaks must add delay | the deadline is the latency budget: the same mean PSNR with 9-19% fewer slots than PF, the same share at 30 dB with 39% fewer than PADC (C14). Within the frame both program indices bring users to 30 dB earlier than PADC at every slot: the Whittle index earliest (2.9 slots on the same users), the Lagrangian index with the highest final share (+2.8 points over Whittle, 1.25 slots later than it); with requests arriving over time the Whittle index keeps online's success with about half its delay. Our closed-form online rule does wait: it trails PADC early in the frame and wins at the deadline. Slower only for the first coarse image (slot 6.7 vs PF's 4.5), which the deadline objective does not reward; a per-slot reward in the same programs covers that if an application needs it |
 | Why not learn the scheduler (bandits, RL)? | the model is known: every user reports its channel each slot (full, not bandit, feedback) and the quality model is calibrated from 12 decodes per image; learning restless bandits address a different information structure; and any learned causal policy is capped by our bound (+0.26 dB mean) |
+| Why not repeat a phase that met a deep fade (He et al. retransmit important chunks and combine copies by MRC)? | a natural extension of our arm: a repeat of phase j adds its SNRs, so the state stays two numbers (Y changes by rho_j (phi(n_combined) - phi(n_j))) and the programs, the bound and the indices carry over; it needs a decoder that accepts repeats, which the encode-once prefix code does not train for. Not evaluated; future work |
 | "The MMSE form is SoftCast's" | yes for linear analog codes, by construction; the finding is that a learned nonlinear code obeys it only when trained for it, and that this, not MIESM, is the abstraction for scheduling learned codes |
 | Analog symbols are not NR-compatible | a 6G mode (as all DeepJSCC work assumes); the scheduler and abstraction need only per-slot noise, so they carry over to quantised (DeepJSCC-Q-style) codes, to measure |

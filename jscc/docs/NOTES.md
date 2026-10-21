@@ -399,6 +399,15 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    citing Chakraborty, Sun, Hou and Eryilmaz (2026, in preparation), report that the per-slot
    knapsack with arbitrary ties is not asymptotically optimal and an LP-priority tie rule fixes
    it. The tie rule is the first suspect to test.
+   Batch 5 (2026-10-21; Gast, Gaujal and Yan; Zhang and Frazier) sharpens it: a flat per-user
+   gap is a total gap linear in K, which an LP-compatible policy never has (a degenerate problem
+   still gives 1/sqrt(K) per user), and no priority rule (ours: the Whittle index among
+   indifferent users) is LP-compatible when several users are mixed in the relaxation. Price
+   check on the stand-in with a binding target (T 10, 29 dB, 60 supply-scaled steps): bound per
+   user 0.7826 -> 0.7819 at K 8 (B 1) and 0.7043 -> 0.7028 at K 32 (B 4), prices within +-4% of
+   the constant price except the last slot (0.84 of it): prices explain at most ~0.15 points.
+   Order of the diagnosis: tie rule, then the 0/1 reward's discretisation, then prices, then
+   LP-update (docs/PAPER.md, owed item 9).
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
