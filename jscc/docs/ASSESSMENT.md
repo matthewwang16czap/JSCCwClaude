@@ -219,6 +219,107 @@ IEEE Transactions on Wireless Communications (TWC).
    (+1.6 dB at 2 dB error, the verdict of entry 16) is exposed the same way: the toy's digital
    gains +0.9 dB there with HARQ (+1.9 at 3 dB). So C5 as a whole is at stake in 20.2; the
    paper's spine (C12, C13, C14) does not depend on it, but "why JSCC in a downlink" does.
+20. **Section 20 measured (2026-10-20): C5 survives HARQ, and the scheduler question is settled.**
+   With incremental-redundancy HARQ, tuned for it, digital recovers 0.3 dB at 2 dB CQI error and
+   0.75 dB at r = 0.8, far less than the toy codec suggested: JSCC still leads by +1.3 dB / +13
+   points and +1.7 dB / +15.5 points, and leads a 3 dB-gap code with HARQ from r = 0.95. The
+   reason is clean: JSCC loses 0.5 dB from fresh reports to r = 0.8, digital 1.9 dB even with
+   HARQ. Those are now the numbers to quote; the +2.5 dB of entry 19 becomes "without HARQ". The
+   stale-report schedules decode as simulated (decoded slope_adv - PF +0.50 dB at r = 0.8,
+   model error unbiased, MAE 0.08-0.12 dB), so C5's physical axis rests on the codec. The
+   Lagrangian index brings the most users to 30 dB (+2.8 points over the Whittle index) and is
+   ahead of PADC at every slot; the Whittle index is earlier. That makes the Lagrangian index
+   the paper's scheduler, with the closed form as its approximation and the Whittle index as
+   the earliness option; section 21 runs it on the main frames and decodes it. On stale
+   reports, the target rule needs a 0.5-1 dB margin besides the posterior. Remaining risks:
+   one test set and PSNR only (owed), and the Lagrangian index not yet decoded (section 21).
+21. **Full texts, batch 1 (2026-10-20): the method is imported, the arm is not.** Five uploaded
+   PDFs read page by page
+   (`research_notes/Related work for JSCC scheduling/fulltext_readings.md`). Hao, Xu and Tong (IEEE TAC) define our Lagrangian index ("the
+   greatest tax under which it is optimal to activate the arm", future prices at the relaxation's
+   optimum), so the paper presents it as their policy applied to a new arm. Hosseini and Panwar
+   already plot their LP relaxation's value beside the policies (20 users, "the optimum"), so the
+   certificate is new evidence for a new arm, not a new kind of evidence. Yu, Xu and Tong's
+   asymptotics are light-traffic and their Whittle index takes the bottom of the indifference
+   range (the top-of-range convention is ours). Fu and van der Schaar's file was their
+   single-user paper; the multi-user one is still unread. One finding for the code: Hao, Xu and
+   Tong's theorem needs exact prices and ties randomized by the relaxation's policy, and their
+   uniform-tie curve stays flat below the bound, the shape of our 30 dB gap; our price solver's
+   step does not scale with B (at B = 4 and 8 it never improved on the constant price). No
+   one-unit result changes; the diagnosis is owed item 9 in `docs/PAPER.md`.
+22. **Full texts, batch 2 (2026-10-20): the nearest learned-code scheduler lacks our arm.** Five
+   more PDFs read page by page (same file). McDowell et al. (2608.28441) schedule a meta-learned
+   VIB code per fading slot with a Lagrangian multi-action bandit, LP-priority ties and a decoded
+   task reward, so "no paper schedules a learned code slot by slot" is false; but each slot
+   carries a fresh, self-contained codeword (nothing accumulates), the reward decays with age,
+   there is no deadline, CSI is perfect, and the slot values are learned by RL for lack of an
+   abstraction. Our arm claim is now worded as phases that accumulate across slots, and the
+   abstraction is what makes each program exact. Their physical layer is trained over -5 to
+   20 dB and frozen, so C8-C10 are untouched. DeepJSCC-l (TWC 2021) is the origin of encode once
+   with a decoder per length (C6 stays a system verdict) and gives C12 its mechanism; DRJSCC
+   adds a second observation. Shisher et al. (JSAIT 2023) plot the relaxation's bound against
+   system scale, and McDowell et al. report that ties decide asymptotic optimality in the
+   multi-action knapsack, which supports the tie lead on our 30 dB gap. A BUPT case study
+   (2609.02924) has digital beating SwinJSCC from 7 dB up with exact SNR on AWGN, consistent with
+   C5. The two 2026 EESM preprints are now the main unread risk to C12.
+23. **Full texts, batch 3 (2026-10-20): the stale-report bound is standard, the report model is
+   not.** Five more PDFs read page by page (same file). Ouyang, Eryilmaz and Shroff (1108.3768)
+   bound every policy for ARQ-revealed Markov channels by the same belief-state relaxation we
+   use on stale reports, and plot it against N (met by N = 50), so the stale part of C13 is an
+   application: new in its observation model (every user reports every slot, no exploration
+   value) and finite horizon. Their companion paper (1009.3959) compares with the exact optimum
+   on 4-5 users and finds the index policy uniform random on a memoryless channel, the
+   counterpart of our r = 0 limit. Le Ny, Feron and Dahleh prove a relaxation bound tight by
+   periodic switching in a deterministic problem, which our frame cannot do, so our gap stays a
+   measurement. Both papers, like Yu, Xu and Tong, take the Whittle index as an infimum: our
+   top-of-range choice must be presented as a deliberate departure. Ayesta, Erausquin and Jacko
+   give the exact PI formula (RB and PB are relatives, not special cases), which makes the
+   PI-type baseline cheap (owed item 10). ABG (2504.21055) is single-SNR and per network, with
+   an MMSE-shaped curve (exponent near 1); C1 and C12 unchanged.
+24. **Full texts, batch 4 (2026-10-21): the digital objection is answered, and the deadline is why
+   ties matter.** Five more PDFs read page by page (same file). Steiner and Shamai's layered HARQ,
+   the theoretical competitor the survey named for C5, is designed for no transmit CSI and gains
+   most with one retransmission over a channel fixed between rounds; our digital chain has CQI,
+   newly faded retransmission slots and 4 IR rounds, so omitting it is defensible except at
+   r <= 0.6 in our 0-15 dB range (an optional check, owed item 11); its eq. (6) is our IR rule.
+   Tang, Wang, Song and Song resolve conflicts at random and prove it asymptotically optimal for
+   age of information, which isolates the deadline and the all-or-nothing target as the reason
+   our random-guided rule and Hao, Xu and Tong's uniform ties fall short (the 30 dB diagnosis,
+   owed item 9). Hou, Borkar and Kumar's per-client debts across frames expose a fairness
+   limitation of our smallest-need admission, now stated. ProgressFTX has no multi-device
+   version; Kriouile and Assaad's belief is over the source, not the channel. Five papers that
+   can still move a verdict remain unread (Fu and van der Schaar 0903.0207, the two EESM
+   preprints, Mohajer et al., Hu and Frazier).
+25. **Full texts, batch 5, and the survey closed (2026-10-21).** The user could not obtain more;
+   23 full texts were read in five batches. He et al. confirm that progressive pseudo-analog
+   transmission schedules one stream only (with important chunks repeated and combined by MRC,
+   an option our code lacks). Gast, Gaujal and Yan and Zhang and Frazier give the scaling
+   theory in the text: our mean-PSNR result is their non-degenerate O(1) total gap; our flat
+   30 dB gap is a total gap linear in K, which no LP-compatible policy has, and the likely cause
+   is our tie rule among users indifferent at the bound's prices (a priority order, where the
+   theory needs the relaxation's own fractions); a stand-in check puts the price-solver slack at
+   only ~0.15 points per user. Final verdict: the method is imported, the arm and the evidence
+   for it are new, and four claims rest on abstracts (Fu and van der Schaar 0903.0207, the two
+   EESM preprints, Mohajer et al.); they are worded "to our knowledge" or conceded
+   (docs/PAPER.md, owed item 12). Next technical step: the 30 dB diagnosis (owed item 9).
+26. **The TWC story rewritten after the survey (2026-10-21, docs/PAPER.md).** The thesis is now the
+   link abstraction as the interface that lets existing scheduling theory reach learned codes
+   (the EESM analogy), not "a certified near-optimal index": the index, bound and decomposition
+   are imported and attributed; what is ours is the abstraction and its training dependence, the
+   arm it creates, the measured results on a decoded reward, the CSI verdict against digital with
+   HARQ, and scheduler-made training. "Near-optimal" is kept for mean PSNR only; the 30 dB target
+   is reported as measured, with its diagnosis, until owed item 9 runs. The title drops
+   "Near-Optimal Index Scheduling".
+27. **The last runs before writing (2026-10-22, COMMANDS 22).** Built and smoke-checked: the
+   relaxation's tie rule (`lagrange_relax`), LP-update (`lagrange_lpu`), a supply-scaled and
+   kink-aware price solver, finer program grids, the PI-type ratio baseline (`pi`), and MS-SSIM /
+   LPIPS on decoded schedules; the sheet adds CLIC (60 test images: the abstraction, the utility,
+   the main frames and two decoded schedules). On the smoke stand-in the tie rule changes nothing
+   and the 30 dB gap already falls like 1/sqrt(K), so whether the real utility's flat gap is the
+   policy's or the bound's is for the runs to say. What each outcome changes is in the sheet's
+   decision block: near-optimal at 30 dB (a fix closes it, or the bound tightens), or the target
+   gap stays a measured limitation; C3 against `pi`; C12, C1-C4 on two test sets; perceptual
+   columns in the main tables.
 
 ## 1. Your four points, checked
 

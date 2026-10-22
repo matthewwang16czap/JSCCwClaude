@@ -125,83 +125,123 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
      calibrated at the transmitter. The learning-RMAB papers (unknown pay-off processes, only
      the played arm observed: Grunewalder and Khaleghi, JMLR 2019; Gornet and Sinopoli 2024)
      answer a question we do not have, but they point at the two assumptions that matter:
-     a. STALE REPORTS. A report is taken before the slot: h_rep = r h + sqrt(1 - r^2) e,
-        r = |J0(2 pi f_D tau)| (3.5 GHz, 5 ms-old reports: 0.98 at 3 km/h, 0.76 at 10, 0.50
-        at 15, ~0 at 24, below 0.3 beyond; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). The arm is
-        then partially observed, but nothing else changes: given the
-        report, h ~ CN(r h_rep, 1 - r^2) (the Kalman predictor of a Gauss-Markov channel), so
-        the user's program decides on the report's fading bin and draws the slot's true gain
-        from a report-to-channel kernel (`alloc/csi.py`, `Arm(cqi_corr=r)`, checked against
-        simulation: the program's value matches the simulated value at r = 1 / 0.8 / 0.4).
-        The decomposition and the bound survive: (1 - p) T lam + sum_k W_k(lam; r) bounds
-        every scheduler that sees only such reports (the user's program may even know its
-        own true Y). What a scheduler gains by switching between users is bounded by what its
+     a. STALE REPORTS. A report is taken before the slot: h_rep = r h + sqrt(1 - r^2) e, r =
+        |J0(2 pi f_D tau)| (3.5 GHz, 5 ms-old reports: 0.98 at 3 km/h, 0.76 at 10, 0.50 at 15,
+        ~0 at 24, below 0.3 beyond; 1 ms-old: 0.91 at 30 km/h, 0.66 at 60). The arm is then
+        partially observed, but nothing else changes: given the report, h ~ CN(r h_rep, 1 - r^2)
+        (the Kalman predictor of a Gauss-Markov channel), so the user's program decides on the
+        report's fading bin and draws the slot's true gain from a report-to-channel kernel
+        (`alloc/csi.py`, `Arm(cqi_corr=r)`, checked against simulation: the program's value
+        matches the simulated value at r = 1 / 0.8 / 0.4). The decomposition and the bound
+        survive: (1 - p) T lam + sum_k W_k(lam; r) bounds every scheduler that sees only such
+        reports (the user's program may even know its own true Y). This is the standard
+        belief-state relaxation of a partially observed restless bandit, not a new kind of
+        bound: Ouyang, Eryilmaz and Shroff bound every policy the same way for ARQ-revealed
+        Markov channels and plot the bound against N (read in full 2026-10-20); ours is new in
+        the observation model (every user reports every slot, no exploration value) and the
+        finite horizon. What a scheduler gains by switching between users is bounded by what its
         information says about the current slot (Grunewalder and Khaleghi, Prop. 9), so as r
         falls the opportunistic part of every gain and the lift of the channel the scheduler
-        makes must vanish, and only the static, content part (how many phases each user
-        gets) remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR
-        of its expected distortion, exact for the additive model's MSE; digital: the rate of
-        best expected goodput); a "naive" one takes the reports as exact, as schedulers do
-        today. Measured (COMMANDS 18.1-18.2, `docs/NOTES.md` 5 and 6b): as predicted, the
-        opportunistic part fades and at K 8, T 24 it is all there is (the content part is 0.000
-        at every r): slope_adv - PF +0.475 dB at r = 1, +0.385 / +0.256 at r = 0.8 / 0.6 (aware
-        +0.475 / +0.342), ~0 at r = 0. The lift of the scheduler-made channel (+5.0 / +4.5 /
-        +3.6 dB, phases 1-3) keeps 65% of itself at r = 0.8, 8% at 0.3. Unlike the stand-in
-        suggested, the aware transmitter is worth something: it keeps the whole gain over PF
-        to r = 0.8 and saves the quality target (stopping on the reports breaks: a user served
-        at a reported peak looks done although its slot was worse; aware plan_adv keeps +8
-        points over PADC at r = 0.8). JSCC's lead over digital grows with report age, the
-        physical axis of C5: +0.3 dB at r = 1, +2.5 dB / +19 points at 0.8, +3.3 / +20 at 0.6
-        (digital without HARQ; with retransmission and combining, `--harq`, COMMANDS 20.2).
-        The bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to
-        it shrinks: less information, less to gain.
-     b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and
-        Smith 2020; Zhang and Frazier 2021; Gast, Gaujal and Yan 2023) is asymptotic in the
-        number of arms with a fixed share served per period: there, Lagrangian (LP-priority)
-        index policies lose O(1/sqrt(N)) per arm against the Lagrangian bound, without
-        indexability. A downlink TTI has many resource units (subband groups): B units per
-        slot, each one phase, a user at most one per slot, is exactly that regime, with the
-        bound's supply term (1 - p) B T lam. Our K 8, one-unit frame is its hardest point.
-        `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with
-        B = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's
-        gain at the bound's per-slot prices, ties broken by the Whittle index). Measured (mean
-        PSNR, gap to the bound per user, K 8 / 16 / 32 / 64 / 128): Lagrangian 0.207 / 0.090 /
-        0.039 / 0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed
-        form 0.267 -> 0.155, a plateau (its continuation is a typical slot, not the price);
-        PF 0.71 -> 0.52. At 30 dB the Lagrangian index stays ~1.5 points from the bound at
-        every K. So the theory's regime holds, and at scale the programs' index is the
-        scheduler to use; the closed form is its cheap approximation (one unit per slot: a
-        tie). On stale reports (K 8) the Lagrangian index stays best and the Whittle index
-        degrades (-0.15 dB against our rule at r = 0.4): its price-range convention is
-        fragile when the reports say little.
+        makes must vanish, and only the static, content part (how many phases each user gets)
+        remains. An "aware" transmitter decides on each slot's posterior (JSCC: the SNR of its
+        expected distortion, exact for the additive model's MSE; digital: the rate of best
+        expected goodput); a "naive" one takes the reports as exact, as schedulers do today.
+        Measured (COMMANDS 18.1-18.2, `docs/NOTES.md` 5 and 6b): as predicted, the opportunistic
+        part fades and at K 8, T 24 it is all there is (the content part is 0.000 at every r):
+        slope_adv - PF +0.475 dB at r = 1, +0.385 / +0.256 at r = 0.8 / 0.6 (aware +0.475 /
+        +0.342), ~0 at r = 0 (the counterpart of Ouyang et al.'s memoryless channel, where
+        feedback is worthless and their index policy is uniform random). The lift of the
+        scheduler-made channel (+5.0 / +4.5 / +3.6 dB, phases 1-3) keeps 65% of itself at r =
+        0.8, 8% at 0.3. Unlike the stand-in suggested, the aware transmitter is worth something:
+        it keeps the whole gain over PF to r = 0.8 and saves the quality target (stopping on the
+        reports breaks: a user served at a reported peak looks done although its slot was worse;
+        aware plan_adv keeps +8 points over PADC at r = 0.8). JSCC's lead over digital grows
+        with report age, the physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5 points at
+        0.8, +1.7 / +14 at 0.6 against digital with incremental-redundancy HARQ (without it:
+        +2.5 / +19, +3.3 / +20; COMMANDS 20.2), and the JSCC side holds decoded (20.1). The
+        bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to it
+        shrinks: less information, less to gain.
+     b. MANY USERS PER SLOT. The theory of index policies (Hu and Frazier 2017; Brown and Smith
+        2020; Zhang and Frazier 2021; Hao, Xu and Tong, IEEE TAC, read in full 2026-10-20: our
+        Lagrangian index is their Lagrangian priority policy; Gast, Gaujal and Yan 2024 and
+        Zhang and Frazier, both read in full 2026-10-21: our Lagrangian index is Gast et al.'s
+        LP index) is asymptotic in the number of arms with a fixed share served per period:
+        there, Lagrangian (LP-priority) index policies lose O(1/sqrt(N)) per arm against the
+        Lagrangian bound, without indexability, provided they reproduce the relaxation's
+        activations (LP-compatible; Gast et al. Thm 2); in total, O(1) when every slot has a
+        mixed state in the relaxation (non-degenerate) and O(sqrt(N)) otherwise (Zhang and
+        Frazier). A downlink TTI has many resource units (subband groups): B units per slot,
+        each one phase, a user at most one per slot, is exactly that regime, with the bound's
+        supply term (1 - p) B T lam. Our K 8, one-unit frame is its hardest point.
+        `tools/rmab_scale.py` (COMMANDS 18.3) measures the gap per user for K = 8 ... 128 with B
+        = K/8, for PF, our rule, the Whittle index and the Lagrangian index (each user's gain at
+        the bound's per-slot prices, ties broken by the Whittle index). Measured (mean PSNR, gap
+        to the bound per user, K 8 / 16 / 32 / 64 / 128): Lagrangian 0.207 / 0.090 / 0.039 /
+        0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed form 0.267
+        -> 0.155, a plateau (its continuation is a typical slot, not the price); PF 0.71 ->
+        0.52. In total, the Lagrangian index's gap stays bounded (1.66 -> 0.64 dB): Zhang and
+        Frazier's non-degenerate O(1). At 30 dB the Lagrangian index stays ~1.5 points from the
+        bound at every K, which the theory does not predict. Two leads (2026-10-20): Hao, Xu and
+        Tong's Figs. 3-4 show the same flat gap when ties are not broken by the relaxation's own
+        randomized policy (ours go to the Whittle index), and McDowell et al. (read in full;
+        citing Chakraborty, Sun, Hou and Eryilmaz 2026) report the same for the multi-action
+        per-slot knapsack, where an LP-priority tie rule restores asymptotic optimality; and
+        alloc/whittle.lagrangian_bound's subgradient step grows with the unit imbalance; at B =
+        4 and 8 the per-slot prices never improved on the best constant price (smoke stand-in:
+        0.007 dB per user for the mean; the stand-in's target does not bind). One-unit results
+        are unaffected. Batch 5 of the full texts (2026-10-21) makes it specific: a flat
+        per-user gap is a total gap linear in K, which no LP-compatible policy has (even a
+        degenerate problem gives 1/sqrt(K) per user), and no priority rule is LP-compatible when
+        several users are indifferent at once (Gast et al. Thm 5), as a 0/1 target makes likely;
+        ours ranks the indifferent users by the Whittle index. Prices matter little: on the
+        stand-in with a binding 29 dB target (T 10), proper per-slot prices lower the bound by
+        0.07 / 0.15 points per user at K 8 / 32. Diagnosis owed: docs/PAPER.md, owed item 9 (the
+        relaxation's tie rule first; built 2026-10-22 with the price solver, grid and LP-update
+        variants, COMMANDS 22.2; on the stand-in the tie rule changes nothing). The lost-slot runs (--preempt) are outside these theorems
+        (a budget shared at random by all users; Zhang and Frazier list it as open). So the
+        theory's regime holds, and at scale the programs' index is the scheduler to use; the
+        closed form is its cheap approximation (one unit per slot: a tie). On stale reports (K
+        8) the Lagrangian index stays best and the Whittle index degrades (-0.15 dB against our
+        rule at r = 0.4): its price-range convention is fragile when the reports say little.
      c. THE INDEX WHERE NOW AND LATER ARE ALIKE. When a later slot is as good as this one
-        (useless reports, or no deadline pressure yet) taking and leaving the slot are worth
-        the same over a whole range of prices and the indifference price is not unique; the
-        index is defined as the top of that range (the largest price at which taking it is
-        still optimal), located by the gain's slope -1 past it. At r = 0 it is then the
-        user's expected marginal gain, falling with the phases held (what a static
-        allocation needs); with fresh reports nothing changes (identical to the previous
-        definition on the exact small frames). Taking the bottom of the range, as a plain
-        sign test does, lets the programs' interpolation error pick the users (seen on the
-        stand-in: very unequal counts, -0.5 dB).
+        (useless reports, or no deadline pressure yet) taking and leaving the slot are worth the
+        same over a whole range of prices and the indifference price is not unique; the index is
+        defined as the top of that range (the largest price at which taking it is still
+        optimal), located by the gain's slope -1 past it. At r = 0 it is then the user's
+        expected marginal gain, falling with the phases held (what a static allocation needs);
+        with fresh reports nothing changes (identical to the previous definition on the exact
+        small frames). Taking the bottom of the range, as a plain sign test does, lets the
+        programs' interpolation error pick the users (seen on the stand-in: very unequal counts,
+        -0.5 dB). The convention is ours: Yu, Xu and Tong's Whittle index (TAC 2018, Def. 2) is
+        the smallest subsidy at which resting is optimal, the bottom of the range, and so are Le
+        Ny, Feron and Dahleh's (Def. 4) and Ouyang et al.'s (eq. 10); Hao, Xu and Tong define
+        their priority as a supremum, but with the future prices fixed the indifference point is
+        unique there (full texts, 2026-10-20). A published rule in the same spirit: McDowell et
+        al.'s LP-priority tie rule keeps the larger codelength among tied maximisers, resolving
+        indifference toward the more active action.
      d. ONE PROGRAM PER USER, THEN A CONFLICT RULE (the CMU blog, Hong 2026, read in full;
-        SURVEY F5). Every policy here has the same two steps: the relaxation gives each user
-        an ideal action (take or leave this slot at the price lambda*_t), and a rule decides
-        who is served when more users want the slot than it has units. Whittle / Lagrangian
-        indices rank by value; our rule ranks by its certainty-equivalent value among users
-        below their quotas; the blog's ID policy takes the wanting users in a fixed order
-        (persistency), which it proves near-optimal for average reward without the global
-        attractor index policies need. In our finite-horizon frame no attractor condition is
-        needed for index policies, but the blog's lesson still applies where rewards are
-        all-or-nothing: at a quality target, spreading slots over too many users wastes them
-        (its random tie-breaking failure), which our admission rules (shortest need first)
-        already prevent. `tools/rmab_scale.py` runs the ID-guided policy and its random-order
-        baseline beside the indices (COMMANDS 18.3). Measured: at 30 dB ID beats random by
-        +0.5 to +0.7 points at every K (persistency, modest here: the stand-in's +9 was four
-        frames), but both trail the Lagrangian index (2.6 / 3.1 vs 1.5 points from the bound
-        at K 128); for the mean value ranking wins (0.005 vs 0.09-0.11 dB at K 128). On stale
-        reports (r = 0.7) the guided policies collapse at the target (ID 35.6%, random 46.3%,
-        the best policy 59.9%): with flat ideal actions the order alone decides.
+        SURVEY F5). Every policy here has the same two steps: the relaxation gives each user an
+        ideal action (take or leave this slot at the price lambda*_t), and a rule decides who is
+        served when more users want the slot than it has units. Whittle / Lagrangian indices
+        rank by value; our rule ranks by its certainty-equivalent value among users below their
+        quotas; the blog's ID policy takes the wanting users in a fixed order (persistency),
+        which it proves near-optimal for average reward without the global attractor index
+        policies need. In our finite-horizon frame no attractor condition is needed for index
+        policies, but the blog's lesson still applies where rewards are all-or-nothing: at a
+        quality target, spreading slots over too many users wastes them (its random tie-breaking
+        failure), which our admission rules (shortest need first) already prevent.
+        `tools/rmab_scale.py` runs the ID-guided policy and its random-order baseline beside the
+        indices (COMMANDS 18.3). Measured: at 30 dB ID beats random by +0.5 to +0.7 points at
+        every K (persistency, modest here: the stand-in's +9 was four frames), but both trail
+        the Lagrangian index (2.6 / 3.1 vs 1.5 points from the bound at K 128); for the mean
+        value ranking wins (0.005 vs 0.09-0.11 dB at K 128). On stale reports (r = 0.7) the
+        guided policies collapse at the target (ID 35.6%, random 46.3%, the best policy 59.9%):
+        with flat ideal actions the order alone decides. The conflict rule matters because of
+        the deadline, not in general: for age of information, Tang, Wang, Song and Song (read in
+        full 2026-10-21) pick uniformly at random among the sensors whose relaxed policy wants
+        the slot and prove that O(1/sqrt(N)) from the optimum, because a deferred sensor waits
+        one more slot at a bounded cost; in a frame with a terminal all-or-nothing target a
+        deferred user can lose its last good slot.
   7. DELAY (2026-10-18; measured in COMMANDS 19, 2026-10-19, `docs/NOTES.md` 6c). A frame has
      one deadline, so delay can mean three things, and they do not all favour the same rule
      (snrc4, calibrated transmitter, K 8, 2000 frames; the Whittle index on the nested utility):
@@ -309,6 +349,12 @@ the content part of the utility can add, G-C prices the prefix.
   lead (+4.2). The base station has the image and the codec, so it can calibrate each image
   from 2P constant-SNR decodes of its own (`tools/utility_fit.py --calib`), with kappa and rho
   measured once on other images: gate P-C3.
+* Fairness across frames: the quality-target rules admit the smallest remaining needs, which
+  maximises each frame's share but could refuse the same hard (cell-edge) users frame after
+  frame if they persisted. Our frames redraw users, so the simulations cannot show it. The
+  standard remedy is a per-user debt carried across frames (Hou, Borkar and Kumar, INFOCOM 2009:
+  largest-debt-first is feasibility optimal for long-run delivery ratios), which can sit on top
+  of any of our rules; to state as a limitation.
 * The codec's competitiveness: at CBR 1/12 and 1 / 4 / 7 dB on Kodak this tree's w1 ViT gives
   28.94 / 30.26 / 31.35 dB, JSCCformer-f 30.84 / 32.05 / 33.16 with two-block feedback; after
   discounting ~1 dB of feedback gain, still ~0.8-0.9 dB behind, and about on par with PADC's

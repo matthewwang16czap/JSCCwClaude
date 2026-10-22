@@ -1,4 +1,4 @@
-# Results notes (condensed 2026-10-15; sections 18-19 added 2026-10-19)
+# Results notes (condensed 2026-10-15; sections 18-19 added 2026-10-19, section 20 2026-10-20)
 
 What the experiments established, by topic; the last section indexes every experiment round.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
@@ -118,10 +118,9 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 With error-free CQI JSCC is on par (a code 3 dB from capacity is 0.5 dB ahead). With errors
 (decisions on the reports; JSCC decodes at the true SNR, digital backs off 1-6 dB at its best,
 tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 to 3 dB, digital
-2.3 dB: from 1 dB of CQI error on, JSCC is ahead even of the 3 dB-gap code. Caveat found
-2026-10-19: digital here has no HARQ (a lost block's slot is wasted). With HARQ-IR and its rates
-tuned for it, on a toy codec digital's best policy gains +0.1 / +0.9 / +1.9 dB at 1 / 2 / 3 dB of
-error, so this lead may shrink to well under 1 dB; COMMANDS 20.2 measures it.
+2.3 dB: from 1 dB of CQI error on, JSCC is ahead even of the 3 dB-gap code. These digital
+numbers have no HARQ (a lost block's slot is wasted); with it see below (the stale-report
+paragraph): the lead at 2 dB is +1.33 dB / +12.9 points.
 
 **Stale reports: the physical axis (COMMANDS 18.1, 2026-10-19).** A report taken tau before its
 slot has correlation r = |J0(2 pi f_D tau)| with it (3.5 GHz, 5 ms-old reports: r 0.98 at 3 km/h,
@@ -140,16 +139,50 @@ the slot cannot carry is lost):
 | at 30 dB, hd / HEIC (%) | 77.2 / 74.4 | 75.4 / 63.0 | 73.9 / 58.2 | 70.3 / 51.2 | 64.0 / 43.7 | 59.4 / 41.0 | 56.7 / 40.9 |
 | hd minus HEIC (points) | +2.8 | +12.4 | +15.7 | **+19.1** | +20.3 | +18.4 | +15.8 |
 
-So at 10 km/h with 5 ms-old reports (r ~0.76) JSCC leads by ~2.6 dB and ~19 points, at 3 km/h
-(r ~0.98) by ~0.8 dB. From r = 1 to 0 JSCC loses 1.6 dB, HEIC 4.8 (its backoff grows to 2-7 dB
-and it still loses 7-50% of its blocks); a code 3 dB from capacity falls behind from r = 0.95.
-The JSCC side is decoded at r = 0.8 / 0.6 in COMMANDS 20.1 (pending). The digital side
-drops a block the slot could not carry; NR would retransmit it and combine (HARQ), which is
-what stale reports call for: `schedule_sim.py --harq ir|chase` (built 2026-10-19) does it,
-and on a toy codec (stand-in R-D curves; rates tuned with HARQ on, which makes them bolder than
-the report) digital's best policy gains +2.2 dB at r = 0.8 and +3.1 dB at r = 0.6, about half of
-what stale reports cost it. The lead above is an upper estimate, possibly by 1 dB or more,
-until COMMANDS 20.2 measures it with HARQ.
+Without HARQ (the table above) JSCC leads by ~2.6 dB and ~19 points at 10 km/h with 5 ms-old
+reports (r ~0.76). From r = 1 to 0 JSCC loses 1.6 dB, HEIC 4.8 (its backoff grows to 2-7 dB and it
+still loses 7-50% of its blocks).
+
+**With HARQ (COMMANDS 20.2, 2026-10-20): the numbers to quote.** A block the slot could not
+carry is retransmitted in the user's next slot and combined (`schedule_sim.py --harq ir`:
+incremental redundancy, the transmissions' efficiency adds; up to 4 transmissions), the backoff
+(naive) or an offset on the aware rate tuned with HARQ on per policy and r. Best digital policy
+and transmitter at each point; the JSCC numbers are those above (a prefix has no block to lose):
+
+| report correlation r | 1 | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+|---|---|---|---|---|---|---|---|
+| mean PSNR, HEIC + HARQ / 3 dB-gap code + HARQ | 31.29 / 32.13 | 30.19 / 30.65 | 29.82 / 30.19 | 29.36 / 29.71 | 28.92 / 29.18 | 28.78 / 28.96 | 28.75 / 28.87 |
+| what HARQ gives HEIC (dB) | 0 | +0.12 | +0.34 | +0.74 | +1.60 | +2.47 | +2.22 |
+| hd minus HEIC + HARQ (dB) | +0.34 | +1.32 | +1.56 | **+1.73** | +1.69 | +1.49 | +1.25 |
+| hd minus the gap code + HARQ (dB) | -0.50 | +0.86 | +1.19 | +1.38 | +1.42 | +1.31 | +1.13 |
+| at 30 dB, HEIC + HARQ (%) | 74.4 | 63.6 | 59.5 | 54.8 | 49.8 | 46.8 | 47.0 |
+| hd minus HEIC + HARQ (points) | +2.8 | +11.8 | +14.4 | **+15.5** | +14.2 | +12.6 | +9.7 |
+
+| CQI error sd (dB) | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| mean PSNR, HEIC + HARQ / gap code + HARQ | 31.29 / 32.13 | 30.68 / 31.15 | 30.15 / 30.53 | 29.73 / 30.04 |
+| hd minus HEIC + HARQ (dB) | +0.34 | +0.91 | **+1.33** | +1.60 |
+| hd minus the gap code + HARQ (dB) | -0.50 | +0.44 | +0.96 | +1.29 |
+| at 30 dB, HEIC + HARQ (%) / hd minus it (points) | 74.4 / +2.8 | 68.4 / +8.5 | 62.7 / **+12.9** | 58.1 / +15.1 |
+
+HARQ takes 0.3 dB off the CQI-error lead at 2 dB and 0.75 dB off the stale-report lead at
+r = 0.8, far less than a toy codec suggested (it recovered half of digital's loss there): even
+with IR, HEIC loses 1.9 dB from fresh reports to r = 0.8, JSCC 0.5. So at 10 km/h with 5 ms-old
+reports JSCC leads HEIC with HARQ by ~1.7 dB and ~15 points, at 3 km/h by ~0.7 dB, and a code
+3 dB from capacity with HARQ from r = 0.95 (+0.9 dB) and from 2 dB of CQI error (+1.0). The
+tuned digital transmitter turns bold with HARQ (greedy's aware rate up to 7 dB above its
+single-transmission goodput optimum at r = 0.4; 30-60% of its slots then decode no block).
+Chase combining is worse than IR (r = 0.8 / 0.6: 29.03 / 28.19 dB vs 29.36 / 28.92). Digital
+without HARQ stays in the tables above as the reference; the paper quotes these.
+
+**The JSCC side decoded (COMMANDS 20.1).** The stale-report schedules of the C5 table (aware
+transmitter, 60 frames, the per-length decoders) decoded by the codec: the model's error on
+1408-1440 histories per point is unbiased to the conservative side (predicted minus decoded
+-0.02 to -0.045 dB) with MAE 0.08-0.12 dB (p95 0.28-0.39), slightly above the fresh reports'.
+Decoded slope_adv - pf: +0.500 dB [0.40, 0.61] at r = 0.8, +0.361 [0.25, 0.48] at r = 0.6
+(simulated +0.475 / +0.342). Paired with section 17's fresh decodes on the same frames,
+slope_adv loses 0.49 dB at r = 0.8 and 0.98 at r = 0.6 (simulated 0.54 / 1.03). So the JSCC
+side of the stale-report axis holds as decoded.
 
 ## 6. The scheduler-made channel (scheduler-aware training)
 
@@ -223,6 +256,29 @@ random-order baseline.
   before the frame (plan_adv, aware) keeps +8 points over PADC to r = 0.8 and +5 at r = 0.6; at
   r = 0 PADC is best. At r = 0 with an aware transmitter every advantage index tied and the
   first user took every spare slot (padc_adv mean PSNR 26.4 dB); ties now go to PF.
+  Rerun after the fix (COMMANDS 20.4b): padc_adv = padc (56.7%), online 51.9% (53.0 before),
+  plan_adv 54.4% unchanged, every mean-PSNR policy 30.00 dB; PADC stays best at r = 0.
+* **Decoded at r = 0.8 / 0.6** (COMMANDS 20.1, aware, 60 frames): PADC 62.1 / 60.2%, online 68.5
+  / 60.0%, plan_adv 72.7 / 65.4% at 30 dB decoded (predicted 63.3 / 67.9 / 72.7 and 61.9 / 59.8 /
+  66.0); plan_adv - PADC +10.6 points [7.5, 14.0] and +5.2 [1.7, 8.8], online - PADC +6.5 [3.1,
+  10.2] and -0.2 [-3.8, +3.5]. As simulated: plan the spare slots, decide on the posterior.
+* **Margins** (COMMANDS 20.4a, 2000 frames; every policy aims at 30 + m dB):
+
+  | r | 0.95 | 0.8 | 0.6 |
+  |---|---|---|---|
+  | naive online, m 0 / 0.5 / 1 (%) | 69.8 / 73.7 / 72.7 | 59.0 / 64.1 / 66.1 | 49.1 / 54.1 / 57.1 |
+  | naive plan_adv, m 0 / 0.5 / 1 | 75.1 / 75.3 / 74.9 | 66.4 / 69.0 / 70.3 | 56.8 / 61.4 / 64.3 |
+  | aware plan_adv, m 0 / 0.5 / 1 | 75.4 / 75.3 / 74.5 | 70.3 / 71.1 / 70.5 | 64.0 / 66.1 / 66.6 |
+  | aware replan_adv, m 0.5 / 1 | 75.9 / 75.8 | 69.7 / 71.1 | 64.0 / 66.1 |
+  | PADC, best over m and transmitter | 66.5 | 63.0 | 60.2 |
+
+  A margin is what stale reports call for: the reported SNRs of the slots a user was served in
+  are biased up (it was served at its reported peaks), so the model's stopping point is early.
+  1 dB brings naive online back above PADC at r = 0.8 (66.1 vs 63.0; not at 0.6), and the best
+  rule gains +0.5 / +0.8 / +2.6 points over margin 0 (best JSCC 75.9 / 71.1 / 66.6%, against
+  PADC's best +9.4 / +8.1 / +6.4 points; the margin is chosen on the evaluation frames, a mild
+  optimism). PADC gains at most 0.9 points from a margin. The rule: decide on the posterior, plan the
+  spare slots, aim 0.5-1 dB above the target.
 * **The bound and the indices on stale reports** (K 8, nested utility, 300 frames, mean): the
   bound falls with r (31.68 / 31.43 / 30.85 / 30.18 dB at r = 1 / 0.9 / 0.7 / 0.4) and our rule's
   gap to it shrinks (0.25 / 0.25 / 0.21 / 0.12 dB): less information, less to gain. The
@@ -292,6 +348,26 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
   delay 4.2 / 4.8 slots (online 8.0 / 11.1), and 0.6 / 1.0 slots FASTER than PADC on the same
   requests; D 16 alike. With 4 units per slot the ordering is the same (online +21 to +30 points
   over PADC).
+* **The Lagrangian index's time to 30 dB** (COMMANDS 20.3, `rmab_scale.py --delay`, nested
+  utility; % of users at 30 dB by slots 6 / 12 / 18 / 24, mean slot with misses at 25):
+
+  | | K 8, one unit (300 frames) | K 32, 4 units (100 frames) | K 8, r = 0.8 aware |
+  |---|---|---|---|
+  | Lagrangian | 32.3 / 55.5 / 70.3 / **76.6**, 12.67 | 33.5 / 59.2 / 74.8 / **77.1**, 12.06 | 24.2 / 45.1 / 57.5 / 63.6, 15.15 |
+  | Whittle | **38.2 / 61.4** / 70.9 / 73.8, **11.95** | **41.0 / 63.8** / 72.8 / 75.4, **11.47** | 28.2 / 48.6 / 58.0 / 63.4, 14.61 |
+  | ID-guided | 25.4 / 50.7 / 68.0 / 74.5, 13.66 | 26.1 / 52.5 / 69.8 / 75.5, 13.37 | 9.8 / 19.5 / 28.7 / 36.4, 19.96 |
+  | PF | 16.5 / 34.5 / 55.2 / 63.9, 16.37 | 16.8 / 34.3 / 54.3 / 64.1, 16.34 | 13.8 / 30.0 / 48.6 / 59.0, 17.36 |
+  | gap to the bound at the deadline (points): Lagrangian / Whittle | 2.2 / 5.1 | 1.4 / 3.0 | 10.0 / 10.3 |
+
+  A trade-off between the two indices: the Lagrangian index brings the most users to 30 dB by
+  the deadline (+2.8 points [1.9, 3.8] over the Whittle index at K 8, +1.7 at K 32) but later:
+  0.7 slots later on average (1.25 [1.05, 1.47] on the users both bring there), behind until
+  about slot 18. Its prices hold a slot back for the user it is worth most to at the deadline;
+  the Whittle index's private prices serve the shortest remaining need first. Both are ahead of
+  PF by 3.7-4.9 slots and, against 19.1's nested frame (same utility, other frames), the
+  Lagrangian index is also ahead of PADC (20 / 48 / 61 / 65) and of online (18 / 41 / 61 / 73) at
+  every checkpoint. On stale reports the two tie at the deadline and the bound is loose (each
+  program knows its own true state); the guided policies collapse (ID 36%).
 
 ## 7. Open
 
@@ -302,12 +378,61 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    target. GPU.
 3. Optional: a Jacobian probe (the decoder's per-chunk Jacobian energy against the fitted C rho:
    the first-order mechanism behind the abstraction); the codec gap (more data).
-4. The scheduler to recommend at scale is the programs' Lagrangian index (0.005 dB from the bound
-   at K 128, robust to stale reports); its time to the target is measured in COMMANDS 20.3.
-5. Quality targets on stale reports: stopping needs the posterior; does a margin restore online?
-   (COMMANDS 20.4). The decoded check of the stale-report schedules: COMMANDS 20.1 (GPU).
-6. Digital with HARQ (incremental redundancy, Chase combining; built 2026-10-19): C5 on stale
-   reports and CQI errors again, COMMANDS 20.2. The stale-report lead is the one at stake.
+4. The scheduler to recommend is the programs' Lagrangian index (0.005 dB from the bound at
+   K 128, robust to stale reports, the most users at 30 dB by the deadline; the Whittle index is
+   earlier). Built into `schedule_sim.py` as `lagrange` (2026-10-20, identical to rmab_scale's
+   with one unit per slot): COMMANDS 21 runs it on the main frames (CQI errors, stale reports,
+   lost slots, the latency budget) and decodes its schedules.
+5. Done 2026-10-20: margins on stale reports (aware + plan_adv + 0.5-1 dB), the decoded
+   stale-report schedules, digital with HARQ (C5 restated: +1.3 dB at 2 dB CQI error, +1.7 dB /
+   +15.5 points at r = 0.8).
+6. The 30 dB gap of the Lagrangian index (~1.5 points below the bound at every K, B = K/8;
+   section 6b). Two leads from 2026-10-20: Hao, Xu and Tong (IEEE TAC, read in full) get the
+   same flat gap when ties are not broken by the relaxation's randomized policy (ours go to the
+   Whittle index); and `alloc/whittle.lagrangian_bound`'s subgradient step is not divided by B.
+   Smoke stand-in check (8 images, P 6, T 24, one draw per K, mean PSNR per user): constant
+   price 31.9393 / 31.3366 / 31.6951 dB at K 8 / 32 / 64; 60 steps as coded 31.9319 / 31.3366 /
+   31.6951 (no gain at B 4 and 8); 60 steps divided by the supply 31.9319 / 31.3302 / 31.6882.
+   The stand-in's 30 dB target does not bind (prices 0). One-unit runs are unaffected. Plan:
+   docs/PAPER.md, owed item 9. CPU.
+   Batch 2 of the full texts (2026-10-20) adds the multi-action counterpart: McDowell et al.,
+   citing Chakraborty, Sun, Hou and Eryilmaz (2026, in preparation), report that the per-slot
+   knapsack with arbitrary ties is not asymptotically optimal and an LP-priority tie rule fixes
+   it. The tie rule is the first suspect to test.
+   Batch 5 (2026-10-21; Gast, Gaujal and Yan; Zhang and Frazier) sharpens it: a flat per-user
+   gap is a total gap linear in K, which an LP-compatible policy never has (a degenerate problem
+   still gives 1/sqrt(K) per user), and no priority rule (ours: the Whittle index among
+   indifferent users) is LP-compatible when several users are mixed in the relaxation. Price
+   check on the stand-in with a binding target (T 10, 29 dB, 60 supply-scaled steps): bound per
+   user 0.7826 -> 0.7819 at K 8 (B 1) and 0.7043 -> 0.7028 at K 32 (B 4), prices within +-4% of
+   the constant price except the last slot (0.84 of it): prices explain at most ~0.15 points.
+   Order of the diagnosis: tie rule, then the 0/1 reward's discretisation, then prices, then
+   LP-update (docs/PAPER.md, owed item 9).
+   Built 2026-10-22, run in COMMANDS 22.2a-d: `lagrange_relax` (tools/rmab_scale.py and
+   tools/schedule_sim.py: sure gains first, then the users indifferent at lambda*_t in a random
+   order, then the rest), `lagrange_lpu` (re-solves lambda* from the users' states every
+   --resolve slots), `--price-scale supply`, `--kink-grad` (alloc/whittle.kink_demand: the
+   relaxation's common mix theta_t of the indifferent states, which meets the supply wherever it
+   is interior), `--ny` / `--ng`; every run prints the sure demand and the indifferent mass at
+   lambda* as shares of the supply. The defaults reproduce every earlier bound and schedule bit
+   for bit. Stand-in, T 10, 29 dB, 30 frames: the indifferent users hold 38% / 44% of the supply
+   at K 8 / 32 and the sure demand 92% / 95%; `lagrange_relax` - `lagrange` +0.00 / -0.10
+   points; the gap 6.7 -> 3.9 points per user already falls like 1/sqrt(K); a 4x finer grid
+   moves the bound by 0.004 per user. The stand-in does not show the flat gap, so only the real
+   utility's runs can decide.
+7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
+   full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
+   state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
+   PSNR gain of user k's next phase at slot SNR s. Built 2026-10-22 as `--policies pi` in both
+   tools (S' on 32 equiprobable fades at the user's mean SNR; aware SNRs on stale reports; ties,
+   including infinite indices, by the largest gain): COMMANDS 22.1 (decoded), 22.2e-f
+   (docs/PAPER.md, owed item 10). CPU.
+8. Optional, only if a referee asks: a two-layer superposition digital baseline with IR per layer
+   (Steiner and Shamai, IEEE TWC 2008, read in full 2026-10-21) at r <= 0.6, where our 0-15 dB
+   users sit in its best range (docs/PAPER.md, owed item 11). Its full text supports omitting
+   it otherwise: it is designed for no transmit CSI, and its gain needs a channel fixed between
+   rounds and few retransmissions, while our chain has CQI, newly faded retransmission slots and
+   4 IR rounds.
 
 ## 8. Experiment index
 
@@ -326,3 +451,4 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
 | P1, step 8 | 17 (= 13) | 10-14 | MMSE abstraction ~9x MIESM; CQI errors: JSCC clearly ahead; scheduler certified; equal budget |
 | RMAB re-examined | 18 | 10-19 | stale reports: JSCC over digital +0.3 -> +2.5 dB / +19 points at r 0.8; the opportunistic part and the lift fade; aware + plan_adv for the target; with many units the indices reach the bound (0.005 dB at K 128), our closed form plateaus at 0.15 |
 | Delay | 19 | 10-19 | latency budget 9-19% (mean, vs PF) and 39% (30 dB, vs PADC) shorter; the Whittle index reaches 30 dB first (2.9 slots before PADC, same users) at online's share; traffic: online +25 points over PADC, the Whittle index with half its delay |
+| HARQ, decoded stale, Lagrangian delay, margins | 20 | 10-20 | C5 with HARQ: +1.3 dB at 2 dB CQI error, +1.7 dB / +15.5 points at r 0.8 (HARQ took 0.3 / 0.75 dB off); stale-report schedules decoded as simulated; the Lagrangian index has the best share at 30 dB, the Whittle index the earliest; margins of 0.5-1 dB on stale reports |

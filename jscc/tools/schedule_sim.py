@@ -69,6 +69,23 @@ phases left, so every policy can use the whole frame. Policies:
                  indifference price for this slot is highest (with --target, a slot nobody
                  gains from goes to PF). Exact for a --nested utility, an approximation
                  otherwise
+    lagrange     (both objectives) the Lagrangian (LP-priority) index: the same programs
+                 priced at the per-slot prices lambda*_t that minimise the frame's Lagrangian
+                 bound (alloc/whittle.lagrangian_bound); serve the user whose program gains
+                 most from taking this slot at that price (Hao, Xu and Tong's Lagrangian
+                 priority policy, IEEE TAC; Hu and Frazier; Brown and Smith; needs no
+                 indexability), ties by the Whittle index; with --target only users
+                 with a positive Whittle index claim the slot, the rest goes to PF (as
+                 tools/rmab_scale.py, which it reproduces with one unit per slot)
+    lagrange_relax  (both, on request) lagrange with the relaxation's tie rule: a user whose
+                 gain is above the programs' precision first (the largest); else one of the
+                 users within it of 0 (indifferent at lambda*_t), at random, as the
+                 relaxation mixes them, not by the Whittle index (tools/rmab_scale.py)
+    pi           (mean, on request) a PI-type ratio index (Ayesta, Erausquin and Jacko): the
+                 predicted gain of this slot over the expected excess of a typical slot's gain
+                 above it, E[(g(S') - g(s))^+], S' on 32 equiprobable fades at the user's mean
+                 SNR (aware SNRs with --cqi-aware); infinite where no typical slot beats it,
+                 ties by the largest gain
 
 All policies see the same images, mean SNRs and fades (common random numbers). Reported per
 policy: mean PSNR at the deadline, the 5th percentile over users, the worst user of a frame on
@@ -128,15 +145,28 @@ import numpy as np  # noqa: E402
 from alloc.utility import load_utility  # noqa: E402
 
 MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
-                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle")
+                 "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle", "lagrange")
 TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
-                   "online_pf", "online", "replan_adv", "whittle")
-POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES))
+                   "online_pf", "online", "replan_adv", "whittle", "lagrange")
+EXTRA_POLICIES = ("lagrange_relax", "pi")              # on request (--policies), not by default
+LAGRANGE = ("lagrange", "lagrange_relax")
+POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES + EXTRA_POLICIES))
 NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
                 "online", "replan_adv")
 PF_TIMING = ("pf", "fixed_uni", "fixed_eq", "fixed_slope", "adaptive_slope", "pf_len", "padc",
              "plan", "stop", "online_pf")
 ADV_TIMING = ("slope_adv", "padc_adv", "plan_adv", "stop_adv", "online", "replan_adv")
+
+
+PI_Q = 10.0 * np.log10(-np.log(1.0 - (np.arange(32) + 0.5) / 32))   # Exp(1) quantiles, dB
+
+
+def tie_keys(snr_t, t):
+    """Random tie-break keys in [0, 1) for one slot, a function of the slot's true SNRs and
+    index only: the same in every tool that sees the same frame (tools/rmab_scale.py)."""
+    import zlib
+    seed = zlib.crc32(np.ascontiguousarray(snr_t, dtype=np.float64).tobytes())
+    return np.random.default_rng([seed, int(t), 97]).random(len(snr_t))
 
 
 def rate(snr_db):
@@ -223,6 +253,26 @@ def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0):
                           p_lost=1.0 - p_avail, clip=clip, cqi_corr=cqi_corr)
                       for i, m in zip(imgs, means)]
     return _ARMS[key]
+
+
+_PRICED = {}
+PRICE_STEPS = 10                                              # subgradient steps (rmab_scale's)
+
+
+def priced_for(arms, T, p_lost):
+    """The lagrange policy: the per-slot prices lambda*_t that minimise the frame's
+    Lagrangian bound (one unit per slot) and every program priced at them, cached with the
+    frame's programs."""
+    from alloc.whittle import lagrangian_bound
+    key = id(arms)
+    hit = _PRICED.get(key)
+    if hit is None or hit[0] is not arms:
+        if len(_PRICED) > 8:
+            _PRICED.clear()
+        _, prices = lagrangian_bound(arms, T, p_lost, per_slot=PRICE_STEPS)
+        hit = (arms, prices, [a.priced(prices) for a in arms])
+        _PRICED[key] = hit
+    return hit[1], hit[2]
 
 
 _AWARE = {}
@@ -432,7 +482,16 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
     arms = (arms_for(belief, imgs, means, T, goal, offset, p_avail, clip,
                      1.0 if aware is None or seen is None else aware)
-            if policy == "whittle" else None)
+            if policy in ("whittle",) + LAGRANGE else None)
+    prices = Wp = None
+    if policy in LAGRANGE:
+        prices, Wp = priced_for(arms, T, 1.0 - p_avail)
+    piq = None
+    if policy == "pi":                                        # the PI index's typical slots
+        fq = np.asarray(means, dtype=np.float64)[:, None] + PI_Q[None, :]
+        piq = (aware_snr(util, belief, imgs, means, fq, aware, clip)
+               if aware is not None and seen is not None else np.clip(fq, clip[0], clip[1]))
+        piq = piq - backoff if digital else piq
     rest = None                                               # online: phases still needed
     if policy in ("stop", "stop_adv", "online_pf", "online", "replan_adv"):
         rest = np.array([need(belief, i, [], p, goal) for i, p in zip(imgs, plan)], dtype=float)
@@ -483,11 +542,31 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 ok = below
         if arms is not None:                                  # the Whittle index (alloc/whittle.py)
             idx = np.full(K, -np.inf)
+            lg = np.full(K, -np.inf)
             for j in np.flatnonzero(ok):
                 n, Y = arms[j].state(hist[j])
                 x = g[j] if arms[j].kern is None else seen[j, t]     # stale: the report itself
                 idx[j] = arms[j].index(t, n, Y, float(x))
-            if np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
+                if Wp is not None:                            # the Lagrangian index
+                    lg[j] = arms[j].gain_at(Wp[j], prices, t, n, Y, float(x))
+            if policy in LAGRANGE:
+                cl = ok & np.isfinite(lg)
+                if target is not None:                        # only users the slot helps
+                    cl &= idx > 1e-12
+                tol = 0.5 * float(arms[0].lams[1])            # the programs' precision
+                if cl.any() and policy == "lagrange":         # the largest gain at lambda*_t, in
+                    q = np.where(cl, np.round(lg / tol), -np.inf)     # the programs' precision;
+                    cand = np.flatnonzero(q >= q.max())       # ties by the Whittle index, then
+                    ok = np.zeros(K, dtype=bool)              # the first
+                    ok[cand[int(np.argmax(idx[cand]))]] = True
+                elif cl.any():                                # lagrange_relax: a sure gain, else
+                    q = np.where(cl, np.where(np.abs(lg) <= tol, 0.0, lg), -np.inf)  # one of the
+                    cand = np.flatnonzero(q >= q.max())       # indifferent users at random
+                    ok = np.zeros(K, dtype=bool)
+                    ok[cand[int(np.argmax(tie_keys(snr[:, t], t)[cand]))]] = True
+                else:
+                    ok = has                                  # nobody claims it: leftover (PF)
+            elif np.isfinite(idx.max()) and (target is None or idx.max() > 1e-12):
                 ok = idx >= idx.max()                         # served below (ties: first)
             else:
                 ok = has                                      # nobody gains: leftover (PF)
@@ -502,7 +581,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
             k = next(j for j in order if ok[j])
         elif policy == "maxsnr":
             k = int(np.argmax(np.where(ok, g, -np.inf)))
-        elif policy in PF_TIMING or policy == "whittle":      # whittle: ok is its choice
+        elif policy in PF_TIMING or policy in ("whittle",) + LAGRANGE:   # ok is their choice
             r = rate(g)
             k = int(np.argmax(np.where(ok, r / (served + 1e-3 * r.mean()), -np.inf)))
         else:
@@ -513,10 +592,16 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                     if b is not None:
                         gv[j] = b["d"]
             gain = np.full(K, -np.inf)
+            raw = np.full(K, -np.inf)                         # pi: the gain itself (ties)
             for j in np.flatnonzero(ok):
                 now = belief.psnr(imgs[j], hist[j])
                 gain[j] = belief.psnr(imgs[j], hist[j] + [float(gv[j])]) - now
-                if policy in ADV_TIMING or policy == "greedy_rel":
+                if policy == "pi":                            # over the expected excess of a
+                    alt = np.array([belief.psnr(imgs[j], hist[j] + [float(x)]) for x in piq[j]])
+                    ex = float(np.maximum(alt - now - gain[j], 0.0).mean())   # typical slot
+                    raw[j] = gain[j]
+                    gain[j] = gain[j] / ex if ex > 1e-12 else np.inf
+                elif policy in ADV_TIMING or policy == "greedy_rel":
                     ref = belief.psnr(imgs[j], hist[j] + [float(plan[j])]) - now
                     if policy in ADV_TIMING:                  # this slot against a typical one
                         gain[j] -= ref
@@ -525,7 +610,9 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
                 elif alpha:
                     gain[j] *= max(now, 1e-3) ** (-alpha)
             tied = np.flatnonzero(gain >= gain.max() - 1e-12)
-            if len(tied) > 1 and policy in ADV_TIMING:   # exact ties (useless reports: every
+            if len(tied) > 1 and policy == "pi":              # (infinite: no typical slot beats
+                k = int(tied[np.argmax(raw[tied])])           # this one) by the largest gain
+            elif len(tied) > 1 and policy in ADV_TIMING:   # exact ties (useless reports: every
                 r = rate(g)        # slot alike) go to PF, not to the first user, who would take
                 k = int(tied[np.argmax((r / (served + 1e-3 * r.mean()))[tied])])  # every spare slot
             else:              # (greedy keeps the first: a digital step curve ties all the time)
@@ -870,6 +957,8 @@ def main():
     needs = sorted(set(a.policies) & set(NEEDS_TARGET))
     if needs and a.target is None:
         ap.error(f"{', '.join(needs)} need --target")
+    if "pi" in a.policies and a.target is not None:
+        ap.error("pi is for the mean objective (no --target)")
     dig = {"link": a.link, "gap_db": a.gap_db, "mode": a.digital_mode, "P": a.digital_max_phases}
     util = load_utility(a.utility, **dig)
     belief = load_utility(a.belief, **dig) if a.belief else None

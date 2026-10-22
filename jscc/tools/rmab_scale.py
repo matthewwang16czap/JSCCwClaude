@@ -25,9 +25,10 @@ with phases left, as in tools/schedule_sim.py):
                 quota, top B (mean objective only)
     whittle     the Whittle index of each user's program, top B
     lagrange    the Lagrangian (LP-priority) index: each user's gain from this slot in its own
-                program priced at the bound's optimal prices lambda*_t (Hu and Frazier;
-                Brown and Smith), ties (users who would take a later unit as well) broken by
-                the Whittle index, top B
+                program priced at the bound's optimal prices lambda*_t (Hao, Xu and Tong's
+                Lagrangian priority policy; Hu and Frazier; Brown and Smith), ties (users who
+                would take a later unit as well) broken by the Whittle index, top B (their
+                theorem breaks ties at random by the relaxation's own policy instead)
     id_guided   the CMU blog's ID policy (Hong et al., Math. Oper. Res. 2025): a user WANTS the
                 slot if taking it is optimal in its program at lambda*_t (its ideal action);
                 when more users want it than there are units, the ones first in a fixed order
@@ -35,6 +36,35 @@ with phases left, as in tools/schedule_sim.py):
                 persistency, no ranking by value
     rand_guided the same ideal actions, conflicts broken in a fresh random order every slot
                 (the blog's failing baseline: no persistency)
+    pi          a PI-type ratio index (Ayesta, Erausquin and Jacko's potential improvement):
+                g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted PSNR gain of user k's
+                next phase at this slot's SNR s, S' a slot from k's own fading (32
+                equiprobable quantiles at its mean SNR; with --cqi-corr and an aware
+                transmitter, their aware SNRs); infinite at the top of the range, ties by the
+                largest gain; top B (mean objective only)
+
+The relaxation's tie rule and price solver (docs/PAPER.md owed item 9: at 30 dB the
+Lagrangian index stays ~1.5 points per user below the bound at every K):
+    lagrange_relax  the Lagrangian index in Zhang and Frazier's fluid-priority order: users
+                whose gain at lambda*_t is above the programs' precision first (by gain), then
+                the indifferent ones (|gain| within it: they would take a later unit as well)
+                in a random order, which activates every indifferent state with the same
+                probability, as the relaxation's own mix does (alloc/whittle.kink_demand),
+                then the rest by gain. lagrange breaks equal rounded gains by the Whittle
+                index instead (every result before 2026-10-22)
+    lagrange_lpu  lagrange_relax with LP-update: every --resolve slots lambda* is re-solved
+                from the users' current states over the slots left (Gast, Gaujal and Yan;
+                Brown and Smith); the slot's own fading counts as unknown in the re-solve.
+                About 4 times lagrange's CPU at --resolve 6; not in the default --policies
+    --tie-band b    a gain within b times the smallest grid price of 0 is indifferent
+                    (default 0.5: the programs' interpolation error)
+    --price-scale supply   the subgradient step divided by the supply (default: price, the
+                    earlier step, which grows with B)
+    --kink-grad     the subgradient taken at the relaxation's mix of the indifferent states
+    --ny, --ng      the programs' Y grid and fading bins (default 128, 16)
+Per K the output also gives, at lambda* (the bound's programs), the demand that is sure (gain
+above the precision) and the indifferent mass, as shares of the supply: the tie rule matters
+when the sure demand falls short of the supply and the indifferent mass fills it.
 
 --delay (with --target): also when each user's decoded image reaches the target, per policy
 the share of users there by slots T/4, T/2, 3T/4 and T (a CDF over all users) and the mean slot
@@ -58,10 +88,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np  # noqa: E402
 
 from alloc.utility import load_utility  # noqa: E402
-from tools.schedule_sim import aware_snr, bootstrap, rate, targets  # noqa: E402
+from tools.schedule_sim import PI_Q, aware_snr, bootstrap, rate, targets, tie_keys  # noqa: E402
 
-POLICIES = ("pf", "adv", "whittle", "lagrange", "id_guided", "rand_guided")
-PRICED = ("lagrange", "id_guided", "rand_guided")       # need the programs at lambda*
+POLICIES = ("pf", "adv", "pi", "whittle", "lagrange", "lagrange_relax", "lagrange_lpu",
+            "id_guided", "rand_guided")
+DEFAULT = tuple(p for p in POLICIES if p != "lagrange_lpu")
+MEAN_ONLY = ("adv", "pi")
+PRICED = ("lagrange", "lagrange_relax", "lagrange_lpu", "id_guided", "rand_guided")  # at lambda*
 _G = {}
 
 
@@ -121,6 +154,9 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
     quota = None
     if policy == "adv":                        # quotas for the units expected, not the realised
         quota = targets(belief, imgs, typ, int(round(T * B * (1.0 - o.preempt))), "slope")
+    pis = pi_slots(o, util, belief, imgs, means) if policy == "pi" else None
+    tol = 0.5 * float(arms[0].lams[1]) if arms is not None else 0.0    # the programs' precision
+    band = o.tie_band * float(arms[0].lams[1]) if arms is not None else 0.0
     for t in range(T):
         Bt = int(units[t])
         if Bt == 0:
@@ -128,6 +164,13 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
         has = np.array([len(h) < P for h in hist])
         if not has.any():
             break
+        if policy == "lagrange_lpu" and t > 0 and t % o.resolve == 0:   # LP-update
+            from alloc.whittle import lagrangian_bound
+            _, prices = lagrangian_bound(
+                arms, T, o.preempt, per_slot=o.price_steps, units=B, scale=o.price_scale,
+                kink=band if o.kink_grad else None,
+                start=(t, [arms[k].state(hist[k]) for k in range(K)]))
+            W_star = [a.priced(prices) for a in arms]
         g = dec[:, t]
         r = rate(g)
         pf = r / (served + 1e-3 * r.mean())
@@ -136,6 +179,8 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
         tie = None
         if policy == "pf":
             score = pf
+        elif policy == "pi":                              # potential improvement
+            score, tie = pi_index(belief, imgs, hist, g, pis, claim)
         elif policy == "adv":
             claim &= np.array([len(h) < q for h, q in zip(hist, quota)])
             tie = pf                                      # exact ties (useless reports): PF
@@ -150,9 +195,13 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
                 wi[k] = arms[k].index(t, n, Y, x)
                 if policy in PRICED:
                     score[k] = arms[k].gain_at(W_star[k], prices, t, n, Y, x)
-            tol = 0.5 * float(arms[0].lams[1])            # the programs' precision
             if policy == "whittle":
                 score = wi
+            elif policy in ("lagrange_relax", "lagrange_lpu"):   # sure > indifferent > the
+                fin = np.isfinite(score)                  # rest; the indifferent at random
+                score = np.where(fin & (np.abs(score) <= band), 0.0,
+                                 np.where(fin, score, -np.inf))
+                tie = tie_keys(snr[:, t], t)
             elif policy == "lagrange":     # the Lagrangian gain, ties by the Whittle index
                 score, tie = np.where(np.isfinite(score), np.round(score / tol), -np.inf), wi
             else:                          # guided: the users whose ideal action is to take it,
@@ -178,6 +227,32 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
     return out, reach
 
 
+def pi_slots(o, util, belief, imgs, means):
+    """The PI index's typical slots: per user the SNRs (K, 32) its decisions would see on 32
+    equiprobable fades at its mean SNR (with stale reports and an aware transmitter, the
+    aware SNRs of reports at those fades)."""
+    means = np.asarray(means, dtype=np.float64)
+    rep = means[:, None] + PI_Q[None, :]
+    if o.cqi_corr < 1.0 and not o.cqi_naive:
+        return aware_snr(util, belief, imgs, means, rep, o.cqi_corr, o.snr_clip)
+    return np.clip(rep, *o.snr_clip)
+
+
+def pi_index(belief, imgs, hist, g, pis, claim):
+    """(score, tie) of the PI-type ratio rule: the gain of this slot over the expected
+    excess of a typical slot's gain above it (inf where no typical slot beats it), ties by
+    the gain itself."""
+    K = len(hist)
+    score, gain = np.full(K, -np.inf), np.full(K, -np.inf)
+    for k in np.flatnonzero(claim):
+        now = belief.psnr(int(imgs[k]), hist[k])
+        gain[k] = belief.psnr(int(imgs[k]), hist[k] + [float(g[k])]) - now
+        alt = np.array([belief.psnr(int(imgs[k]), hist[k] + [float(x)]) for x in pis[k]]) - now
+        ex = float(np.maximum(alt - gain[k], 0.0).mean())
+        score[k] = gain[k] / ex if ex > 1e-12 else np.inf
+    return score, gain
+
+
 def _score(util, imgs, hist, target):
     q = np.array([util.psnr(int(i), h) for i, h in zip(imgs, hist)])
     return float(q.mean()) if target is None else float(np.mean(q >= target))
@@ -193,21 +268,27 @@ def _work(args):
     clip = tuple(o.snr_clip)
     res = {}
     t0 = time.time()
+    grid = dict(ny=o.ny, ng=o.ng)
     arms = [Arm(util, int(i), float(m), T, target=o.target, p_lost=p_user, clip=clip,
-                cqi_corr=r) for i, m in zip(imgs, means)]
-    ub, prices = lagrangian_bound(arms, T, o.preempt, per_slot=o.price_steps, units=B)
+                cqi_corr=r, **grid) for i, m in zip(imgs, means)]
+    band = o.tie_band * float(arms[0].lams[1])
+    opt = dict(per_slot=o.price_steps, units=B, scale=o.price_scale,
+               kink=band if o.kink_grad else None)
+    info = {}
+    ub, prices = lagrangian_bound(arms, T, o.preempt, info=info, **opt)
     res["bound"] = ub / K
+    res["sure_share"], res["mid_share"] = info["sure_share"], info["mid_share"]
     pol_arms = arms
     if belief is not util or (seen is not None and o.cqi_naive):
         pol_arms = [Arm(belief, int(i), float(m), T, target=o.target, p_lost=p_user, clip=clip,
-                        cqi_corr=1.0 if o.cqi_naive else r) for i, m in zip(imgs, means)]
+                        cqi_corr=1.0 if o.cqi_naive else r, **grid) for i, m in zip(imgs, means)]
     W_star = None
     if any(p in o.policies for p in PRICED):
         if pol_arms is not arms:
-            _, prices = lagrangian_bound(pol_arms, T, o.preempt, per_slot=o.price_steps, units=B)
+            _, prices = lagrangian_bound(pol_arms, T, o.preempt, **opt)
         W_star = [a.priced(prices) for a in pol_arms]
     for p in o.policies:
-        if p == "adv" and o.target is not None:
+        if p in MEAN_ONLY and o.target is not None:
             continue
         h, reach = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star,
                        prices, order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
@@ -240,11 +321,21 @@ def main():
                     help="--cqi-corr < 1: the policies take the reports as exact")
     ap.add_argument("--target", type=float, default=None,
                     help="score the share of users at this PSNR (adv is not run)")
-    ap.add_argument("--policies", nargs="+", default=list(POLICIES), choices=POLICIES)
+    ap.add_argument("--policies", nargs="+", default=list(DEFAULT), choices=POLICIES)
     ap.add_argument("--delay", action="store_true",
                     help="with --target: when each user reaches it (a CDF by slot, mean slot)")
     ap.add_argument("--price-steps", type=int, default=10,
                     help="subgradient steps on a price per slot for the bound (0: one price)")
+    ap.add_argument("--tie-band", type=float, default=0.5,
+                    help="a gain within this many smallest grid prices of 0 is indifferent")
+    ap.add_argument("--price-scale", default="price", choices=["price", "supply"],
+                    help="the subgradient step: the earlier one, or divided by the supply")
+    ap.add_argument("--kink-grad", action="store_true",
+                    help="the subgradient at the relaxation's mix of the indifferent states")
+    ap.add_argument("--resolve", type=int, default=6,
+                    help="lagrange_lpu: re-solve lambda* every N slots")
+    ap.add_argument("--ny", type=int, default=128, help="the programs' Y grid points")
+    ap.add_argument("--ng", type=int, default=16, help="the programs' fading bins")
     ap.add_argument("--index-frames", type=int, default=1,
                     help="frames whose programs are checked for indexability")
     ap.add_argument("--index-arms", type=int, default=8, help="programs checked per such frame")
@@ -260,6 +351,8 @@ def main():
         ap.error("--preempt is in [0, 1)")
     if o.delay and o.target is None:
         ap.error("--delay needs --target")
+    if o.resolve < 1 or o.ny < 8 or o.ng < 2 or o.tie_band < 0:
+        ap.error("--resolve >= 1, --ny >= 8, --ng >= 2, --tie-band >= 0")
     util = load_utility(o.utility)
     if getattr(util, "kind", "") == "digital":
         ap.error("the programs need a token-prefix utility")
@@ -271,8 +364,12 @@ def main():
           f"{f', stale reports (correlation {o.cqi_corr:g}, transmitter ' + ('naive' if o.cqi_naive else 'aware') + ')' if o.cqi_corr < 1 else ''}"
           f"; {'mean PSNR' if o.target is None else f'share at {o.target:g} dB'}; utility "
           f"{o.utility}{f' (not nested: largest rho deviation {dev:.3f}; the programs use its nested approximation)' if dev > 1e-6 else ''}")
+    print(f"programs: Y grid {o.ny}, {o.ng} fading bins; prices: {o.price_steps} subgradient steps, "
+          f"step scaled by {o.price_scale}{', at the kink' if o.kink_grad else ''}"
+          f"{f'; lagrange_lpu re-solves every {o.resolve} slots' if 'lagrange_lpu' in o.policies else ''}"
+          f"; indifference band {o.tie_band:g} x the smallest grid price")
     scale, unit = (1.0, "dB") if o.target is None else (100.0, "pts")
-    pols = [p for p in o.policies if not (p == "adv" and o.target is not None)]
+    pols = [p for p in o.policies if not (p in MEAN_ONLY and o.target is not None)]
     table = {}
     for K in o.users:
         B = K // o.users_per_unit
@@ -290,9 +387,14 @@ def main():
         print(f"\nK {K} users, B {B} units per slot, {o.frames} frames ({time.time() - t0:.0f} s; "
               f"{np.mean([r['seconds'] for r in res]):.1f} s per frame and worker)")
         print(f"  {'Lagrangian bound (per user)':30s} {scale * bound.mean():8.3f}")
+        sure = np.mean([r["sure_share"] for r in res])
+        mid = np.mean([r["mid_share"] for r in res])
+        print(f"  at lambda*: sure demand {100 * sure:.1f}% of the supply, indifferent mass "
+              f"{100 * mid:.1f}% (within {o.tie_band:g} x the smallest grid price of a zero gain)")
         print(f"  {'policy':12s} {'value':>8s} {'phases':>6s}   {'gap to the bound [95% CI]':>32s}"
               f"   {'gap x sqrt(K)':>13s}")
-        row = {"B": B, "bound": float(bound.mean())}
+        row = {"B": B, "bound": float(bound.mean()), "sure_share": float(sure),
+               "mid_share": float(mid)}
         for p in pols:
             v = np.array([r[p] for r in res])
             d = bound - v
@@ -304,7 +406,10 @@ def main():
             row[p + "_gap"] = float(d.mean())
             row[p + "_gap_ci"] = [float(lo), float(hi)]
         for a, b in (("lagrange", "whittle"), ("whittle", "adv"), ("lagrange", "adv"), ("adv", "pf"),
-                     ("whittle", "pf"), ("id_guided", "rand_guided"), ("lagrange", "id_guided")):
+                     ("whittle", "pf"), ("id_guided", "rand_guided"), ("lagrange", "id_guided"),
+                     ("adv", "pi"), ("pi", "pf"), ("lagrange", "pi"),
+                     ("lagrange_relax", "lagrange"), ("lagrange_lpu", "lagrange_relax"),
+                     ("lagrange_lpu", "lagrange")):
             if a in pols and b in pols:
                 d = np.array([r[a] - r[b] for r in res])
                 lo, hi = bootstrap(d, seed=o.seed)
@@ -345,7 +450,8 @@ def report_delay(o, res, pols, row):
         row[p + "_slot"] = float(slot.mean())
         print(f"    {p:12s} " + " ".join(f"{100 * b:5.1f}%" for b in by) + f"   {slot.mean():6.2f}")
     for a, b in (("lagrange", "whittle"), ("whittle", "pf"), ("lagrange", "pf"),
-                 ("id_guided", "rand_guided"), ("lagrange", "id_guided")):
+                 ("id_guided", "rand_guided"), ("lagrange", "id_guided"),
+                 ("lagrange_relax", "lagrange"), ("lagrange_lpu", "lagrange")):
         if a in pols and b in pols:
             d = np.minimum(per[a], T + 1).mean(1) - np.minimum(per[b], T + 1).mean(1)
             lo, hi = bootstrap(d, seed=o.seed)

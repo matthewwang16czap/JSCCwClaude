@@ -146,37 +146,82 @@ class Arm:
                 W[t, :, n, :] = self.p * stay + (1.0 - self.p) * (best.transpose(0, 2, 1) @ self.w)
         return W
 
-    def demand(self, prices):
+    def demand(self, prices, start=None, W=None):
         """With a price per slot (T,): the value from the start, and the expected number of
         slots t the user takes (T,) under its best response (a forward pass of its state
-        distribution through the decisions of its program; the gradient of the value)."""
+        distribution through the decisions of its program; the gradient of the value).
+        `start` = (t0, n, Y): from that state at the start of slot t0 (LP-update: the slots
+        before t0 take nothing, the value is the state's). W: priced(prices), if at hand."""
         prices = np.asarray(prices, dtype=np.float64)
-        W = self._solve(prices[None, :])[:, 0]                  # (T + 1, P + 1, ny)
-        cell = self._cells()
-        mass = np.zeros((self.P + 1, len(self.y)))
-        mass[0, 0] = 1.0
+        if W is None:
+            W = self._solve(prices[None, :])[:, 0]              # (T + 1, P + 1, ny)
+        t0, mass = self.start_mass(start)
+        value = float(W[0, 0, 0]) if start is None else float((W[t0] * mass).sum())
         taken = np.zeros(self.T)
-        for t in range(self.T):
-            new = mass * self.p                                 # the slot is lost
-            new[self.P] += mass[self.P] * (1.0 - self.p)        # nothing left to take
-            for n in range(self.P):
-                j, a = cell[n]
-                val = W[t + 1, n + 1, j] * (1.0 - a) + W[t + 1, n + 1, j + 1] * a   # (ng, ny)
-                if self.kern is not None:                  # decided on the report's bin
-                    val = self.kern @ val
-                take = val - prices[t] > W[t + 1, n, :][None, :]                 # (ng, ny)
-                mv = mass[n][None, :] * self.w[:, None] * (1.0 - self.p)  # (ng, ny)
-                taken[t] += float((mv * take).sum())
-                new[n] += (mv * ~take).sum(0)
-                if self.kern is not None:                  # the true bin it lands in
-                    mt = self.kern.T @ (mv * take)
-                    np.add.at(new[n + 1], j.ravel(), (mt * (1.0 - a)).ravel())
-                    np.add.at(new[n + 1], (j + 1).ravel(), (mt * a).ravel())
-                    continue
-                np.add.at(new[n + 1], j[take], (mv * (1.0 - a))[take])
-                np.add.at(new[n + 1], j[take] + 1, (mv * a)[take])
-            mass = new
-        return float(W[0, 0, 0]), taken
+        for t in range(t0, self.T):
+            mass, taken[t], _ = self._slot(W, float(prices[t]), t, mass)
+        return value, taken
+
+    def start_mass(self, start=None):
+        """(t0, the state distribution (P + 1, ny) at the start of slot t0): the frame's
+        start, or the state (n, Y) of `start` = (t0, n, Y), split between its two Y grid
+        points as the programs interpolate."""
+        mass = np.zeros((self.P + 1, len(self.y)))
+        if start is None:
+            mass[0, 0] = 1.0
+            return 0, mass
+        t0, n, Y = start
+        j, a = self._weights(np.asarray(float(Y)))
+        mass[int(n), int(j)] += 1.0 - float(a)
+        mass[int(n), int(j) + 1] += float(a)
+        return int(t0), mass
+
+    def _slot(self, W, price, t, mass, theta=0.0, tol=0.0):
+        """One slot of a forward pass: the state distribution `mass` (P + 1, ny) at the start
+        of slot t under the decisions of the program with values W, priced `price` in slot t.
+        A state whose gain from the slot net of its price is above tol takes it; one within
+        tol of 0 (at the kink: indifferent, a later slot as good) takes it with probability
+        theta, unless the slot is worth nothing to it at all (done or out of reach, which a
+        zero price leaves at the kink too). Returns (the distribution at t + 1, the mass that
+        takes the slot for sure, the indifferent mass). theta = tol = 0: the strict best
+        response (bit for bit the earlier forward pass)."""
+        new = mass * self.p                                     # the slot is lost
+        new[self.P] += mass[self.P] * (1.0 - self.p)            # nothing left to take
+        cell, ny = self._cells(), len(self.y)
+        strict = mid_mass = 0.0
+        for n in range(self.P):
+            if not mass[n].any():
+                continue
+            j, a = cell[n]
+            val = W[t + 1, n + 1, j] * (1.0 - a) + W[t + 1, n + 1, j + 1] * a   # (ng, ny)
+            if self.kern is not None:                      # decided on the report's bin
+                val = self.kern @ val
+            stay = W[t + 1, n, :][None, :]
+            d = val - price - stay                         # (the earlier forward pass's order)
+            take = d > tol                                                    # (ng, ny)
+            mv = mass[n][None, :] * self.w[:, None] * (1.0 - self.p)          # (ng, ny)
+            strict += float((mv * take).sum())
+            mid = (d >= -tol) & ~take & (val - stay > tol)   # indifferent, and worth something
+            if theta > 0 and mid.any():                    # mixed at the kink
+                mid_mass += float((mv * mid).sum())
+                mt = mv * (take + theta * mid)
+                new[n] += (mv - mt).sum(0)
+                if self.kern is not None:
+                    mt = self.kern.T @ mt
+                new[n + 1] += (np.bincount(j.ravel(), (mt * (1.0 - a)).ravel(), ny)
+                               + np.bincount((j + 1).ravel(), (mt * a).ravel(), ny))
+                continue
+            if tol > 0:
+                mid_mass += float((mv * mid).sum())
+            new[n] += (mv * ~take).sum(0)
+            if self.kern is not None:                      # the true bin it lands in
+                mt = self.kern.T @ (mv * take)
+                np.add.at(new[n + 1], j.ravel(), (mt * (1.0 - a)).ravel())
+                np.add.at(new[n + 1], (j + 1).ravel(), (mt * a).ravel())
+                continue
+            np.add.at(new[n + 1], j[take], (mv * (1.0 - a))[take])
+            np.add.at(new[n + 1], j[take] + 1, (mv * a)[take])
+        return new, strict, mid_mass
 
     def value(self, lam):
         """W(lam): the expected reward minus prices paid, from the start of the frame."""
@@ -221,8 +266,9 @@ class Arm:
 
     def gain_at(self, Wp, prices, t, n, Y, snr):
         """The gain of taking slot t at this SNR (report) in the program priced at `prices`
-        (Wp = priced(prices)): the Lagrangian index of Hu and Frazier / Brown and Smith,
-        well defined without indexability."""
+        (Wp = priced(prices)): the Lagrangian index of Hu and Frazier / Brown and Smith, at the
+        bound's prices Hao, Xu and Tong's Lagrangian priority value (minus lambda_t), well
+        defined without indexability."""
         if n >= self.P or t >= self.T:
             return -np.inf
         lam = float(np.broadcast_to(np.asarray(prices, dtype=np.float64), (self.T,))[t])
@@ -270,21 +316,75 @@ class Arm:
         return bad / max(tot, 1)
 
 
-def lagrangian_bound(arms, T, p_lost=0.0, refine=12, per_slot=0, units=1):
+def kink_demand(arms, prices, supply, tol, Ws=None, starts=None):
+    """The relaxation's demand at a kink: the programs' forward passes in lockstep, priced
+    `prices` (T,); in each slot every state whose gain is within tol of 0 (indifferent: the
+    users who would take a later slot as well) takes the slot with one common probability
+    theta_t, the one that brings the expected demand to the supply where it can (the
+    relaxation's own randomisation: Brown and Smith's split in proportion to the occupation
+    measure, Hao, Xu and Tong's phi*, water-filling across the mixed states). Ws: the
+    programs priced at `prices`; starts: one (t0, n, Y) per arm (LP-update). Returns
+    (demand (T,), theta (T,), the sure demand (T,), the indifferent mass (T,))."""
+    T = arms[0].T
+    prices = np.asarray(prices, dtype=np.float64)
+    Ws = [a.priced(prices) for a in arms] if Ws is None else Ws
+    starts = [None] * len(arms) if starts is None else starts
+    init = [a.start_mass(s) for a, s in zip(arms, starts)]
+    t0, mass = init[0][0], [m for _, m in init]
+    dem, theta, sure, mid = (np.zeros(T) for _ in range(4))
+    for t in range(t0, T):
+        parts = [a._slot(W, float(prices[t]), t, m, 0.0, tol) for a, W, m in zip(arms, Ws, mass)]
+        sure[t], mid[t] = sum(p[1] for p in parts), sum(p[2] for p in parts)
+        th = float(np.clip((supply - sure[t]) / mid[t], 0.0, 1.0)) if mid[t] > 1e-12 else 0.0
+        theta[t], dem[t] = th, sure[t] + th * mid[t]
+        mass = ([a._slot(W, float(prices[t]), t, m, th, tol)[0]
+                 for a, W, m in zip(arms, Ws, mass)] if th > 0 else [p[0] for p in parts])
+    return dem, theta, sure, mid
+
+
+def lagrangian_bound(arms, T, p_lost=0.0, refine=12, per_slot=0, units=1, scale="price",
+                     kink=None, start=None, info=None):
     """min over prices lam >= 0 of (1 - p) B sum_t lam_t + sum_k W_k(lam): an upper bound on
     the expected objective (summed over the users) of every causal scheduler that serves at
     most B = `units` users per slot, each unit lost with probability p. First over a
     constant price (the grid minimum refined by golden-section search between its
     neighbours), then, with per_slot > 0, that many projected subgradient steps on a price
     per slot (the gradient: the slots' supply (1 - p) B minus the users' expected demand).
-    Returns (bound, prices: a constant or (T,))."""
+    Returns (bound, prices: a constant or (T,)).
+
+    scale: the subgradient step. "price" (the default, every result before 2026-10-22):
+    half the constant price over sqrt(step number), times the gradient in units, so it grows
+    with B (at B = 4 and 8 the steps never improved on the constant price). "supply": the
+    same divided by the supply (1 - p) B, a relative step at every B.
+    kink: a tolerance; the gradient is then taken at the relaxation's mix of the indifferent
+    states (kink_demand), not at their strict best response, which counts every indifferent
+    state as not buying and so overstates the shortfall wherever many states are tied.
+    start = (t0, [(n, Y) per arm]): the bound from slot t0 on, the users in those states (the
+    LP-update policy re-solves its prices so; the slots before t0 keep price 0).
+    info (a dict): receives the indifferent mass at the returned prices (kink_demand with
+    tol = kink, or the programs' precision), per slot and as a share of the supply."""
     lams = arms[0].lams
     supply = (1.0 - p_lost) * units
-    f = supply * T * lams + sum(a.W[0, :, 0, 0] for a in arms)
+    t0 = 0 if start is None else int(start[0])
+    sts = [None] * len(arms) if start is None else [(t0, n, Y) for n, Y in start[1]]
+    left = T - t0
+
+    def at(a, V, st):                         # V (L, P + 1, ny) at slot t0 -> (L,)
+        if st is None:
+            return V[:, 0, 0]
+        return a._interp(V[:, int(st[1]), :], float(st[2]))
+
+    f = supply * left * lams + sum(at(a, a.W[t0], st) for a, st in zip(arms, sts))
     j = int(np.argmin(f))
     best, lam = float(f[j]), float(lams[j])
     lo, hi = lams[max(j - 1, 0)], lams[min(j + 1, len(lams) - 1)]
-    g = lambda x: supply * T * x + sum(a.value(x) for a in arms)  # noqa: E731
+
+    def g(x):
+        if start is None:
+            return supply * T * x + sum(a.value(x) for a in arms)
+        return supply * left * x + sum(float(at(a, a._solve([x])[t0], st)[0])
+                                       for a, st in zip(arms, sts))
+
     for _ in range(refine if hi > lo else 0):
         x1, x2 = lo + 0.382 * (hi - lo), lo + 0.618 * (hi - lo)
         v1, v2 = g(x1), g(x2)
@@ -296,15 +396,37 @@ def lagrangian_bound(arms, T, p_lost=0.0, refine=12, per_slot=0, units=1):
             hi = x2
         else:
             lo = x1
-    if per_slot <= 0:
+    tol = kink if kink is not None else (0.5 * float(lams[1]) if len(lams) > 1 else 1e-9)
+    if per_slot <= 0 and start is None:
+        if info is not None:
+            _kink_info(info, arms, np.full(T, lam), supply, tol, sts if start else None)
         return best, lam
-    prices, step = np.full(T, lam), max(lam, 1e-3) * 0.5
+    live = np.arange(T) >= t0
+    prices = np.where(live, lam, 0.0)
+    step = max(lam, 1e-3) * 0.5 / (supply if scale == "supply" else 1.0)
     best_p = prices.copy()
     for it in range(per_slot):
-        vals, dem = zip(*(a.demand(prices) for a in arms))
-        ub = supply * prices.sum() + sum(vals)
+        Ws = [a.priced(prices) for a in arms]
+        if kink is None:
+            vals, dem = zip(*(a.demand(prices, st, W) for a, st, W in zip(arms, sts, Ws)))
+            dem = np.sum(dem, 0)
+        else:                                     # the values need no forward pass
+            vals = [float(W[0, 0, 0]) if st is None else float(at(a, W[t0][None], st)[0])
+                    for a, st, W in zip(arms, sts, Ws)]
+            dem = kink_demand(arms, prices, supply, kink, Ws, sts if start else None)[0]
+        ub = supply * prices[live].sum() + sum(vals)
         if ub < best - 1e-12:
             best, best_p = ub, prices.copy()
-        grad = supply - np.sum(dem, 0)
+        grad = np.where(live, supply - dem, 0.0)
         prices = np.maximum(prices - step / np.sqrt(it + 1) * grad, 0.0)
+    if info is not None:
+        _kink_info(info, arms, best_p, supply, tol, sts if start else None)
     return best, best_p
+
+
+def _kink_info(info, arms, prices, supply, tol, starts):
+    dem, theta, sure, mid = kink_demand(arms, prices, supply, tol, starts=starts)
+    live = slice(0 if starts is None else int(starts[0][0]), None)
+    info.update(mid=mid.tolist(), theta=theta.tolist(), sure=sure.tolist(),
+                mid_share=float(mid[live].sum() / max(supply * len(mid[live]), 1e-12)),
+                sure_share=float(sure[live].sum() / max(supply * len(sure[live]), 1e-12)))
