@@ -980,7 +980,7 @@ def check_stale_csi():
     with open(os.path.join(tmp, "s.json")) as fh:
         res = json.load(fh)["per_K"]
     ok(set(res) == {"8", "16"} and all(np.isfinite(v["bound"]) and v["B"] == int(k) // 8
-                                         and all(np.isfinite(v[p]) for p in rs.POLICIES)
+                                         and all(np.isfinite(v[p]) for p in rs.DEFAULT)
                                          for k, v in res.items()),
        "tools/rmab_scale.py: B = K / 8 units per slot, every policy and the bound per K")
     from types import SimpleNamespace
@@ -995,12 +995,145 @@ def check_stale_csi():
             arms = arms_for(belief, imgs, means, 10, target, 0.0, 1.0, (-2.0, 22.0), r)
             _, pr = lagrangian_bound(arms, 10, 0.0, per_slot=PRICE_STEPS)
             o = SimpleNamespace(target=target, cqi_naive=False, cqi_corr=r,
-                                snr_clip=(-2.0, 22.0), preempt=0.0)
+                                snr_clip=(-2.0, 22.0), preempt=0.0, tie_band=0.5, resolve=6)
             h2, _ = rs.run(o, u, belief, imgs, means, snr, np.ones(10, dtype=int), seen,
                            "lagrange", 1, arms, [a.priced(pr) for a in arms], pr)
             same &= h1 == h2
     ok(same, "schedule_sim's lagrange policy schedules exactly as tools/rmab_scale.py's with one "
              "unit per slot (mean and target, fresh and stale reports)")
+
+
+def check_relaxation(x):
+    """The relaxation's tie rule and price solver (alloc/whittle.kink_demand; lagrangian_bound
+    scale / kink / start), the lagrange_relax, lagrange_lpu and pi policies
+    (tools/rmab_scale.py, tools/schedule_sim.py), and perceptual metrics on decoded replays
+    (tools/mixed_snr.py --replay-metrics, tools/replay_report.py --metric)."""
+    import contextlib
+    import io
+    import json
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import tools.rmab_scale as rs
+    from alloc.utility import Utility, nested_rho
+    from alloc.whittle import Arm, kink_demand, lagrangian_bound
+    from tools.schedule_sim import PRICE_STEPS, arms_for, draw_frames, run_frame
+
+    print("[relaxation tie rule, price solver, PI index, replay metrics]")
+    rng = np.random.default_rng(0)
+    N, P = 8, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    rho = [nested_rho(master, L) for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)
+    u = Utility(1.8, rho, dsrc, csens, [f"im{i}" for i in range(N)],
+                meta={"nested": master.tolist()})
+    K, T = 8, 10
+    imgs, means = rng.integers(N, size=K), rng.uniform(0.0, 15.0, K)
+    good = True
+    for target in (None, 29.0):
+        arms = [Arm(u, int(i), float(m), T, target=target, ny=48, ng=8)
+                for i, m in zip(imgs, means)]
+        tol = 0.5 * float(arms[0].lams[1])
+        b0, _ = lagrangian_bound(arms, T, per_slot=2)
+        bs, _ = lagrangian_bound(arms, T, per_slot=2, start=(0, [(0, 0.0)] * K))
+        info = {}
+        bk, _ = lagrangian_bound(arms, T, per_slot=2, units=2, scale="supply", kink=tol, info=info)
+        bc, lam = lagrangian_bound(arms, T, units=2)
+        dem, th, sure, mid = kink_demand(arms, np.full(T, lam), 2.0, tol)
+        inner = (th > 0) & (th < 1)
+        m0 = arms[0].start_mass()[1]
+        m1 = arms[0]._slot(arms[0].priced(lam), lam, 0, m0, 0.5, tol)[0]
+        good &= (abs(b0 - bs) < 1e-9 and bk <= bc + 1e-12 and np.all((th >= 0) & (th <= 1))
+                 and np.allclose(dem, sure + th * mid) and np.allclose(dem[inner], 2.0)
+                 and abs(m1.sum() - 1.0) < 1e-12 and 0 <= info["mid_share"]
+                 and 0 <= info["sure_share"])
+    ok(good, "price solver: the bound re-solved from the frame's start is the bound; the "
+             "supply-scaled, kink subgradient never ends above the constant price; the kink's "
+             "mix theta is in [0, 1] and meets the supply wherever it is interior; a mixed slot "
+             "keeps the state distribution's mass")
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "u.json")
+    u.save(path)
+    rows = {}
+    for extra in (["--target", "29", "--policies", "pf", "whittle", "lagrange", "lagrange_relax",
+                   "lagrange_lpu", "--resolve", "3", "--price-scale", "supply", "--kink-grad"],
+                  ["--policies", "pf", "adv", "pi", "lagrange", "lagrange_relax"]):
+        argv, buf = sys.argv, io.StringIO()
+        sys.argv = ["rmab_scale.py", "--utility", path, "--users", "8", "16", "--frames", "2",
+                    "--slots", "8", "--price-steps", "2", "--index-arms", "1", "--ny", "48",
+                    "--ng", "8", "--out", os.path.join(tmp, "r.json")] + extra
+        try:
+            with contextlib.redirect_stdout(buf):
+                rs.main()
+        finally:
+            sys.argv = argv
+        with open(os.path.join(tmp, "r.json")) as fh:
+            rows["target" if "--target" in extra else "mean"] = json.load(fh)["per_K"]
+    pols = {"target": ("pf", "whittle", "lagrange", "lagrange_relax", "lagrange_lpu"),
+            "mean": ("pf", "adv", "pi", "lagrange", "lagrange_relax")}
+    ok(all(np.isfinite(v[p]) and 0 <= v["mid_share"] and 0 <= v["sure_share"]
+           for kind, per in rows.items() for v in per.values() for p in pols[kind]),
+       "tools/rmab_scale.py: lagrange_relax, lagrange_lpu (LP-update), pi, supply-scaled and "
+       "kink prices, coarse grids; the sure demand and indifferent mass at lambda* per K")
+    from tools.schedule_sim import tie_keys
+    same, clip = True, (-2.0, 22.0)
+    for target, r, pol in ((None, 1.0, "lagrange_relax"), (29.0, 1.0, "lagrange_relax"),
+                           (29.0, 0.7, "lagrange_relax"), (None, 1.0, "pi"), (None, 0.7, "pi")):
+        for imgs, means, snr, belief, avail, seen in draw_frames(
+                u, 4, 10, 2, (0.0, 15.0), "rayleigh", clip, seed=5, cqi_corr=r):
+            h1 = run_frame(u, belief, imgs, means, snr, pol, target=target, seen=seen,
+                           aware=r if r < 1 else None)
+            arms = arms_for(belief, imgs, means, 10, target, 0.0, 1.0, clip, r)
+            _, pr = lagrangian_bound(arms, 10, 0.0, per_slot=PRICE_STEPS)
+            o = SimpleNamespace(target=target, cqi_naive=False, cqi_corr=r, snr_clip=clip,
+                                preempt=0.0, tie_band=0.5, resolve=6)
+            h2, _ = rs.run(o, u, belief, imgs, means, snr, np.ones(10, dtype=int), seen, pol, 1,
+                           arms, [a.priced(pr) for a in arms], pr)
+            same &= h1 == h2
+    k1, k2 = tie_keys(np.array([1.0, 2.0, 3.0]), 4), tie_keys(np.array([1.0, 2.0, 3.0]), 4)
+    ok(same and np.array_equal(k1, k2) and not np.array_equal(k1, tie_keys(np.array([1.0, 2.0, 3.0]), 5)),
+       "schedule_sim's lagrange_relax and pi schedule exactly as tools/rmab_scale.py's with one "
+       "unit per slot (mean and target, fresh and stale reports); tie keys repeat per slot")
+    from tools.mixed_snr import run_file
+    model, cfg = build("vit")
+    spec = {"chunking": "phase", "target": 10.0, "entries": [
+        {"frame": 0, "policy": "pf", "user": 0, "image": "a", "mean_snr": 5.0, "snrs": [5.0, 9.0],
+         "predicted_psnr": 12.0},
+        {"frame": 0, "policy": "pf", "user": 1, "image": "b", "mean_snr": 3.0, "snrs": [],
+         "predicted_psnr": 10.0},
+        {"frame": 0, "policy": "lagrange", "user": 0, "image": "a", "mean_snr": 5.0, "snrs": [5.0],
+         "predicted_psnr": 11.0},
+        {"frame": 0, "policy": "lagrange", "user": 1, "image": "b", "mean_snr": 3.0,
+         "snrs": [3.0, 3.0, 8.0], "predicted_psnr": 12.5}]}
+    with open(os.path.join(tmp, "p.json"), "w") as fh:
+        json.dump(spec, fh)
+    args = SimpleNamespace(profiles_json=os.path.join(tmp, "p.json"), length_checkpoints=None)
+    ds = SimpleNamespace(names=["a", "b"])
+    loader = [x[0:1], x[1:2]]
+    with contextlib.redirect_stdout(io.StringIO()):
+        plain = run_file(model, cfg, args, ds, loader, MetricSuite(["psnr"]))["entries"]
+        more = run_file(model, cfg, args, ds, loader, MetricSuite(["psnr", "msssim", "lpips"]))
+    out = os.path.join(tmp, "d.json")
+    with open(out, "w") as fh:
+        json.dump(more, fh)
+    argv, buf = sys.argv, io.StringIO()
+    sys.argv = ["replay_report.py", out, "--metric", "msssim", "--base", "pf"]
+    try:
+        from tools.replay_report import main as replay_main
+        with contextlib.redirect_stdout(buf):
+            replay_main()
+    finally:
+        sys.argv = argv
+    me = more["entries"]
+    ok(all(a.get("actual_psnr") == b.get("actual_psnr") for a, b in zip(plain, me))
+       and me[1]["actual_psnr"] is None
+       and all(np.isfinite(e["actual_msssim"]) and np.isfinite(e["actual_lpips"]) for e in me)
+       and "mean msssim" in buf.getvalue(),
+       "mixed_snr --replay-metrics: the decoded PSNR is unchanged, MS-SSIM and LPIPS for every "
+       "entry (an empty one as a mid-grey image); replay_report --metric pairs on them")
 
 
 def check_harq():
@@ -1574,6 +1707,7 @@ def main():
     check_snr_profiles(x)
     check_codesign(x)
     check_stale_csi()
+    check_relaxation(x)
     check_harq()
     check_delay()
     check_schedule()

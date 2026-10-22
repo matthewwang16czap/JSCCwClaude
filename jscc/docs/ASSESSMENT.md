@@ -310,6 +310,16 @@ IEEE Transactions on Wireless Communications (TWC).
    HARQ, and scheduler-made training. "Near-optimal" is kept for mean PSNR only; the 30 dB target
    is reported as measured, with its diagnosis, until owed item 9 runs. The title drops
    "Near-Optimal Index Scheduling".
+27. **The last runs before writing (2026-10-22, COMMANDS 22).** Built and smoke-checked: the
+   relaxation's tie rule (`lagrange_relax`), LP-update (`lagrange_lpu`), a supply-scaled and
+   kink-aware price solver, finer program grids, the PI-type ratio baseline (`pi`), and MS-SSIM /
+   LPIPS on decoded schedules; the sheet adds CLIC (60 test images: the abstraction, the utility,
+   the main frames and two decoded schedules). On the smoke stand-in the tie rule changes nothing
+   and the 30 dB gap already falls like 1/sqrt(K), so whether the real utility's flat gap is the
+   policy's or the bound's is for the runs to say. What each outcome changes is in the sheet's
+   decision block: near-optimal at 30 dB (a fix closes it, or the bound tightens), or the target
+   gap stays a measured limitation; C3 against `pi`; C12, C1-C4 on two test sets; perceptual
+   columns in the main tables.
 
 ## 1. Your four points, checked
 

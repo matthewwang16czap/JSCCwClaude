@@ -36,7 +36,10 @@ Designs (--design):
             phase in delivery order; tools/schedule_sim.py --dump writes it): decoded and
             scored, next to the PSNR the utility model predicted for it; with a "target"
             (schedule_sim.py --target), also the share of users that reach it, decoded
-            against predicted
+            against predicted. --replay-metrics msssim lpips: also those metrics of every
+            decoded entry ("actual_msssim", "actual_lpips"; a user who received nothing
+            scores as a mid-grey image), the decoded PSNR unchanged (the same draws);
+            tools/replay_report.py --metric pairs policies on them
 
 --chunks K cuts a prefix into K equal parts; --chunks phase cuts it at phase
 boundaries (a phase = one token per patch position: CBR 1/48 at 256 px), so a
@@ -141,6 +144,9 @@ def add_args(parser):
     g.add_argument("--length-checkpoints", nargs="+", default=None,
                    help="file: one checkpoint per prefix length 1..P (one model per CBR): "
                         "each entry is encoded AND decoded by the model of its length")
+    g.add_argument("--replay-metrics", nargs="+", default=["psnr"],
+                   help="file: the metrics of every decoded entry (utils/metrics.py names; "
+                        "psnr always)")
     g.add_argument("--profile-seed", type=int, default=0)
     g.add_argument("--max-images", type=int, default=None)
     g.add_argument("--out", default=None, help="JSON: every profile's per-image PSNR + summary")
@@ -210,6 +216,18 @@ def score_profiles(model, cfg, enc, x, k, units, cuts, profiles, suite, seed):
     return out
 
 
+def score_entry(model, cfg, enc, x, k, units, cuts, snrs, suite, seed):
+    """Every metric of `suite` for one image under one SNR profile; the same draws as
+    score_profiles, so its PSNR is score_profiles' bit for bit."""
+    dev = x.device
+    reseed(cfg, seed)
+    snr = piecewise_snr(torch.tensor([snrs], device=dev), torch.tensor([cuts], device=dev,
+                                                                        dtype=torch.long),
+                        cfg.n_tokens)
+    rec = model.decode(enc, model.send(enc, units, snr), units)
+    return {n: float(v[0]) for n, v in suite(rec, x, keys=[k]).items()}
+
+
 def paired_report(entries, target=None):
     """Decoded differences between policies on the same frames (tools/schedule_sim.py
     dumps every policy on the same images and fades): per frame the users' mean PSNR, or
@@ -255,12 +273,14 @@ def run_file(models, cfg, args, ds, loader, suite):
         raise SystemExit(f"{len(missing)} images of {args.profiles_json} are not in the test set, "
                          f"e.g. {missing[:3]}")
     per = cfg.grid_tokens
+    extra = [n for n in suite.names if n != "psnr"]
     with torch.no_grad():
         for k, x in enumerate(loader):
             todo = by_image.get(ds.names[k], [])
             if not todo:
                 continue
             x = x.to(cfg.device, non_blocking=True)
+            grey = None
             with autocast(cfg, cfg.device):
                 per_length = isinstance(models, list)
                 encs = {}
@@ -268,6 +288,11 @@ def run_file(models, cfg, args, ds, loader, suite):
                     snrs = [float(v) for v in entries[e_i]["snrs"]]
                     if not snrs:
                         entries[e_i]["actual_psnr"] = None
+                        if extra:                     # nothing received: a mid-grey image
+                            if grey is None:
+                                grey = suite(torch.full_like(x, 0.5), x, keys=[k])
+                            for n in extra:
+                                entries[e_i]["actual_" + n] = float(grey[n][0])
                         continue
                     if len(snrs) > cfg.phases:
                         raise SystemExit(f"entry {e_i}: {len(snrs)} phases, the model has "
@@ -277,6 +302,14 @@ def run_file(models, cfg, args, ds, loader, suite):
                     key = len(snrs) if per_length else 0
                     if key not in encs:
                         encs[key] = model.encode(x)
+                    if extra:
+                        vals = score_entry(model, cfg, encs[key], x, k, units,
+                                           chunk_cuts(units, "phase", per), snrs, suite,
+                                           cfg.eval_seed + 7919 * e_i)
+                        entries[e_i]["actual_psnr"] = vals["psnr"]
+                        for n in extra:
+                            entries[e_i]["actual_" + n] = vals.get(n)
+                        continue
                     entries[e_i]["actual_psnr"] = score_profiles(
                         model, cfg, encs[key], x, k, units, chunk_cuts(units, "phase", per),
                         [snrs], suite, cfg.eval_seed + 7919 * e_i)[0]
@@ -289,7 +322,10 @@ def run_file(models, cfg, args, ds, loader, suite):
             sel = [e for e in rows if e.get("policy", "?") == pol]
             a = np.mean([e["actual_psnr"] for e in sel])
             pr = np.mean([e["predicted_psnr"] for e in sel])
-            print(f"  {pol:12s} users {len(sel):5d}  actual mean PSNR {a:7.3f}  predicted {pr:7.3f}")
+            more = "".join(f"  {n} {np.nanmean([e.get('actual_' + n, np.nan) for e in sel]):.4f}"
+                           for n in extra)
+            print(f"  {pol:12s} users {len(sel):5d}  actual mean PSNR {a:7.3f}  predicted {pr:7.3f}"
+                  + more)
     tgt = spec.get("target")
     if tgt is not None:                     # target runs: a user with nothing is not satisfied
         print(f"target {tgt:g} dB: share of users at or above it, actual (decoded) vs predicted; "
@@ -304,7 +340,7 @@ def run_file(models, cfg, args, ds, loader, suite):
     paired_report(entries, tgt)
     spec["entries"] = entries
     spec["decoded_by"] = {"checkpoint": args.length_checkpoints or cfg.pretrained,
-                          "run_name": cfg.run_name}
+                          "run_name": cfg.run_name, "metrics": list(suite.names)}
     return spec
 
 
@@ -337,7 +373,9 @@ def main():
     model = loaded if args.length_checkpoints else loaded[0]
     ds = sweep_dataset(cfg, "test", max_images=args.max_images)
     loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
-    suite = MetricSuite(["psnr"])
+    if args.design != "file" and args.replay_metrics != ["psnr"]:
+        raise SystemExit("--replay-metrics is for --design file")
+    suite = MetricSuite(["psnr"] + [n for n in args.replay_metrics if n != "psnr"])
     if args.design == "file":
         out = run_file(model, cfg, args, ds, loader, suite)
         if args.out:

@@ -14,6 +14,10 @@ only where every frame's users had the same images and mean SNRs in both. Raw du
 (schedule_sim.py --dump, not decoded) are read the same way and scored by the PSNR their
 utility model predicts: the model's paired comparison across codes, on as many frames as
 the dumps hold.
+
+--metric msssim | lpips (files decoded with mixed_snr.py --replay-metrics): every mean and
+paired difference on that metric instead of PSNR (with a target, the share at it stays a
+PSNR share and the paired differences are the metric's mean); LPIPS is lower-is-better.
 """
 
 import argparse
@@ -33,6 +37,17 @@ def score(e):
     return e.get("predicted_psnr", 0.0) if a is None else a
 
 
+def metric(e, name):
+    """The entry's decoded value of a --replay-metrics metric (psnr: score)."""
+    if name == "psnr":
+        return score(e)
+    v = e.get("actual_" + name)
+    if v is None:
+        raise SystemExit(f"an entry has no actual_{name}: decode with mixed_snr.py "
+                         f"--replay-metrics {name}")
+    return float(v)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("files", nargs="+", help="decoded replays (mixed_snr.py --design file --out)")
@@ -41,6 +56,8 @@ def main():
                     help="the policy (tag:policy) the others are paired against; default: the "
                          "first of online / padc / pf / fixed_uni present")
     ap.add_argument("--target", type=float, default=None, help="default: the files' target")
+    ap.add_argument("--metric", default="psnr",
+                    help="psnr (default), or a metric decoded with --replay-metrics (msssim, lpips)")
     a = ap.parse_args()
     if a.tags and len(a.tags) != len(a.files):
         ap.error("--tags needs one name per file")
@@ -72,12 +89,17 @@ def main():
         err = np.array([e["predicted_psnr"] - e["actual_psnr"] for e in rows])
         print(f"{len(rows)} decoded histories: predicted - actual PSNR bias {err.mean():+.3f}, "
               f"MAE {np.abs(err).mean():.3f}, p95 {np.percentile(np.abs(err), 95):.3f} dB")
+    mname = a.metric
+    other = mname != "psnr"
     print(f"{'policy':24s} {'users':>5s} {kind + ' mean PSNR':>17s}"
+          + (f" {'mean ' + mname:>12s}" if other else "")
           + (f" {'at ' + format(tgt, 'g') + ' dB':>9s} {'predicted':>9s}" if tgt is not None else ""))
     for p in pols:
         sel = [e for e in entries if e["policy"] == p]
         q = np.array([score(e) for e in sel])
         line = f"{p:24s} {len(sel):5d} {q.mean():17.3f}"
+        if other:
+            line += f" {np.mean([metric(e, mname) for e in sel]):12.4f}"
         if tgt is not None:
             pre = np.array([e.get("predicted_psnr", 0.0) >= tgt for e in sel])
             line += f" {100 * (q >= tgt).mean():8.1f}% {100 * pre.mean():8.1f}%"
@@ -93,10 +115,16 @@ def main():
         raise SystemExit(f"--base {base!r} is not among the policies {pols}")
     per = {}
     for e in entries:
-        v = float(score(e) >= tgt) if tgt is not None else float(score(e))
+        if other:
+            v = metric(e, mname)
+        else:
+            v = float(score(e) >= tgt) if tgt is not None else float(score(e))
         per.setdefault(e["policy"], {}).setdefault(e["frame"], []).append(v)
     what = "share reaching the target" if tgt is not None else "mean PSNR"
     scale, unit = (100.0, " pts") if tgt is not None else (1.0, " dB")
+    if other:
+        what = f"mean {mname}" + (" (lower is better)" if "lpips" in mname or mname == "dists" else "")
+        scale, unit = 1.0, ""
     print(f"{kind}, paired by frame: {what} minus {base}'s, 95% CI over frames")
     for p in pols:
         if p == base:
@@ -106,8 +134,9 @@ def main():
             continue
         d = np.array([np.mean(per[p][f]) - np.mean(per[base][f]) for f in common])
         lo, hi = bootstrap(d)
-        print(f"  {p:24s} {scale * d.mean():+7.3f}{unit} [{scale * lo:+.3f}, {scale * hi:+.3f}]  "
-              f"({len(common)} frames)")
+        f = "+.4f" if other else "+.3f"
+        print(f"  {p:24s} {scale * d.mean():{'+8.4f' if other else '+7.3f'}}{unit} "
+              f"[{scale * lo:{f}}, {scale * hi:{f}}]  ({len(common)} frames)")
 
 
 if __name__ == "__main__":

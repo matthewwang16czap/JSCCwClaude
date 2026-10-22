@@ -189,10 +189,15 @@ report of correlation r with its channel (r = J0(2 pi f_D tau)), the true slots 
 policies take reports as exact unless `--cqi-aware` (decisions on each slot's posterior; the
 whittle policy's programs decide on the report). `schedule_sim.py --policies whittle lagrange`
 run the users' programs as policies (the Whittle index; the Lagrangian index at the bound's per-slot
-prices, the scheduler the measurements recommend). `tools/rmab_scale.py --users 8 16 32 64 128`
-runs PF, our rule, the Whittle and Lagrangian indices, the ID-guided policy of the restless-
-bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8 units
-per slot (`--cqi-corr`, `--target`, `--preempt` too).
+prices, the scheduler the measurements recommend; `lagrange_relax`: the same with the
+relaxation's tie rule, the indifferent users at random; `pi`: a PI-type ratio index, mean only).
+`tools/rmab_scale.py --users 8 16 32 64 128` runs PF, our rule, `pi`, the Whittle and Lagrangian
+indices (`lagrange`, `lagrange_relax`, `lagrange_lpu` with LP-update), the ID-guided policy of the
+restless-bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8
+units per slot (`--cqi-corr`, `--target`, `--preempt` too; the price solver: `--price-scale
+supply`, `--kink-grad`; the programs' grids: `--ny`, `--ng`). `mixed_snr.py --design file
+--replay-metrics msssim lpips` scores decoded schedules on those metrics too, and
+`replay_report.py --metric msssim` pairs policies on them.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and

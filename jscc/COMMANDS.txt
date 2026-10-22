@@ -1,14 +1,16 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-20. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-22. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: SECTION 21 (21.1 on GPUs 1-4, ~30 min after ~15 min of CPU; the rest CPU,
-~1-1.5 h in seven background chains, which can run while the GPUs decode). Everything through
-section 20 is done and recorded in docs/NOTES.md.
+WHAT TO RUN: SECTIONS 21 AND 22, the last runs before the paper is written. Section 22 (at the
+end): four GPU chains (GPUs 1-4, ~2-3 h) and nine CPU chains (seven of ~1-4 h), all in the
+background. Section 21 too if it is not done (if 21.1 has not started, skip only 21.1: 22.1
+decodes the same frames with more policies). Everything through section 20 is done and
+recorded in docs/NOTES.md.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -42,8 +44,10 @@ section 20 is done and recorded in docs/NOTES.md.
   20 C5 with HARQ, the stale-report            done (docs/NOTES.md 5, 6b, 6c)
      schedules decoded, the Lagrangian
      index's delay, margins on stale reports
-  21 the Lagrangian index on the main          TO RUN NOW (GPUs 1-4 for 21.1, the rest
-     frames, its latency budget, decoded       CPU)
+  21 the Lagrangian index on the main          TO RUN WITH 22 (GPUs 1-4 for 21.1, the
+     frames, its latency budget, decoded       rest CPU)
+  22 before writing: the 30 dB gap, the PI     TO RUN NOW (GPUs 1-4, the rest CPU)
+     baseline, CLIC, MS-SSIM / LPIPS
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2217,7 +2221,7 @@ cat results/s20_margin.txt                                                      
 #         on the posterior and plan the spare slots (plan_adv, aware).
 
 ================================================================================
- 21. TO RUN NOW -- the Lagrangian index on the main frames and decoded by the codec
+ 21. TO RUN WITH 22 -- the Lagrangian index on the main frames and decoded by the codec
      (GPUs 1-4: 21.1, ~30 min after ~15 min of CPU dumps; the rest CPU, ~1-1.5 h)
 ================================================================================
 # Why (section 20 is recorded in docs/NOTES.md 5, 6b, 6c; docs/PAPER.md C3-C14): the programs'
@@ -2352,3 +2356,232 @@ cat results/s21_latency_mean.txt results/s21_latency_tgt.txt                    
 #         form's advantage.
 #   21.3  the latency budget against the Lagrangian index: how many more slots PF and PADC need
 #         for its quality (the C14 headline, restated with the recommended scheduler).
+
+================================================================================
+ 22. TO RUN NOW -- what the paper still needs before writing: the 30 dB gap, the PI
+     baseline, a second test set (CLIC) and perceptual metrics
+     (GPUs 1-4: four chains of ~2-3 h; CPU: seven background chains of ~1-4 h)
+================================================================================
+# Why (docs/PAPER.md, "Owed before submission", items 2, 9 and 10). Without these the paper
+# cannot be written as planned:
+#   item 9   at 30 dB the Lagrangian index stays ~1.5 points per user below the bound at every
+#            K (section 18.3). The theory says a policy that follows the relaxation loses
+#            O(1 / sqrt(K)) per user, so either our policy does not follow it or the bound is
+#            loose. New code tests the four candidates on the same frames as 18.3:
+#            (a) the tie rule: lagrange_relax (the relaxation's own order: users with a sure
+#                gain first, then the indifferent ones at random, not by the Whittle index);
+#            (b) the bound's grids (--ny 256 --ng 32);
+#            (c) the price solver: --price-scale supply (a step that does not grow with B),
+#                30 steps, --kink-grad (the subgradient at the relaxation's mix of the
+#                indifferent users);
+#            (d) LP-update: lagrange_lpu re-solves the prices from the users' states every
+#                6 slots.
+#            Every run now also prints, per K, how much of the supply the indifferent users hold
+#            at the bound's prices (on the smoke stand-in: 40%, so the tie rule could matter;
+#            there it changed nothing and the gap already fell like 1 / sqrt(K)).
+#   item 10  the closed-form rule (slope_adv) needs a known ratio index beside it: pi, the
+#            PI-type index of Ayesta, Erausquin and Jacko (gain over the expected excess of a
+#            typical slot's gain), on the main frames and at scale.
+#   item 2   Kodak has 24 images and every table is PSNR: CLIC (the first 60 test images) for
+#            the abstraction (C12, C1), the decoded accuracy (C2) and the decoded gains (C3,
+#            C4); and MS-SSIM / LPIPS of every decoded schedule (tools/mixed_snr.py
+#            --replay-metrics: the decoded PSNR is unchanged, the same draws).
+# Section 21: run it too if it is not done. If 21.1 has not started, skip 21.1 only: 22.1's
+# Kodak decodes are the same 60 frames with every policy of 21.1 and more. 21.2-21.3 stay.
+# Everything is skipped if its output exists. Order: 22.0; 22.1 (one CPU chain for the dumps,
+# then four GPU chains, which wait for them); 22.2 (seven CPU chains); 22.3 (one CPU chain that
+# waits for the CLIC decodes of 22.1, fits CLIC's utility and writes CLIC's schedules, which
+# GPU chains 1 and 2 then decode); 22.4 when everything is done.
+
+# 22.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: [relaxation tie rule ...])
+mkdir -p results logs_s22
+nvidia-smi -i 1,2,3,4
+cat > logs_s22/env.sh <<'ENV'
+. logs_s21/env.sh
+S1=${VT}_s1/models/last.pt
+NW=8
+CLICDIR=$JSCC_DATA_ROOT/datasets/CLIC/test
+CLICP="--img-size 256 --channel-type awgn --amp --testset CLIC --max-images 60 --snrs 1 4 7 10 13 --design full --chunks phase --random-profiles 10 --backbone vit"
+CREPF="--img-size 256 --channel-type awgn --amp --testset CLIC --max-images 60 --design file --backbone vit"
+PM="--replay-metrics msssim lpips"
+CNUB="--utility results/utility_clic_nested.json --belief results/belief_clic_nested.json"
+TIE="--target 30 --users 8 16 32 64 128 --frames 100 --workers 8"
+SUP="--price-scale supply --price-steps 30 --kink-grad"
+ENV
+. logs_s22/env.sh
+#   inputs that must exist (sections 13-21; send me any line saying "No such file"):
+ls logs_s21/env.sh results/utility_snrc4_nested.json results/belief_snrc4_nested.json $SNRC4 $S1 > /dev/null
+#   the CLIC test set: the first 60 images (sorted by path) of ~/datasets/CLIC/test, any
+#   subfolders. If this prints 0 or "No such file", put the CLIC test images there (e.g. the
+#   CLIC 2020 professional test set) or tell me: everything else in section 22 runs without it
+ls $CLICDIR | head -3; find $CLICDIR -type f | wc -l
+
+# 22.1 -- Kodak schedules (CPU, ~20 min, background), then four GPU chains (background) -------
+#   The dumps: 60 frames each, the seed and frames of sections 12-21 (so they repeat 21.1's
+#   schedules for its policies), with pi and lagrange_relax added: mean PSNR and the 30 dB
+#   target, fresh reports and r = 0.8 with the aware transmitter.
+. logs_s22/env.sh
+nohup bash -c "
+[ -s results/s22_rep_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --policies pf slope_adv pi whittle lagrange lagrange_relax --out results/s22_rep_mean.json > results/s22_rep.tmp 2>&1 ;
+[ -s results/s22_rep_tgt_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --target 30 --policies padc online whittle lagrange lagrange_relax --out results/s22_rep_tgt.json >> results/s22_rep.tmp 2>&1 ;
+[ -s results/s22_rep_r80_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --policies pf slope_adv pi whittle lagrange lagrange_relax --out results/s22_rep_r80_mean.json >> results/s22_rep.tmp 2>&1 ;
+[ -s results/s22_rep_r80_tgt_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware --target 30 --policies padc plan_adv whittle lagrange lagrange_relax --out results/s22_rep_r80_tgt.json >> results/s22_rep.tmp 2>&1 ;
+mv results/s22_rep.tmp results/s22_rep.txt
+" > /dev/null 2>&1 &
+#   GPU chains, one per card. Each: (1) its part of CLIC's mixed-SNR measurements (the data of
+#   the utility model, sections 6b and 13: snrc4 on GPUs 1-2, the constant-SNR control s1 on
+#   GPUs 3-4, split by CBR; ~1 h; skipped without CLIC), (2) one Kodak decode with MS-SSIM and
+#   LPIPS (~15-20 min), (3) GPUs 1-2 only: one CLIC schedule decode, when 22.3 has written it
+#   (~20-30 min). A chain waits at most 12 h for its inputs.
+cat > logs_s22/gpu.sh <<'GPU'
+. logs_s22/env.sh
+G=$1
+waitfor() { for i in $(seq 1 720); do [ -s "$1" ] && return 0; sleep 60; done; return 1; }
+case $G in
+  1) M=$SNRC4; C="1/48 1/24 1/16 1/12"; P=snrc4_a; K=mean ;;
+  2) M=$SNRC4; C="5/48 1/8"; P=snrc4_b; K=tgt ;;
+  3) M=$S1; C="1/48 1/24 1/16 1/12"; P=s1_a; K=r80_mean ;;
+  4) M=$S1; C="5/48 1/8"; P=s1_b; K=r80_tgt ;;
+esac
+if [ -d $CLICDIR ] && [ ! -s results/s22_clic_full_$P.json ]; then
+  CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $CLICP --cbrs $C --pretrained $M --out results/s22_clic_full_$P.json > results/s22_clic_full_$P.txt 2>&1
+fi
+waitfor results/s22_rep_${K}_histories.json && [ ! -s results/s22_dec_$K.json ] && \
+  CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $REPF $PM --pretrained $SNRC4 --profiles-json results/s22_rep_${K}_histories.json --out results/s22_dec_$K.json > results/s22_dec_$K.txt 2>&1
+if [ $G -le 2 ] && [ -d $CLICDIR ]; then
+  waitfor results/s22_clic_rep_${K}_histories.json && [ ! -s results/s22_clic_dec_$K.json ] && \
+    CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $CREPF $PM --pretrained $SNRC4 --profiles-json results/s22_clic_rep_${K}_histories.json --out results/s22_clic_dec_$K.json > results/s22_clic_dec_$K.txt 2>&1
+fi
+echo done > logs_s22/gpu$G.done
+GPU
+for g in 1 2 3 4; do nohup bash logs_s22/gpu.sh $g > logs_s22/gpu$g.log 2>&1 & done
+sleep 120; tail -n 2 results/s22_clic_full_*.txt
+
+# 22.2 -- CPU, background, seven chains (~1-4 h each; the five rmab_scale chains run 8
+#   processes each, 40 cores in all: on a smaller machine start them two at a time) ------------
+#   22.2a-d: the 30 dB gap at scale (tools/rmab_scale.py, B = K / 8, section 18.3's frames).
+#   a: the tie rule alone, at the earlier prices (lagrange repeats 18.3's numbers exactly);
+#   b: the same policies at the fixed prices (the bound itself may move: read it beside a's);
+#   c: LP-update (K 8, 32, 128); d: finer grids at b's prices (K 8, 32, 128).
+. logs_s22/env.sh
+nohup bash -c "
+[ -s results/s22_gap_ties.txt ] || {
+python tools/rmab_scale.py $NUB $TIE --policies pf whittle lagrange lagrange_relax --out results/s22_gap_ties.json > results/s22_gap_ties.tmp 2>&1 ;
+mv results/s22_gap_ties.tmp results/s22_gap_ties.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s22_gap_prices.txt ] || {
+python tools/rmab_scale.py $NUB $TIE $SUP --policies pf whittle lagrange lagrange_relax --out results/s22_gap_prices.json > results/s22_gap_prices.tmp 2>&1 ;
+mv results/s22_gap_prices.tmp results/s22_gap_prices.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s22_gap_lpu.txt ] || {
+python tools/rmab_scale.py $NUB --target 30 --users 8 32 128 --frames 100 --workers 8 $SUP --resolve 6 --policies lagrange lagrange_relax lagrange_lpu --out results/s22_gap_lpu.json > results/s22_gap_lpu.tmp 2>&1 ;
+mv results/s22_gap_lpu.tmp results/s22_gap_lpu.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s22_gap_grid.txt ] || {
+python tools/rmab_scale.py $NUB --target 30 --users 8 32 128 --frames 100 --workers 8 $SUP --ny 256 --ng 32 --policies pf lagrange lagrange_relax --out results/s22_gap_grid.json > results/s22_gap_grid.tmp 2>&1 ;
+mv results/s22_gap_grid.tmp results/s22_gap_grid.txt ; }
+" > /dev/null 2>&1 &
+#   22.2e: mean PSNR at scale with pi (the earlier prices: the other policies repeat 18.3's
+#   numbers), then the fixed prices (the mean result must not move).
+nohup bash -c "
+[ -s results/s22_scale_mean.txt ] || {
+python tools/rmab_scale.py $NUB --users 8 16 32 64 128 --frames 100 --workers 8 --policies pf adv pi whittle lagrange lagrange_relax --out results/s22_scale_mean.json > results/s22_scale_mean.tmp 2>&1 ;
+python tools/rmab_scale.py $NUB --users 8 32 128 --frames 100 --workers 8 $SUP --policies pf adv lagrange lagrange_relax --out results/s22_scale_mean_sup.json >> results/s22_scale_mean.tmp 2>&1 ;
+mv results/s22_scale_mean.tmp results/s22_scale_mean.txt ; }
+" > /dev/null 2>&1 &
+#   22.2f-g: the main frames (K 8, T 24, 500 frames, as 21.2): pi and lagrange_relax beside
+#   the earlier policies; fresh reports, 2 dB CQI errors, stale reports (r = 0.8, aware; the
+#   target with the 0.5 dB margin of section 20)
+nohup bash -c "
+[ -s results/s22_main_mean.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv pi whittle lagrange lagrange_relax > results/s22_main_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv pi whittle lagrange lagrange_relax --cqi-error 2 >> results/s22_main_mean.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --policies pf slope_adv pi whittle lagrange lagrange_relax --cqi-corr 0.8 --cqi-aware >> results/s22_main_mean.tmp 2>&1 ;
+mv results/s22_main_mean.tmp results/s22_main_mean.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s22_main_tgt.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange lagrange_relax --delay > results/s22_main_tgt.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange lagrange_relax --cqi-error 2 >> results/s22_main_tgt.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --margin 0.5 --policies padc plan_adv whittle lagrange lagrange_relax --cqi-corr 0.8 --cqi-aware >> results/s22_main_tgt.tmp 2>&1 ;
+mv results/s22_main_tgt.tmp results/s22_main_tgt.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s22_*.tmp
+
+# 22.3 -- CLIC: one CPU chain (background) that waits for the four CLIC parts of 22.1, then
+#   fits CLIC's utility (nested, with the transmitter's belief from 1 and 13 dB, as for Kodak),
+#   compares the link abstractions on snrc4 and on s1 (C12), runs the main frames on CLIC
+#   (500 frames) and writes the two 60-frame schedules that GPU chains 1 and 2 decode
+. logs_s22/env.sh
+cat > logs_s22/clic.sh <<'CLIC'
+. logs_s22/env.sh
+waitfor() { for i in $(seq 1 720); do [ -s "$1" ] && return 0; sleep 60; done; return 1; }
+[ -d $CLICDIR ] || { echo "no CLIC test set" > results/s22_clic.txt; exit 0; }
+waitfor results/s22_clic_full_snrc4_a.json && waitfor results/s22_clic_full_snrc4_b.json || exit 1
+{
+python tools/utility_fit.py --mixed results/s22_clic_full_snrc4_a.json results/s22_clic_full_snrc4_b.json --nested --out results/utility_clic_nested.json --calib 1 13 --belief-out results/belief_clic_nested.json 2>&1
+python tools/utility_fit.py --mixed results/s22_clic_full_snrc4_a.json results/s22_clic_full_snrc4_b.json --compare-abstractions 2>&1
+[ -s results/s22_clic_rep_mean_histories.json ] || python tools/schedule_sim.py $CNUB --frames 60 --dump 60 --policies pf slope_adv pi lagrange lagrange_relax --out results/s22_clic_rep_mean.json 2>&1
+[ -s results/s22_clic_rep_tgt_histories.json ] || python tools/schedule_sim.py $CNUB --frames 60 --dump 60 --target 30 --policies padc online lagrange lagrange_relax --out results/s22_clic_rep_tgt.json 2>&1
+python tools/schedule_sim.py $CNUB --frames 500 --policies pf slope_adv pi whittle lagrange lagrange_relax 2>&1
+python tools/schedule_sim.py $CNUB --frames 500 --target 30 --policies pf padc online plan_adv whittle lagrange lagrange_relax 2>&1
+waitfor results/s22_clic_full_s1_a.json && waitfor results/s22_clic_full_s1_b.json && \
+  python tools/utility_fit.py --mixed results/s22_clic_full_s1_a.json results/s22_clic_full_s1_b.json --compare-abstractions 2>&1
+} > results/s22_clic.tmp
+mv results/s22_clic.tmp results/s22_clic.txt
+CLIC
+nohup bash logs_s22/clic.sh > logs_s22/clic.log 2>&1 &
+
+# 22.4 -- reading (send back everything it prints) ------------------------------------------
+#   when logs_s22/gpu1.done ... gpu4.done exist and results/s22_*.tmp are gone:
+. logs_s22/env.sh
+ls logs_s22/*.done results/s22_*.tmp 2>&1
+for k in mean r80_mean; do for m in psnr msssim lpips; do python tools/replay_report.py results/s22_dec_$k.json --base slope_adv --metric $m; done; done 2>&1 | tee results/s22_replays.txt
+for k in tgt r80_tgt; do for m in psnr msssim lpips; do python tools/replay_report.py results/s22_dec_$k.json --base padc --metric $m; done; done 2>&1 | tee -a results/s22_replays.txt
+python tools/replay_report.py results/s22_clic_dec_mean.json --base slope_adv 2>&1 | tee -a results/s22_replays.txt
+python tools/replay_report.py results/s22_clic_dec_mean.json --base slope_adv --metric msssim 2>&1 | tee -a results/s22_replays.txt
+python tools/replay_report.py results/s22_clic_dec_mean.json --base slope_adv --metric lpips 2>&1 | tee -a results/s22_replays.txt
+python tools/replay_report.py results/s22_clic_dec_tgt.json --base padc 2>&1 | tee -a results/s22_replays.txt
+python tools/replay_report.py results/s22_clic_dec_tgt.json --base padc --metric lpips 2>&1 | tee -a results/s22_replays.txt
+head -n 12 results/s22_dec_*.txt results/s22_clic_dec_*.txt          # the model's error per file
+tail -n 30 results/s22_clic_full_*.txt                                # CLIC's measurements
+cat results/s22_clic.txt                                              # CLIC fit, abstractions, frames
+cat results/s22_gap_ties.txt results/s22_gap_prices.txt results/s22_gap_lpu.txt results/s22_gap_grid.txt
+cat results/s22_scale_mean.txt results/s22_main_mean.txt results/s22_main_tgt.txt
+
+# Decision (what the results change; docs/PAPER.md C1-C4, C12, C13, owed items 2, 9, 10):
+#   30 dB gap (22.2a-d). Read each run's "summary: gap to the Lagrangian bound per user" and its
+#   "at lambda*" lines.
+#     - lagrange_relax's (or lagrange_lpu's) per-user gap falls with K (at least like
+#       1 / sqrt(K): the "gap x sqrt(K)" column flat or falling): the tie rule (or the
+#       re-solving) was the cause. That policy becomes the paper's target scheduler, the
+#       main-frame tables (22.2g, 22.1's decodes) carry it, and C13 says "near-optimal" for both
+#       objectives.
+#     - the bound falls by most of the gap with the fixed prices (b vs a) or the finer grids
+#       (d vs b) while the policies stay: the bound was loose, not the policy. C13 then reports
+#       the tightened bound and the policy as near-optimal at 30 dB too.
+#     - neither: the target gap stays open in the paper, with these four causes measured and
+#       ruled out (a limitation, as now).
+#   PI (22.2e-f, 22.1's decodes): slope_adv at or above pi (mean, fresh and stale): C3 stands
+#     with the known ratio index as its baseline. pi above slope_adv: C3 is restated (the
+#     difference form is not the better certainty-equivalent rule; the paper then recommends
+#     the Lagrangian index and cites pi as the closed form).
+#   CLIC (22.3, 22.1): the sensitivity-weighted MMSE abstraction again best (held-out error near
+#     Kodak's 0.03-0.07 dB; MIESM and EESM worse) and s1 again without a rule: C12 and C1 hold
+#     on two test sets. The decoded CLIC gains (slope_adv / lagrange over pf; online / lagrange
+#     over padc) near Kodak's: C3 and C4 are reported on both sets. A model error on CLIC's
+#     decoded schedules above ~0.1 dB: C2 is restated per dataset.
+#   MS-SSIM / LPIPS (22.4): the PSNR gains go with higher MS-SSIM and lower LPIPS: the main
+#     tables add both columns. If they disagree (a PSNR gain with a worse LPIPS), the paper says
+#     the scheduler optimises the distortion it is given and reports both.

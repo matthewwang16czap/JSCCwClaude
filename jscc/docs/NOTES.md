@@ -408,10 +408,25 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    the constant price except the last slot (0.84 of it): prices explain at most ~0.15 points.
    Order of the diagnosis: tie rule, then the 0/1 reward's discretisation, then prices, then
    LP-update (docs/PAPER.md, owed item 9).
+   Built 2026-10-22, run in COMMANDS 22.2a-d: `lagrange_relax` (tools/rmab_scale.py and
+   tools/schedule_sim.py: sure gains first, then the users indifferent at lambda*_t in a random
+   order, then the rest), `lagrange_lpu` (re-solves lambda* from the users' states every
+   --resolve slots), `--price-scale supply`, `--kink-grad` (alloc/whittle.kink_demand: the
+   relaxation's common mix theta_t of the indifferent states, which meets the supply wherever it
+   is interior), `--ny` / `--ng`; every run prints the sure demand and the indifferent mass at
+   lambda* as shares of the supply. The defaults reproduce every earlier bound and schedule bit
+   for bit. Stand-in, T 10, 29 dB, 30 frames: the indifferent users hold 38% / 44% of the supply
+   at K 8 / 32 and the sure demand 92% / 95%; `lagrange_relax` - `lagrange` +0.00 / -0.10
+   points; the gap 6.7 -> 3.9 points per user already falls like 1/sqrt(K); a 4x finer grid
+   moves the bound by 0.004 per user. The stand-in does not show the flat gap, so only the real
+   utility's runs can decide.
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
-   PSNR gain of user k's next phase at slot SNR s. Not built (docs/PAPER.md, owed item 10). CPU.
+   PSNR gain of user k's next phase at slot SNR s. Built 2026-10-22 as `--policies pi` in both
+   tools (S' on 32 equiprobable fades at the user's mean SNR; aware SNRs on stale reports; ties,
+   including infinite indices, by the largest gain): COMMANDS 22.1 (decoded), 22.2e-f
+   (docs/PAPER.md, owed item 10). CPU.
 8. Optional, only if a referee asks: a two-layer superposition digital baseline with IR per layer
    (Steiner and Shamai, IEEE TWC 2008, read in full 2026-10-21) at r <= 0.6, where our 0-15 dB
    users sit in its best range (docs/PAPER.md, owed item 11). Its full text supports omitting

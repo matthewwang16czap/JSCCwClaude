@@ -196,7 +196,8 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         ours ranks the indifferent users by the Whittle index. Prices matter little: on the
         stand-in with a binding 29 dB target (T 10), proper per-slot prices lower the bound by
         0.07 / 0.15 points per user at K 8 / 32. Diagnosis owed: docs/PAPER.md, owed item 9 (the
-        relaxation's tie rule first). The lost-slot runs (--preempt) are outside these theorems
+        relaxation's tie rule first; built 2026-10-22 with the price solver, grid and LP-update
+        variants, COMMANDS 22.2; on the stand-in the tie rule changes nothing). The lost-slot runs (--preempt) are outside these theorems
         (a budget shared at random by all users; Zhang and Frazier list it as open). So the
         theory's regime holds, and at scale the programs' index is the scheduler to use; the
         closed form is its cheap approximation (one unit per slot: a tie). On stale reports (K
