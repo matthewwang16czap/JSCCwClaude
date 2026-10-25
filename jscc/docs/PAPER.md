@@ -326,6 +326,14 @@ families, two seeds where it matters, digital with tuned backoff, HARQ and lost 
    where the success is uncertain and cheap to secure, which a uniform margin cannot do
    (COMMANDS 23.1: margins cost 0.25-4.9 points). Would measure how much of the ~1.6 points per
    user is recoverable. In `alloc/whittle.py` (Arm.reward) and `tools/rmab_scale.py`. CPU.
+   Built 2026-10-25: `Arm(soft=(sigma, bias))`, `alloc/whittle.soft_spread` (sigma and bias per
+   prefix length, pooled over images, from the fitted curves against the calibrated ones: what a
+   transmitter learns by cross-validating its calibration), and the policies `whittle_soft` /
+   `lagrange_soft` in both tools (`--soft-sigma auto | <dB>`), beside the hard ones on the same
+   frames. COMMANDS 24: at scale (measured sigma; a 0.05 / 0.1 / 0.2 dB sweep), on the main
+   frames (fresh, 2 dB CQI errors, r = 0.8), decoded on Kodak, CLIC and r = 0.8. Stand-in (60
+   frames, curves off by sigma ~0.10 dB): the soft Lagrangian index recovers ~45% of the curve
+   errors' cost at K 32 (+0.63 of 1.41 points, CI includes 0), nothing at K 8 (cost 0.21).
 14. Done 2026-10-25 (NOTES 6e): C5 with the single decoder (COMMANDS 23.2).
 
 

@@ -520,9 +520,16 @@ fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the fr
   reward was a hedge against the curve errors.
 * The Whittle index's gap falls with K given the true curves too (4.8 -> 1.3) but stays above
   the Lagrangian index's; the curve errors cost it ~1 point.
-* Not run: a program whose terminal reward is the calibrated success probability,
-  Phi((q - Q) / sigma_i) with sigma_i the calibration error, in place of 1{q >= Q} (a soft
-  target; the hedge a margin cannot be). Optional (docs/PAPER.md, owed item 13).
+* Built 2026-10-25, run in COMMANDS 24: programs whose terminal reward is the calibrated
+  success probability Phi((q + bias - Q) / sigma), sigma and bias per prefix length pooled over
+  the images, in place of 1{q >= Q} (a soft target; the hedge a margin cannot be):
+  `whittle_soft` / `lagrange_soft` (docs/PAPER.md, owed item 13). Smoke stand-in (T 10, 29 dB,
+  60 frames; curves perturbed to a measured error of sigma ~0.10 dB, bias +0.03, close to the
+  real calibration's): the curve errors cost the hard Lagrangian index 0.21 / 1.41 points per
+  user at K 8 / 32 (gap 7.07 / 4.59 against 6.86 / 3.18 with the true curves); the soft index
+  recovers +0.63 [-0.21, +1.41] at K 32 (about 45%) and -0.42 [-1.88, +1.04] at K 8 (nothing to
+  recover); the soft Whittle index gains nothing (0.00 / -0.42). Suggestive, not significant:
+  the real curves' runs (100 frames, K to 128) decide.
 
 **C5 with the single decoder (23.2).** The prefix code snrc4 (one encoder, one decoder), its
 nested curves and calibrated transmitter, 2000 frames, the frames of section 20.2; best policy

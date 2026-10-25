@@ -190,7 +190,9 @@ policies take reports as exact unless `--cqi-aware` (decisions on each slot's po
 whittle policy's programs decide on the report). `schedule_sim.py --policies whittle lagrange`
 run the users' programs as policies (the Whittle index; the Lagrangian index at the bound's per-slot
 prices, the scheduler the measurements recommend; `lagrange_relax`: the same with the
-relaxation's tie rule, the indifferent users at random; `pi`: a PI-type ratio index, mean only).
+relaxation's tie rule, the indifferent users at random; `pi`: a PI-type ratio index, mean only;
+`whittle_soft`, `lagrange_soft`: the indices on calibration-aware programs, whose reward at a
+target is the probability of success under the transmitter's curve error, `--soft-sigma`).
 `tools/rmab_scale.py --users 8 16 32 64 128` runs PF, our rule, `pi`, the Whittle and Lagrangian
 indices (`lagrange`, `lagrange_relax`, `lagrange_lpu` with LP-update), the ID-guided policy of the
 restless-bandit literature with its random-order baseline, and the Lagrangian bound with B = K/8

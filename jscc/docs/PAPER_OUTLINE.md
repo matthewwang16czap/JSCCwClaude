@@ -273,7 +273,7 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 - **Limitations.**
   - At a hard target the abstraction's calibration error costs ~1.6 points per user; a
     calibration-aware reward (the success probability under the calibration error) is the
-    natural fix, not evaluated.
+    natural fix (being measured: COMMANDS 24).
   - The programs model outdated reports but take Gaussian CQI errors as exact; under such
     errors the closed-form planner (plan_adv) is the robust target policy.
   - Per-frame admission ignores long-run fairness (per-user debts are the fix).
