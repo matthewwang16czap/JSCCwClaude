@@ -30,7 +30,12 @@ Mersereau 2008) splits the frame into K single-user programs:
 
 The programs run on grids: Y on `ny` points (denser near 0, linear interpolation), the
 fading on `ng` equiprobable quantiles of Exp(1), the price on a geometric grid. With the
---target objective the reward is 1 if the user's PSNR reaches the target, else 0.
+--target objective the reward is 1 if the user's PSNR reaches the target, else 0; with `soft`
+(a calibration-aware program) it is the probability that the true PSNR reaches it when the
+program's curves are off by N(bias, sigma^2) dB at that prefix length (soft_spread):
+Phi((q + bias - target) / sigma). The transmitter's curves are calibrated, so their error is a
+spread a transmitter can measure offline (cross-validation), and a hard 0/1 reward on them stops
+users exactly at their predicted threshold, where a slightly optimistic curve is a miss.
 
 Stale reports (cqi_corr = r < 1, alloc/csi.py): the transmitter decides on a report with
 correlation r to the slot's channel, so the program decides on the report's fading bin and
@@ -56,6 +61,36 @@ def master_profile(util, i):
     return m, dev
 
 
+def norm_cdf(z):
+    """The standard normal distribution function, elementwise (no scipy)."""
+    from math import erfc, sqrt
+    z = np.asarray(z, dtype=np.float64)
+    return np.array([0.5 * erfc(-x / sqrt(2.0)) for x in z.ravel()]).reshape(z.shape)
+
+
+def soft_spread(truth, belief, sigma="auto", n_prof=16, mean_snr=(0.0, 15.0), clip=(-2.0, 22.0),
+                seed=0):
+    """The calibration error of a transmitter's curves, per prefix length n = 1 ... P: (sigma,
+    bias), each (P,), in dB. "auto": the standard deviation and the mean of truth - belief PSNR
+    over every image of the pool and n_prof random n-phase histories per image and length
+    (mean SNR uniform on mean_snr plus Rayleigh fading, clipped: the simulation's slots), pooled
+    over images (what a transmitter learns by cross-validating its calibration on images it has
+    measured; nothing image-specific). A number: that sigma at every length, no bias."""
+    P = belief.P
+    if sigma != "auto":
+        return np.full(P, float(sigma)), np.zeros(P)
+    rng = np.random.default_rng(seed)
+    d = [[] for _ in range(P)]
+    for i in range(len(belief.names)):
+        for n in range(1, P + 1):
+            for _ in range(n_prof):
+                g = np.clip(rng.uniform(*mean_snr) + 10.0 * np.log10(rng.exponential(1.0, n)),
+                            clip[0], clip[1]).tolist()
+                d[n - 1].append(truth.psnr(i, g) - belief.psnr(i, g))
+    d = [np.asarray(x, dtype=np.float64) for x in d]
+    return np.array([float(x.std()) for x in d]), np.array([float(x.mean()) for x in d])
+
+
 def price_grid(target, n=24):
     """Slot prices: PSNR dB per slot for the mean objective, success probability for a target."""
     hi, lo = (1.0, 1e-4) if target is not None else (30.0, 1e-3)
@@ -66,8 +101,15 @@ class Arm:
     """One user's dynamic program over (slot, phases held, accumulated weighted noise)."""
 
     def __init__(self, util, i, mean_snr, T, target=None, p_lost=0.0, clip=(-2.0, 22.0),
-                 lams=None, ny=128, ng=16, fade_db=None, fade_w=None, cqi_corr=1.0):
+                 lams=None, ny=128, ng=16, fade_db=None, fade_w=None, cqi_corr=1.0, soft=None):
+        """soft = (sigma (P,), bias (P,)) in dB, with a target: the calibration-aware reward
+        (module doc; soft_spread). None: the hard 0/1 reward."""
         self.P, self.T, self.target, self.p = util.P, int(T), target, float(p_lost)
+        self.soft = None
+        if soft is not None and target is not None:
+            self.soft = tuple(np.asarray(v, dtype=np.float64).reshape(-1) for v in soft)
+            if any(len(v) != self.P for v in self.soft):
+                raise ValueError(f"soft needs one sigma and one bias per prefix length ({self.P})")
         self.mean, self.clip, self.r = float(mean_snr), tuple(clip), float(cqi_corr)
         if self.r < 1.0 and fade_db is not None:
             raise ValueError("cqi_corr < 1 needs the default Rayleigh fading bins")
@@ -92,14 +134,22 @@ class Arm:
         self.W = self._solve(self.lams)                         # (T + 1, n_lam, P + 1, ny)
 
     def reward(self, n, Y):
-        """Terminal reward of n phases with accumulated noise Y (array)."""
+        """Terminal reward of n phases with accumulated noise Y (array): the PSNR, the 0/1
+        success at the target, or (soft) the probability of success under the curves' error."""
         Y = np.asarray(Y, dtype=np.float64)
         if n == 0:
             q = np.full(Y.shape, self.empty)
         else:
             D = self.dsrc[n - 1] + self.csens[n - 1] * Y / self.S[n]
             q = -10.0 * np.log10(np.maximum(D, 1e-12))
-        return q if self.target is None else (q >= self.target).astype(np.float64)
+        if self.target is None:
+            return q
+        if self.soft is None or n == 0:
+            return (q >= self.target).astype(np.float64)
+        sig, bias = float(self.soft[0][n - 1]), float(self.soft[1][n - 1])
+        if sig <= 1e-9:                                    # a known shift, no spread
+            return (q + bias >= self.target).astype(np.float64)
+        return norm_cdf((q + bias - self.target) / sig)
 
     def _weights(self, Yq):
         """Grid cell and weight of linear interpolation at Yq (any shape)."""

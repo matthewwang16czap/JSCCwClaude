@@ -1138,6 +1138,88 @@ def check_relaxation(x):
        "entry (an empty one as a mid-grey image); replay_report --metric pairs on them")
 
 
+def check_soft():
+    """The calibration-aware programs (alloc/whittle.Arm(soft=...), soft_spread) and the
+    whittle_soft / lagrange_soft policies of tools/rmab_scale.py and tools/schedule_sim.py."""
+    import contextlib
+    import io
+    import json
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import tools.rmab_scale as rs
+    from alloc.utility import Utility, nested_rho
+    from alloc.whittle import Arm, lagrangian_bound, soft_spread
+    from tools.schedule_sim import PRICE_STEPS, arms_for, draw_frames, run_frame, soft_for
+
+    print("[calibration-aware programs]")
+    rng = np.random.default_rng(0)
+    N, P = 8, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    rho = [nested_rho(master, L) for L in range(1, P + 1)]
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    csens = dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P)
+    u = Utility(1.8, rho, dsrc, csens, [f"im{i}" for i in range(N)],
+                meta={"nested": master.tolist()})
+    b = u.perturbed(0.04, np.random.default_rng(11))
+    z0, zb = soft_spread(u, u), soft_spread(u, b)
+    hard = Arm(u, 2, 7.0, 8, target=29.0, ny=48, ng=8)
+    tiny = Arm(u, 2, 7.0, 8, target=29.0, ny=48, ng=8, soft=(np.full(P, 1e-6), np.zeros(P)))
+    wide = Arm(u, 2, 7.0, 8, target=29.0, ny=48, ng=8, soft=(np.full(P, 0.3), np.zeros(P)))
+    r3 = wide.reward(3, wide.y)
+    q3 = -10 * np.log10(wide.dsrc[2] + wide.csens[2] * wide.y / wide.S[3])
+    at = float(np.interp(29.0, q3[::-1], r3[::-1]))
+    ok(np.allclose(z0[0], 0) and np.allclose(z0[1], 0) and np.all(zb[0] > 0)
+       and np.allclose(tiny.W, hard.W, atol=1e-12) and np.all((r3 >= 0) & (r3 <= 1))
+       and np.all(np.diff(r3) <= 1e-12) and abs(at - 0.5) < 0.02
+       and float(wide.value(0.0)) <= float(hard.value(0.0)) + 0.05,
+       f"soft target: no error -> sigma 0; a vanishing sigma is the hard program; the reward is "
+       f"a probability, falling with the noise, 1/2 at the target ({at:.3f}); curves off by "
+       f"sigma {np.round(zb[0], 3).tolist()} dB")
+    tmp = tempfile.mkdtemp()
+    pu, pb = os.path.join(tmp, "u.json"), os.path.join(tmp, "b.json")
+    u.save(pu)
+    b.save(pb)
+    rows = {}
+    for tag, extra in (("truth", []), ("belief", ["--belief", pb]),
+                       ("given", ["--belief", pb, "--soft-sigma", "0.1"])):
+        argv, buf = sys.argv, io.StringIO()
+        sys.argv = ["rmab_scale.py", "--utility", pu, "--users", "8", "16", "--frames", "2",
+                    "--slots", "8", "--price-steps", "2", "--index-arms", "1", "--target", "29",
+                    "--ny", "48", "--ng", "8", "--policies", "pf", "whittle", "lagrange",
+                    "whittle_soft", "lagrange_soft", "--out", os.path.join(tmp, "r.json")] + extra
+        try:
+            with contextlib.redirect_stdout(buf):
+                rs.main()
+        finally:
+            sys.argv = argv
+        with open(os.path.join(tmp, "r.json")) as fh:
+            rows[tag] = json.load(fh)["per_K"]
+    ok(all(np.isfinite(v[p]) for r in rows.values() for v in r.values()
+           for p in ("whittle_soft", "lagrange_soft"))
+       and all(v["whittle_soft"] == v["whittle"] and v["lagrange_soft"] == v["lagrange"]
+               for v in rows["truth"].values()),
+       "tools/rmab_scale.py whittle_soft / lagrange_soft: with the true curves (no error) they "
+       "schedule exactly as whittle / lagrange; with calibrated curves, measured or given sigma")
+    same, clip = True, (-2.0, 22.0)
+    for pol in ("lagrange_soft", "whittle_soft"):
+        for imgs, means, snr, belief, avail, seen in draw_frames(
+                u, 4, 10, 2, (0.0, 15.0), "rayleigh", clip, seed=5, belief_util=b):
+            h1 = run_frame(u, belief, imgs, means, snr, pol, target=29.0)
+            soft = soft_for(u, belief, "auto", clip)
+            arms = arms_for(belief, imgs, means, 10, 29.0, 0.0, 1.0, clip, 1.0, soft)
+            _, pr = lagrangian_bound(arms, 10, 0.0, per_slot=PRICE_STEPS)
+            o = SimpleNamespace(target=29.0, cqi_naive=False, cqi_corr=1.0, snr_clip=clip,
+                                preempt=0.0, tie_band=0.5, resolve=6)
+            h2, _ = rs.run(o, u, belief, imgs, means, snr, np.ones(10, dtype=int), None, pol, 1,
+                           arms, [a.priced(pr) for a in arms], pr)
+            same &= h1 == h2
+    ok(same, "schedule_sim's whittle_soft / lagrange_soft schedule exactly as tools/rmab_scale.py's "
+             "with one unit per slot (calibrated curves)")
+
+
 def check_harq():
     """HARQ in the digital baseline (tools/schedule_sim.py --harq; alloc/digital.mutual_info)."""
     from types import SimpleNamespace
@@ -1710,6 +1792,7 @@ def main():
     check_codesign(x)
     check_stale_csi()
     check_relaxation(x)
+    check_soft()
     check_harq()
     check_delay()
     check_schedule()

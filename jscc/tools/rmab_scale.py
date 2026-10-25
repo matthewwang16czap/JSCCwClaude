@@ -70,7 +70,13 @@ when the sure demand falls short of the supply and the indifferent mass fills it
 the bound is computed on --utility, so the gap to the bound includes the cost of the curves'
 errors (none for the mean, first order at a target, where a user is stopped at its predicted
 threshold); without --belief the policies know the true curves. --margin m: the policies'
-programs aim at target + m dB, a hedge against those errors.
+programs aim at target + m dB, a hedge against those errors (it makes things worse: COMMANDS 23).
+whittle_soft, lagrange_soft (with --target): the same indices on calibration-aware programs,
+whose terminal reward is the probability that the true PSNR reaches the target when the curves
+are off by N(bias, sigma^2) dB (alloc/whittle.soft_spread): --soft-sigma auto (default) measures
+sigma and bias per prefix length, pooled over the images, from --utility against --belief (what
+a transmitter learns by cross-validating its calibration), or takes a number (dB, no bias). They
+are priced on their own relaxation; the bound and the score keep the hard target.
 
 --delay (with --target): also when each user's decoded image reaches the target, per policy
 the share of users there by slots T/4, T/2, 3T/4 and T (a CDF over all users) and the mean slot
@@ -99,7 +105,9 @@ from tools.schedule_sim import PI_Q, aware_snr, bootstrap, rate, targets, tie_ke
 POLICIES = ("pf", "adv", "pi", "whittle", "lagrange", "lagrange_relax", "lagrange_lpu",
             "id_guided", "rand_guided")
 DEFAULT = tuple(p for p in POLICIES if p != "lagrange_lpu")
+POLICIES = POLICIES + ("whittle_soft", "lagrange_soft")  # calibration-aware, on request
 MEAN_ONLY = ("adv", "pi")
+TARGET_ONLY = ("whittle_soft", "lagrange_soft")
 PRICED = ("lagrange", "lagrange_relax", "lagrange_lpu", "id_guided", "rand_guided")  # at lambda*
 _G = {}
 
@@ -140,7 +148,9 @@ def run(o, util, belief, imgs, means, snr, units, seen, policy, B, arms=None, W_
     """One frame under one policy: the delivered (true) SNR lists of the users and, with a
     target, the slot (1-based) each user's decoded image first reaches it (inf: never).
     `order`: the frame's fixed user order (id_guided); `rng`: the random orders of
-    rand_guided."""
+    rand_guided. A *_soft policy is the same index on the calibration-aware programs `arms`."""
+    if policy.endswith("_soft"):
+        policy = policy[:-len("_soft")]
     K, T = snr.shape
     P = util.P
     goal = o.target
@@ -294,11 +304,22 @@ def _work(args):
         if pol_arms is not arms:
             _, prices = lagrangian_bound(pol_arms, T, o.preempt, **opt)
         W_star = [a.priced(prices) for a in pol_arms]
+    soft_arms = W_soft = sprices = None
+    if o.target is not None and any(p in o.policies for p in TARGET_ONLY):
+        soft_arms = [Arm(belief, int(i), float(m), T, target=o.target + o.margin, p_lost=p_user,
+                         clip=clip, cqi_corr=1.0 if o.cqi_naive else r, soft=_G["soft"], **grid)
+                     for i, m in zip(imgs, means)]
+        if "lagrange_soft" in o.policies:
+            _, sprices = lagrangian_bound(soft_arms, T, o.preempt, **opt)
+            W_soft = [a.priced(sprices) for a in soft_arms]
     for p in o.policies:
-        if p in MEAN_ONLY and o.target is not None:
+        if (p in MEAN_ONLY and o.target is not None) or (p in TARGET_ONLY and o.target is None):
             continue
-        h, reach = run(o, util, belief, imgs, means, snr, units, seen, p, B, pol_arms, W_star,
-                       prices, order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
+        soft = p in TARGET_ONLY
+        h, reach = run(o, util, belief, imgs, means, snr, units, seen, p, B,
+                       soft_arms if soft else pol_arms, W_soft if soft else W_star,
+                       sprices if soft else prices,
+                       order=np.random.default_rng([o.seed, K, f, 7]).permutation(K),
                        rng=np.random.default_rng([o.seed, K, f, 8]))
         res[p] = _score(util, imgs, h, o.target)
         res[p + "_reach"] = reach.tolist()
@@ -331,6 +352,9 @@ def main():
     ap.add_argument("--margin", type=float, default=0.0,
                     help="with --target: the policies' programs aim at target + margin dB (the "
                          "bound and the score stay at the target)")
+    ap.add_argument("--soft-sigma", default="auto",
+                    help="whittle_soft / lagrange_soft: the curves' error, 'auto' (measured per "
+                         "prefix length from --utility against --belief) or a number in dB")
     ap.add_argument("--policies", nargs="+", default=list(DEFAULT), choices=POLICIES)
     ap.add_argument("--delay", action="store_true",
                     help="with --target: when each user reaches it (a CDF by slot, mean slot)")
@@ -363,6 +387,13 @@ def main():
         ap.error("--delay needs --target")
     if o.margin and o.target is None:
         ap.error("--margin needs --target")
+    if o.soft_sigma != "auto":
+        try:
+            o.soft_sigma = float(o.soft_sigma)
+        except ValueError:
+            ap.error("--soft-sigma is 'auto' or a number (dB)")
+        if o.soft_sigma < 0:
+            ap.error("--soft-sigma >= 0")
     if o.resolve < 1 or o.ny < 8 or o.ng < 2 or o.tie_band < 0:
         ap.error("--resolve >= 1, --ny >= 8, --ng >= 2, --tie-band >= 0")
     util = load_utility(o.utility)
@@ -382,14 +413,25 @@ def main():
           f"step scaled by {o.price_scale}{', at the kink' if o.kink_grad else ''}"
           f"{f'; lagrange_lpu re-solves every {o.resolve} slots' if 'lagrange_lpu' in o.policies else ''}"
           f"; indifference band {o.tie_band:g} x the smallest grid price")
+    soft = None
+    if o.target is not None and any(p in o.policies for p in TARGET_ONLY):
+        from alloc.whittle import soft_spread
+        soft = soft_spread(util, belief, o.soft_sigma, mean_snr=tuple(o.mean_snr),
+                           clip=tuple(o.snr_clip))
+        print("calibration-aware programs (*_soft): the curves' error per prefix length, sigma "
+              + " ".join(f"{v:.3f}" for v in soft[0]) + " dB, bias (truth - belief) "
+              + " ".join(f"{v:+.3f}" for v in soft[1]) + f" dB ({'measured' if o.soft_sigma == 'auto' else 'given'})")
+    elif any(p in o.policies for p in TARGET_ONLY):
+        print("note: whittle_soft / lagrange_soft need --target; skipped")
     scale, unit = (1.0, "dB") if o.target is None else (100.0, "pts")
-    pols = [p for p in o.policies if not (p in MEAN_ONLY and o.target is not None)]
+    pols = [p for p in o.policies if not (p in MEAN_ONLY and o.target is not None)
+            and not (p in TARGET_ONLY and o.target is None)]
     table = {}
     for K in o.users:
         B = K // o.users_per_unit
         frames = draw(util, K, B, o.slots, o.frames, o.mean_snr, o.snr_clip, o.preempt,
                       o.cqi_corr, o.seed)
-        _G.update(o=o, util=util, belief=belief, K=K, B=B)
+        _G.update(o=o, util=util, belief=belief, K=K, B=B, soft=soft)
         t0 = time.time()
         if o.workers > 1:
             import multiprocessing as mp
@@ -423,7 +465,8 @@ def main():
                      ("whittle", "pf"), ("id_guided", "rand_guided"), ("lagrange", "id_guided"),
                      ("adv", "pi"), ("pi", "pf"), ("lagrange", "pi"),
                      ("lagrange_relax", "lagrange"), ("lagrange_lpu", "lagrange_relax"),
-                     ("lagrange_lpu", "lagrange")):
+                     ("lagrange_lpu", "lagrange"), ("lagrange_soft", "lagrange"),
+                     ("whittle_soft", "whittle"), ("lagrange_soft", "whittle_soft")):
             if a in pols and b in pols:
                 d = np.array([r[a] - r[b] for r in res])
                 lo, hi = bootstrap(d, seed=o.seed)
@@ -465,7 +508,8 @@ def report_delay(o, res, pols, row):
         print(f"    {p:12s} " + " ".join(f"{100 * b:5.1f}%" for b in by) + f"   {slot.mean():6.2f}")
     for a, b in (("lagrange", "whittle"), ("whittle", "pf"), ("lagrange", "pf"),
                  ("id_guided", "rand_guided"), ("lagrange", "id_guided"),
-                 ("lagrange_relax", "lagrange"), ("lagrange_lpu", "lagrange")):
+                 ("lagrange_relax", "lagrange"), ("lagrange_lpu", "lagrange"),
+                 ("lagrange_soft", "lagrange"), ("whittle_soft", "whittle")):
         if a in pols and b in pols:
             d = np.minimum(per[a], T + 1).mean(1) - np.minimum(per[b], T + 1).mean(1)
             lo, hi = bootstrap(d, seed=o.seed)

@@ -81,6 +81,13 @@ phases left, so every policy can use the whole frame. Policies:
                  gain is above the programs' precision first (the largest); else one of the
                  users within it of 0 (indifferent at lambda*_t), at random, as the
                  relaxation mixes them, not by the Whittle index (tools/rmab_scale.py)
+    whittle_soft, lagrange_soft  (target, on request) the Whittle and Lagrangian indices on
+                 calibration-aware programs: a user's terminal reward is the probability that
+                 its true PSNR reaches the target when the transmitter's curves are off by
+                 N(bias, sigma^2) dB (alloc/whittle.soft_spread; --soft-sigma auto measures
+                 sigma and bias per prefix length from --utility against --belief, pooled over
+                 the images; a number: that sigma, no bias), instead of 1 if the PREDICTED PSNR
+                 reaches it: a hedge against the curves' error that a uniform margin is not
     pi           (mean, on request) a PI-type ratio index (Ayesta, Erausquin and Jacko): the
                  predicted gain of this slot over the expected excess of a typical slot's gain
                  above it, E[(g(S') - g(s))^+], S' on 32 equiprobable fades at the user's mean
@@ -148,11 +155,11 @@ MEAN_POLICIES = ("rr", "maxsnr", "pf", "fixed_uni", "fixed_eq", "fixed_slope",
                  "adaptive_slope", "slope_adv", "greedy", "greedy_rel", "whittle", "lagrange")
 TARGET_POLICIES = ("rr", "pf", "pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv",
                    "online_pf", "online", "replan_adv", "whittle", "lagrange")
-EXTRA_POLICIES = ("lagrange_relax", "pi")              # on request (--policies), not by default
+EXTRA_POLICIES = ("lagrange_relax", "pi", "whittle_soft", "lagrange_soft")   # on request only
 LAGRANGE = ("lagrange", "lagrange_relax")
 POLICIES = tuple(dict.fromkeys(MEAN_POLICIES + TARGET_POLICIES + EXTRA_POLICIES))
 NEEDS_TARGET = ("pf_len", "padc", "padc_adv", "plan", "plan_adv", "stop", "stop_adv", "online_pf",
-                "online", "replan_adv")
+                "online", "replan_adv", "whittle_soft", "lagrange_soft")
 PF_TIMING = ("pf", "fixed_uni", "fixed_eq", "fixed_slope", "adaptive_slope", "pf_len", "padc",
              "plan", "stop", "online_pf")
 ADV_TIMING = ("slope_adv", "padc_adv", "plan_adv", "stop_adv", "online", "replan_adv")
@@ -240,19 +247,38 @@ FILL = "admit"
 _ARMS = {}
 
 
-def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0):
+def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0, soft=None):
     """The users' dynamic programs for the whittle policy (alloc/whittle.py), one per user
-    of the frame, cached for the frame (rollouts resume the same frame many times)."""
+    of the frame, cached for the frame (rollouts resume the same frame many times). soft:
+    (sigma, bias) per prefix length, the calibration-aware reward (alloc/whittle.soft_spread)."""
     from alloc.whittle import Arm
+    sk = None if soft is None else tuple(tuple(np.round(np.asarray(v, dtype=np.float64), 12))
+                                         for v in soft)
     key = (id(belief), tuple(int(i) for i in imgs), tuple(np.round(means, 9)), T, goal, offset,
-           p_avail, tuple(clip), cqi_corr)
+           p_avail, tuple(clip), cqi_corr, sk)
     if key not in _ARMS:
         if len(_ARMS) > 8:
             _ARMS.clear()
         _ARMS[key] = [Arm(belief, int(i), float(m) + offset, T, target=goal,
-                          p_lost=1.0 - p_avail, clip=clip, cqi_corr=cqi_corr)
+                          p_lost=1.0 - p_avail, clip=clip, cqi_corr=cqi_corr, soft=soft)
                       for i, m in zip(imgs, means)]
     return _ARMS[key]
+
+
+_SOFT = {}
+
+
+def soft_for(util, belief, sigma, clip):
+    """The calibration-aware programs' (sigma, bias) per prefix length, cached by content (a
+    --pred-noise run draws a new belief every frame)."""
+    from alloc.whittle import soft_spread
+    key = (id(util), np.asarray(belief.dsrc).tobytes(), np.asarray(belief.csens).tobytes(),
+           str(sigma), tuple(clip))
+    if key not in _SOFT:
+        if len(_SOFT) > 8:
+            _SOFT.clear()
+        _SOFT[key] = soft_spread(util, belief, sigma, clip=tuple(clip))
+    return _SOFT[key]
 
 
 _PRICED = {}
@@ -431,7 +457,7 @@ def delay_times(util, imgs, hist, log, T, target=None, whole=False):
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
               t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None,
-              clip=(-2.0, 22.0), aware=None, harq=None):
+              clip=(-2.0, 22.0), aware=None, harq=None, soft_sigma="auto"):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame).
@@ -445,7 +471,12 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     `aware` = r: the reports are stale with correlation r and the transmitter knows it
     (--cqi-aware): it decides on aware_snr, the whittle policy on its reports. `harq` =
     (mode, max_tx): a digital link retransmits failed blocks (harq_deliver); a user's slot
-    is then valued, by the policies that value slots, by the block waiting for it."""
+    is then valued, by the policies that value slots, by the block waiting for it. A *_soft
+    policy is the whittle / lagrange policy on calibration-aware programs (soft_for)."""
+    soft = None
+    if policy.endswith("_soft"):
+        policy = policy[:-len("_soft")]
+        soft = soft_for(util, belief, soft_sigma, clip)
     K, T = snr.shape
     P = util.P
     digital = getattr(util, "kind", "") == "digital"
@@ -481,7 +512,7 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
         if (fixed_codes or policy.startswith("plan")) and left > 0:   # plan the spare slots
             tgt = fill(belief, imgs, plan, goal, tgt, left, P, FILL)  # (a fixed code must)
     arms = (arms_for(belief, imgs, means, T, goal, offset, p_avail, clip,
-                     1.0 if aware is None or seen is None else aware)
+                     1.0 if aware is None or seen is None else aware, soft)
             if policy in ("whittle",) + LAGRANGE else None)
     prices = Wp = None
     if policy in LAGRANGE:
@@ -764,7 +795,7 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
              same_image=False, pred_noise=0.0, alpha=0.0, dump=0, target=None, margin=0.0,
              offset=0.0, belief_util=None, fade_corr=0.0, plan="mean", fixed_codes=False,
              preempt=0.0, preempt_quantile=None, cqi_error=0.0, backoff=0.0, cqi_corr=1.0,
-             cqi_aware=False, delay=False, keep_frames=False, harq=None):
+             cqi_aware=False, delay=False, keep_frames=False, harq=None, soft_sigma="auto"):
     """belief_util: the transmitter's curves (default: the truth, `util`); policies decide
     on it, users are scored on `util`. cqi_error: sd (dB) of the error of the reported slot
     SNRs; backoff: a digital link's MCS backoff (dB), or one per policy {policy: dB};
@@ -788,7 +819,7 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
                              avail, 1.0 - preempt, t_plan, seen,
                              backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
-                             log=lg, clip=clip, aware=aware, harq=harq)
+                             log=lg, clip=clip, aware=aware, harq=harq, soft_sigma=soft_sigma)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -944,6 +975,9 @@ def main():
     ap.add_argument("--pred-noise", type=float, default=0.0,
                     help="sd of the log-normal error of the transmitter's curves")
     ap.add_argument("--alpha", type=float, default=0.0, help="greedy: alpha-fair weighting")
+    ap.add_argument("--soft-sigma", default="auto",
+                    help="whittle_soft / lagrange_soft: the transmitter's curve error, 'auto' "
+                         "(measured from --utility against --belief) or a number in dB")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--delay", action="store_true",
                     help="also the timing of the deliveries: first phase, PSNR over the frame, "
@@ -959,6 +993,12 @@ def main():
         ap.error(f"{', '.join(needs)} need --target")
     if "pi" in a.policies and a.target is not None:
         ap.error("pi is for the mean objective (no --target)")
+    if a.soft_sigma != "auto":
+        try:
+            if float(a.soft_sigma) < 0:
+                raise ValueError
+        except ValueError:
+            ap.error("--soft-sigma is 'auto' or a number >= 0 (dB)")
     dig = {"link": a.link, "gap_db": a.gap_db, "mode": a.digital_mode, "P": a.digital_max_phases}
     util = load_utility(a.utility, **dig)
     belief = load_utility(a.belief, **dig) if a.belief else None
@@ -986,6 +1026,12 @@ def main():
         bonus = a.length_bonus * util.P if len(a.length_bonus) == 1 else a.length_bonus
         util = util.shifted(bonus)
         belief = belief.shifted(bonus) if belief is not None else None
+    if any(p.endswith("_soft") for p in a.policies):
+        sg, bs = soft_for(util, belief or util, a.soft_sigma, a.snr_clip)
+        print("calibration-aware programs (*_soft): the curves' error per prefix length, sigma "
+              + " ".join(f"{v:.3f}" for v in sg) + " dB, bias (truth - belief) "
+              + " ".join(f"{v:+.3f}" for v in bs)
+              + f" dB ({'measured' if a.soft_sigma == 'auto' else 'given'})")
     for corr, sigma in [(c, s) for c in a.cqi_corr for s in a.cqi_error]:
         backoff, ref = 0.0, None
         stale = corr < 1.0 and a.fading != "none"
@@ -1005,7 +1051,7 @@ def main():
                                          a.plan_offset, belief, a.fade_corr, a.plan,
                                          a.fixed_codes, a.preempt, a.preempt_quantile,
                                          sigma, backoff, corr, a.cqi_aware, delay=a.delay,
-                                         harq=harq)
+                                         harq=harq, soft_sigma=a.soft_sigma)
         report(a, util, digital, summary, base, sigma, backoff, ref, corr)
         if a.delay:
             report_delay(a, util, summary, base)

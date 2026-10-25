@@ -1,15 +1,14 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-25 (b). Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-25 (c). Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: NOTHING this turn. Sections 0-23 are done and recorded in docs/NOTES.md (21-22:
-6d; 23: 6e); every assumption of the paper outline (docs/PAPER_OUTLINE.md) is now measured, so
-the next step is writing. One optional CPU experiment is described in docs/PAPER.md (owed item
-13: programs that know the abstraction's calibration error); ask for it and it gets a section.
+WHAT TO RUN: SECTION 24 (CPU: six background chains of ~1-3 h; GPUs 1-4: four short decodes,
+~20 min each, after ~20 min of CPU). Sections 0-23 are done and recorded in docs/NOTES.md (21-22:
+6d; 23: 6e).
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -50,6 +49,9 @@ the next step is writing. One optional CPU experiment is described in docs/PAPER
   23 the 30 dB gap's last suspect (the         done (docs/NOTES.md 6e)
      transmitter's curve errors); digital
      against the single decoder
+  24 calibration-aware programs (the soft      TO RUN NOW (CPU; GPUs 1-4 for 24.3)
+     target): how much of the curve errors'
+     cost they recover
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2690,3 +2692,139 @@ cat results/s23_c5_single.txt
 #         (existing runs suggest about +1.1 dB and +1.5 dB, ~0.2-0.3 dB below the per-length
 #         decoders): C5 is stated with the single decoder; per-length decoders are the optional
 #         upgrade.
+
+================================================================================
+ 24. TO RUN NOW -- calibration-aware programs: a soft target against the curves' error
+     (CPU: six background chains, ~1-3 h; GPUs 1-4: four decodes, ~20 min each)
+================================================================================
+# Why (docs/NOTES.md 6e): at a hard 30 dB target the transmitter's calibration error costs
+# ~1.6 points per user at every K, and a uniform margin makes it worse. New: whittle_soft and
+# lagrange_soft, the same indices on programs whose terminal reward is the probability that a
+# user's TRUE PSNR reaches 30 dB when the transmitter's curves are off by N(bias, sigma^2) dB,
+# instead of 1 if its PREDICTED PSNR does (alloc/whittle.soft_spread, Arm(soft=...)). sigma and
+# the bias come per prefix length, pooled over the images (--soft-sigma auto: measured from the
+# fitted curves against the calibrated ones, which a transmitter learns by cross-validating its
+# calibration; or a number in dB). Unlike a margin, the hedge buys a phase only where success is
+# uncertain and cheap to secure. The bound and the score keep the hard target, so the gap to the
+# bound is directly comparable with 22.2a (hard, calibrated curves: 1.4-1.9 points per user) and
+# 23.1a (hard, true curves: ~0 from K 16 on). The soft policies run beside the hard ones in every
+# run: the paired difference is the gain of the hedge.
+#   24.1  at scale (B = K/8): the measured sigma at K 8 ... 128, and a sweep of sigma (0.05, 0.1,
+#         0.2 dB) at K 8, 32, 128
+#   24.2  the main frames (K 8, T 24, 500 frames): fresh reports, 2 dB CQI errors, stale reports
+#         (r = 0.8, aware, 0.5 dB margin as before)
+#   24.3  decoded by the codec (the truth that matters): the soft index's schedules on Kodak
+#         (measured sigma; sigma 0.15 dB, a wider hedge for the codec's own error), CLIC, and Kodak
+#         at r = 0.8 aware
+# Everything is skipped if its output exists. Order: 24.0; 24.1-24.2 in the background; 24.3 (one
+# CPU chain for the dumps, four GPU chains that wait for them); 24.4 when everything is done.
+
+# 24.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: [calibration-aware programs])
+mkdir -p results logs_s24
+nvidia-smi -i 1,2,3,4
+cat > logs_s24/env.sh <<'ENV'
+. logs_s23/env.sh
+SGAP="--target 30 --frames 100 --workers 8"
+ENV
+. logs_s24/env.sh
+#   inputs that must exist (send me any line saying "No such file"):
+ls results/utility_snrc4_nested.json results/belief_snrc4_nested.json results/utility_clic_nested.json results/belief_clic_nested.json $SNRC4 > /dev/null
+
+# 24.1 -- CPU, background, four chains (~2-3 h each; 8 processes each, 32 cores in all) --------
+. logs_s24/env.sh
+nohup bash -c "
+[ -s results/s24_soft_auto.txt ] || {
+python tools/rmab_scale.py $NUB $SGAP --users 8 16 32 64 128 --policies pf whittle lagrange whittle_soft lagrange_soft --out results/s24_soft_auto.json > results/s24_soft_auto.tmp 2>&1 ;
+mv results/s24_soft_auto.tmp results/s24_soft_auto.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s24_soft_s05.txt ] || {
+python tools/rmab_scale.py $NUB $SGAP --users 8 32 128 --soft-sigma 0.05 --policies pf lagrange lagrange_soft --out results/s24_soft_s05.json > results/s24_soft_s05.tmp 2>&1 ;
+mv results/s24_soft_s05.tmp results/s24_soft_s05.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s24_soft_s10.txt ] || {
+python tools/rmab_scale.py $NUB $SGAP --users 8 32 128 --soft-sigma 0.1 --policies pf lagrange lagrange_soft --out results/s24_soft_s10.json > results/s24_soft_s10.tmp 2>&1 ;
+mv results/s24_soft_s10.tmp results/s24_soft_s10.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s24_soft_s20.txt ] || {
+python tools/rmab_scale.py $NUB $SGAP --users 8 32 128 --soft-sigma 0.2 --policies pf lagrange lagrange_soft --out results/s24_soft_s20.json > results/s24_soft_s20.tmp 2>&1 ;
+mv results/s24_soft_s20.tmp results/s24_soft_s20.txt ; }
+" > /dev/null 2>&1 &
+
+# 24.2 -- CPU, background, two chains (~1.5-2.5 h each): the main frames ----------------------
+. logs_s24/env.sh
+nohup bash -c "
+[ -s results/s24_main_soft.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange whittle_soft lagrange_soft --delay > results/s24_main_soft.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online plan_adv whittle lagrange whittle_soft lagrange_soft --cqi-error 2 >> results/s24_main_soft.tmp 2>&1 ;
+mv results/s24_main_soft.tmp results/s24_main_soft.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s24_main_soft_r80.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --margin 0.5 --policies padc plan_adv whittle lagrange whittle_soft lagrange_soft --cqi-corr 0.8 --cqi-aware > results/s24_main_soft_r80.tmp 2>&1 ;
+mv results/s24_main_soft_r80.tmp results/s24_main_soft_r80.txt ; }
+" > /dev/null 2>&1 &
+
+# 24.3 -- decoded: one CPU chain (~20-30 min) writes four 60-frame schedules (the frames of
+#   sections 12-22), then GPUs 1-4 decode one each with the prefix code snrc4 (~15-20 min)
+. logs_s24/env.sh
+nohup bash -c "
+[ -s results/s24_rep_auto_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --target 30 --policies padc online whittle lagrange whittle_soft lagrange_soft --out results/s24_rep_auto.json > results/s24_rep.tmp 2>&1 ;
+[ -s results/s24_rep_s15_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --target 30 --soft-sigma 0.15 --policies padc lagrange lagrange_soft --out results/s24_rep_s15.json >> results/s24_rep.tmp 2>&1 ;
+[ -s results/s24_rep_clic_histories.json ] || python tools/schedule_sim.py $CNUB --frames 60 --dump 60 --target 30 --policies padc online lagrange lagrange_soft --out results/s24_rep_clic.json >> results/s24_rep.tmp 2>&1 ;
+[ -s results/s24_rep_r80_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --target 30 --cqi-corr 0.8 --cqi-aware --policies padc plan_adv lagrange lagrange_soft --out results/s24_rep_r80.json >> results/s24_rep.tmp 2>&1 ;
+mv results/s24_rep.tmp results/s24_rep.txt
+" > /dev/null 2>&1 &
+cat > logs_s24/gpu.sh <<'GPU'
+. logs_s24/env.sh
+G=$1
+waitfor() { for i in $(seq 1 720); do [ -s "$1" ] && return 0; sleep 60; done; return 1; }
+case $G in
+  1) K=auto; F="$REPF" ;;
+  2) K=s15; F="$REPF" ;;
+  3) K=clic; F="$CREPF" ;;
+  4) K=r80; F="$REPF" ;;
+esac
+waitfor results/s24_rep_${K}_histories.json && [ ! -s results/s24_dec_$K.json ] && \
+  CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $F $PM --pretrained $SNRC4 --profiles-json results/s24_rep_${K}_histories.json --out results/s24_dec_$K.json > results/s24_dec_$K.txt 2>&1
+echo done > logs_s24/gpu$G.done
+GPU
+for g in 1 2 3 4; do nohup bash logs_s24/gpu.sh $g > logs_s24/gpu$g.log 2>&1 & done
+sleep 60; ls results/s24_*.tmp
+
+# 24.4 -- reading (send back everything it prints), when logs_s24/gpu1.done ... gpu4.done exist
+#   and results/s24_*.tmp are gone ------------------------------------------------------------
+. logs_s24/env.sh
+ls logs_s24/*.done results/s24_*.tmp 2>&1
+for k in auto s15 r80; do python tools/replay_report.py results/s24_dec_$k.json --base padc; python tools/replay_report.py results/s24_dec_$k.json --base lagrange; done 2>&1 | tee results/s24_replays.txt
+python tools/replay_report.py results/s24_dec_clic.json --base padc 2>&1 | tee -a results/s24_replays.txt
+python tools/replay_report.py results/s24_dec_clic.json --base lagrange 2>&1 | tee -a results/s24_replays.txt
+python tools/replay_report.py results/s24_dec_auto.json --base lagrange --metric lpips 2>&1 | tee -a results/s24_replays.txt
+grep -A 8 "target 30 dB: share" results/s24_dec_*.txt                 # decoded vs predicted shares
+cat results/s24_soft_auto.txt results/s24_soft_s05.txt results/s24_soft_s10.txt results/s24_soft_s20.txt
+cat results/s24_main_soft.txt results/s24_main_soft_r80.txt
+
+# Decision (docs/PAPER.md C13, C7; owed item 13):
+#   24.1  lagrange_soft's gap to the bound (calibrated curves) against lagrange's: the share of
+#         the ~1.6 points per user it recovers, at the measured sigma and across the sweep. A
+#         clear recovery (most of it, at every K) makes the calibration-aware Lagrangian index the
+#         paper's target scheduler, and the finding becomes "hard targets make the abstraction's
+#         calibration first-order, and a program that knows the calibration error recovers it".
+#         No recovery: the cost stays a reported limitation, with the soft target as tried.
+#   24.2  the same on the main frames, including under CQI errors and stale reports, where the
+#         hard index was fragile; a soft index at or above plan_adv there would make it the one
+#         target policy for every condition (C7 simplified).
+#   24.3  decoded against the codec: lagrange_soft's share minus lagrange's (paired by frame),
+#         and how far each decodes below its prediction (the hard index: 1.3 points on Kodak).
+#         The simulation's truth is the fitted curves; the decodes test the hedge against the
+#         codec itself, whose error the measured sigma does not include (hence sigma 0.15 too).
