@@ -108,6 +108,10 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 
 ## 5. Against digital (HEVC intra / HEIC + link adaptation, same schedulers, 6-slot cap)
 
+The JSCC numbers in this section are the per-length decoders' (hd). With the single decoder, the
+paper's main system, see section 6e: every lead is 0.17-0.21 dB and 1.4-2.5 points smaller, and
+the verdict is the same.
+
 | CQI error sd (dB) | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
 | mean PSNR, hd / HEIC + CQI table / 3 dB-gap code | 31.63 / 31.29 / 32.13 | 31.59 / 30.59 / 31.12 | 31.48 / 29.84 / 30.26 | 31.33 / 29.02 / 29.44 |
@@ -478,6 +482,77 @@ points with +0.0073 MS-SSIM and unchanged LPIPS.
 per user from K 8 to 128 (0.206 -> -0.004 with supply-scaled prices); the relaxation's tie rule
 identical for the mean.
 
+## 6e. The 30 dB gap explained; digital against the single decoder (COMMANDS 23, run 2026-10-25)
+
+**The 30 dB gap was the transmitter's curve errors (23.1).** Every earlier scaling run bounded
+and scored on the fitted curves while the policies decided on the calibrated belief. Given the
+fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the frames of 18.3 and
+22.2; per-user gap in points, 95% CI):
+
+| K | 8 | 16 | 32 | 64 | 128 |
+|---|---|---|---|---|---|
+| bound (share at 30 dB, %) | 78.09 | 78.34 | 78.45 | 79.01 | 78.88 |
+| lagrange, true curves | +0.84 [0.05, 1.70] | -0.23 [-0.80, 0.36] | -0.27 [-0.61, 0.08] | +0.06 [-0.20, 0.32] | -0.19 [-0.38, -0.01] |
+| lagrange, calibrated curves (22.2a) | +1.59 | +1.90 | +1.36 | +1.67 | +1.46 |
+| cost of the curve errors (difference) | 0.75 | 2.12 | 1.62 | 1.61 | 1.66 |
+| whittle, true / calibrated | 4.84 / 5.72 | 3.09 / 4.09 | 1.80 / 3.05 | 1.73 / 2.92 | 1.34 / 2.39 |
+| lagrange, calibrated, policies aim at 30.25 dB | +2.97 | | +1.61 | | +1.86 |
+| lagrange, calibrated, policies aim at 30.5 dB | +6.47 | | +6.11 | | +5.24 |
+| lagrange, true curves, Y grid 256 / 32 bins (its own bound +0.15) | +1.24 | | -0.07 [-0.42, 0.27] | | |
+
+* On its own model the index is near-optimal at the target too: from K 16 on its per-user gap is
+  within +-0.3 points of 0, i.e. a bounded total gap (the non-degenerate O(1) regime of Zhang
+  and Frazier), as for the mean. The small negative gaps are the coarse bound's own
+  discretisation error: finer grids raise the bound by 0.15-0.17 points, and with them the gap at
+  K 32 is -0.07.
+* The curve errors cost ~1.6 points per user from K 16 on (0.75 at one unit per slot), at every
+  K: a hard target makes the abstraction's calibration error first-order, while for the mean the
+  same errors cost nothing measurable (gap 0.005 dB per user at K 128 with them). The decodes show
+  the same effect against the codec: at 30 dB the policies that stop users closest to the
+  threshold decode furthest below their predicted share (Lagrangian index 77.7% vs 79.0%, Whittle
+  74.6 vs 75.4, online 74.6 vs 75.2, PADC 66.2 vs 66.5), while every mean decodes within 0.02 dB.
+* A uniform margin makes it worse (0.25 dB: +0.25 to +1.4 points more gap; 0.5 dB: +3.8 to
+  +4.9): the errors are per image and go both ways, so a margin spends slots on every user to
+  protect the few whose curves are optimistic, and admits fewer users. On stale reports, where
+  the error is several dB, a margin helped (section 6b); here it is a few hundredths.
+* The finer grid hurt in 22.2d only with calibrated curves; with the true curves it changes
+  nothing (77.0 vs 77.25 at K 8, 78.69 vs 78.72 at K 32): the coarse grid's smoothing of the 0/1
+  reward was a hedge against the curve errors.
+* The Whittle index's gap falls with K given the true curves too (4.8 -> 1.3) but stays above
+  the Lagrangian index's; the curve errors cost it ~1 point.
+* Not run: a program whose terminal reward is the calibrated success probability,
+  Phi((q - Q) / sigma_i) with sigma_i the calibration error, in place of 1{q >= Q} (a soft
+  target; the hedge a margin cannot be). Optional (docs/PAPER.md, owed item 13).
+
+**C5 with the single decoder (23.2).** The prefix code snrc4 (one encoder, one decoder), its
+nested curves and calibrated transmitter, 2000 frames, the frames of section 20.2; best policy
+and transmitter (naive or aware) at each point, closed-form policies (the Lagrangian index adds
+~0.06 dB for the mean); digital with IR-HARQ as in section 5. In brackets: the per-length
+decoders' lead (section 5).
+
+| report correlation r | 1 | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+|---|---|---|---|---|---|---|---|
+| mean PSNR, single decoder | 31.42 | 31.30 | 31.17 | 30.90 | 30.42 | 30.09 | 29.84 |
+| minus HEIC + HARQ (dB) | +0.13 (+0.34) | +1.11 (+1.32) | +1.35 (+1.56) | **+1.54** (+1.73) | +1.49 (+1.69) | +1.31 (+1.49) | +1.09 (+1.25) |
+| minus the 3 dB-gap code + HARQ (dB) | -0.71 | +0.65 | +0.98 | +1.19 | +1.23 | +1.13 | +0.96 |
+| at 30 dB, single decoder (%) | 74.7 | 73.3 | 71.7 | 68.3 | 61.9 | 56.9 | 55.3 |
+| minus HEIC + HARQ (points) | +0.3 (+2.8) | +9.7 (+11.8) | +12.2 (+14.4) | **+13.5** (+15.5) | +12.1 (+14.2) | +10.1 (+12.6) | +8.3 (+9.7) |
+
+| CQI error sd (dB) | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| mean PSNR, single decoder | 31.42 | 31.39 | 31.27 | 31.13 |
+| minus HEIC + HARQ (dB) | +0.13 (+0.34) | +0.71 (+0.91) | **+1.12** (+1.33) | +1.40 (+1.60) |
+| minus the 3 dB-gap code + HARQ (dB) | -0.71 | +0.24 | +0.74 | +1.09 |
+| at 30 dB (%) / minus HEIC + HARQ (points) | 74.7 / +0.3 (+2.8) | 74.6 / +6.2 (+8.5) | 73.4 / **+10.7** (+12.9) | 70.9 / +12.8 (+15.1) |
+
+The verdict stands with the single decoder: on par with exact CSI (+0.13 dB, +0.3 points; a
+3 dB-gap code is 0.7 dB ahead), ahead of HEIC with HARQ from 1 dB of CQI error or r = 0.95, and of
+the 3 dB-gap code from 1 dB / r = 0.95. Per-length decoders add a uniform 0.17-0.21 dB and 1.4-2.5
+points to every lead. On stale reports the naive target policies break as in section 6b (online
+-4.0 points under PADC at r = 0.8 naive, +3.3 aware); plan_adv aware is the best target policy
+from r = 0.95 to 0.4, PADC at r = 0. The JSCC side holds decoded at r = 0.8 with this decoder
+(section 6d: model error MAE 0.076-0.095 dB, bias -0.012 / +0.013).
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -533,6 +608,9 @@ identical for the mean.
    at lambda* is ~0; the tie rule costs 1.75 points at one unit and gains 0.27 at K 128; prices
    and re-solving change nothing; finer grids make the policies worse). Last suspect: the
    transmitter's curve errors, which the bound does not have (COMMANDS 23.1).
+   Resolved 2026-10-25 (COMMANDS 23.1, section 6e): with the true curves the index meets the
+   bound from K 16 on (within +-0.3 points); the curve errors cost ~1.6 points per user at the
+   target and nothing measurable for the mean; uniform margins make it worse.
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted

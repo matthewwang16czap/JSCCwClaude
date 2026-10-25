@@ -1,13 +1,15 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-25. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-25 (b). Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: SECTION 23 (CPU only, five background chains of ~1-2 h; no GPU). Sections 21 and
-22 are done (results recorded in docs/NOTES.md 6d). Everything through section 22 is done.
+WHAT TO RUN: NOTHING this turn. Sections 0-23 are done and recorded in docs/NOTES.md (21-22:
+6d; 23: 6e); every assumption of the paper outline (docs/PAPER_OUTLINE.md) is now measured, so
+the next step is writing. One optional CPU experiment is described in docs/PAPER.md (owed item
+13: programs that know the abstraction's calibration error); ask for it and it gets a section.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -45,7 +47,7 @@ WHAT TO RUN: SECTION 23 (CPU only, five background chains of ~1-2 h; no GPU). Se
      frames, its latency budget, decoded
   22 before writing: the 30 dB gap, the PI     done (docs/NOTES.md 6d)
      baseline, CLIC, MS-SSIM / LPIPS
-  23 the 30 dB gap's last suspect (the         TO RUN NOW (CPU only)
+  23 the 30 dB gap's last suspect (the         done (docs/NOTES.md 6e)
      transmitter's curve errors); digital
      against the single decoder
 
@@ -2587,7 +2589,7 @@ cat results/s22_scale_mean.txt results/s22_main_mean.txt results/s22_main_tgt.tx
 #     the scheduler optimises the distortion it is given and reports both.
 
 ================================================================================
- 23. TO RUN NOW -- the 30 dB gap's last suspect, and digital against the single decoder
+ 23. DONE -- the 30 dB gap's last suspect, and digital against the single decoder
      (CPU only: five background chains, ~1-2 h each; no GPU)
 ================================================================================
 # Why (sections 21-22 are recorded in docs/NOTES.md 6d):

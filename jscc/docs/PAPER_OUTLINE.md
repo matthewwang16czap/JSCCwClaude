@@ -1,11 +1,10 @@
 # Paper outline (IEEE TWC): title, abstract, section summaries
 
 Drafted 2026-10-23 from `docs/PAPER.md` (claims C1-C14) and `docs/NOTES.md` (numbers); updated
-2026-10-25 with COMMANDS 21-22 (NOTES 6d). **[A]** marks a result the runs have not given yet
-(two are left, both in COMMANDS 23). Each one is written as we expect it, and the list at the end
-says what changes if it comes out otherwise. The main system is
-the single prefix code: one encoder and one decoder, trained over every rate. Per-length
-decoders are an optional upgrade.
+2026-10-25 with COMMANDS 21-23 (NOTES 6d, 6e). Every number is now measured: no assumption is
+left (the list at the end records how each one came out). The main system is the single prefix
+code: one encoder and one decoder, trained over every rate. Per-length decoders are an optional
+upgrade.
 
 ---
 
@@ -18,28 +17,26 @@ Alternatives:
 - *A Link Abstraction for Scheduling Deep Joint Source-Channel Codes in Multi-User Downlinks*
 - *What Is a Slot Worth to a Learned Code? Link Abstraction and Deadline Scheduling for Deep JSCC*
 
-## Abstract (~230 words; TWC: one paragraph, no citations, no undefined acronyms)
+## Abstract (~240 words; TWC: one paragraph, at most 250 words, no citations)
 
-Deep joint source-channel coding (JSCC) is designed and evaluated on a single link, yet a
-cellular downlink delivers data slot by slot, through a scheduler, to many users before a
-deadline. Scheduling theory for such problems exists, but it needs to know what a slot is worth
-to each user, and no such model exists for learned codes. We show that a learned prefix code
-trained under slot-varying SNR obeys a simple link abstraction: its distortion is the source
-distortion plus a sensitivity-weighted sum of per-slot minimum mean-square-error terms. The
-abstraction predicts decoded quality within 0.06 dB, against 0.49 dB for the mutual-information
-mapping used in digital system simulation. A transmitter can calibrate it from 12 decodes per
-image, on Kodak and CLIC. It holds only when the code is trained for slot-varying SNR. With it,
-each user is a
-two-number state, and multi-user deadline scheduling becomes a finite-horizon restless bandit.
-Per-user dynamic programs, a Lagrangian upper bound on every causal scheduler, and Lagrangian
-index policies therefore apply exactly. For mean PSNR, the index's total gap to the bound stays
-bounded as the cell grows (0.005 dB per user at 128 users), and it gains 0.52 dB over
-proportional fair; a closed-form approximation gains 0.46 dB, decoded. For a quality target, admission by remaining need with
-online stopping serves 11 points more users than per-image rate selection. Under CQI errors and
-outdated reports, the scheduled JSCC system outperforms a digital chain with CQI-table link
-adaptation and incremental-redundancy HARQ by up to 1.5 dB **[A: single-decoder re-run]**.
-Finally, the scheduler reshapes the channel the code sees, and training on it adds a further
-0.28 dB.
+Deep joint source-channel coding (JSCC) is evaluated on single links, yet a cellular downlink
+delivers data slot by slot, through a scheduler, to many users before a deadline. Scheduling
+theory needs to know what a slot is worth to each user, which no model provides for learned
+codes. We show that a learned prefix code trained under
+slot-varying SNR obeys a simple link abstraction: its distortion is the source distortion plus a
+sensitivity-weighted sum of per-slot minimum mean-square-error terms. On two test sets it
+predicts quality within 0.06-0.08 dB, against 0.44-0.49 dB for the mutual-information
+mapping of digital system simulation; a transmitter calibrates it from 12 decodes per image, and
+it holds only when the code is trained for slot-varying SNR. With it, each user is a two-number
+state and deadline scheduling becomes a finite-horizon restless bandit, so per-user dynamic
+programs, a Lagrangian bound on every causal scheduler and Lagrangian index policies apply
+exactly. The index's gap to the bound vanishes as the cell grows, for mean PSNR and for a quality
+target; at a hard target, however, the abstraction's calibration error becomes a fixed cost
+of 1.6 percentage points of satisfied users. Decoded, the index gains 0.5-0.6 dB over
+proportional fair and brings 8-12 points more users to 30 dB than per-image rate selection.
+Under CQI errors and outdated reports, scheduled JSCC outperforms a digital chain with CQI-table
+link adaptation and incremental-redundancy HARQ by 1.1-1.5 dB, and training the code on the
+channel its scheduler creates adds 0.28 dB.
 
 **Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
 restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, image transmission.
@@ -76,15 +73,20 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
      - The abstraction turns each user into a small Markov decision process: phases that
        accumulate across slots, each graded by its slot's SNR, toward a terminal quality.
      - The Lagrangian bound and index apply exactly and run on a CPU.
-     - For mean PSNR, the gap to the bound behaves as the theory predicts. A closed-form
-       certainty-equivalent rule captures most of the gain at small scale.
+     - The Lagrangian index's gap to the bound vanishes as the cell grows, for both
+       objectives (mean: 0.005 dB per user at 128 users; 30 dB target: within ±0.3 points
+       from 16 users on, given the curves the transmitter plans with). A closed-form
+       certainty-equivalent rule captures most of the mean gain at small scale.
+     - A hard target makes the abstraction's calibration error first-order: ~1.6 points per
+       user at every K, which no uniform margin recovers, while the mean is immune.
      - For a quality target, admission by smallest remaining need plus online stopping beats
        per-image rate selection. The gains also read as 9-39% shorter frames.
   3. *System verdict under realistic CSI* (C5, C6).
      - With CQI errors and outdated reports, scheduled JSCC beats HEVC-intra with CQI-table
-       link adaptation and IR-HARQ; with exact CSI they are on par.
-     - One encoder and one multi-rate decoder suffice. Per-length decoders add ~0.2 dB at six
-       times the decoder memory.
+       link adaptation and IR-HARQ (+1.1 dB at 2 dB CQI error, +1.5 dB at r = 0.8); with exact
+       CSI they are on par.
+     - One encoder and one multi-rate decoder suffice when the number of slots is decided
+       after encoding. Per-length decoders add ~0.2 dB at six times the decoder memory.
   4. *The scheduler makes the code's channel* (C8-C10).
      - Opportunistic selection lifts the SNR of the first phases by ~5 dB.
      - Training on that channel gains 0.28 dB, and codes adapt to their scheduler.
@@ -230,27 +232,34 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
     frames the Whittle index leads. A table of which policy when (C7).
   - The share has a price for the users who miss: the Lagrangian index's LPIPS is 0.011 worse
     than PADC's; online gains +8.3 points with better MS-SSIM and the same LPIPS.
-  - Gap to the bound at scale: ~1.2-1.9 points per user at every K. Ruled out: the tie rule,
-    the price solver, re-solving, the programs' grids. **[A: COMMANDS 23.1]** The rest is the
-    cost of the transmitter's curve errors (the bound has none), recovered in part by a margin.
+  - Gap to the bound at scale (Fig.: per-user gap vs K, true vs calibrated curves). Given the
+    curves it plans with, the Lagrangian index is 0.84 points from the bound at K 8 and within
+    ±0.3 from K 16 to 128, inside the bound's own discretisation error (0.15-0.17). Deciding on
+    the calibrated curves adds ~1.6 points per user at every K (0.75 at K 8): the cost of the
+    abstraction's calibration error at a hard threshold. Margins of 0.25 / 0.5 dB make it worse;
+    the tie rule, the price solver, re-solving and finer grids change nothing. The decodes show
+    the same effect against the codec (the Lagrangian index's share decodes 1.3 points below its
+    prediction, PADC's 0.3).
   - Latency at equal quality: the Lagrangian index needs 12.7% / 19.9% fewer slots than PF at
     T 16 / 24; online 39% fewer than PADC; at T 24 online needs a third more slots than the
     Lagrangian index for its share at 30 dB.
 - **D. Imperfect CSI and the digital baseline** (Fig.: mean PSNR / share vs σ and vs r).
   - On par with exact CQI (+0.3 dB).
-  - With HARQ: +1.3 dB / +13 points at σ = 2 dB, and +1.7 dB / +15.5 points at r = 0.8
-    (measured with per-length decoders). With the single decoder, existing unpaired runs
-    give about +1.1 dB / +9 points at σ = 2 dB and +1.5 dB / +13 points at r = 0.8
-    **[A: paired run, COMMANDS 23.2]**.
+  - With HARQ, the single decoder: +1.1 dB / +10.7 points at σ = 2 dB and +1.5 dB / +13.5
+    points at r = 0.8; ahead of HEIC and of a 3 dB-gap code from σ = 1 dB or r = 0.95 (0.7 dB
+    behind the gap code with exact CSI). Per-length decoders add 0.17-0.21 dB and 1.4-2.5
+    points to every lead.
   - On outdated reports the opportunistic gain fades, and stopping needs the posterior plus
     a margin.
 - **E. Scheduler-aware training** (Fig.: per-phase SNR lift; the trained code's κ and ρ).
   - +0.28 dB on the same slots; codes learn their scheduler.
   - The lift keeps 65% of itself at r = 0.8 and 8% at 0.3.
 - **F. System choice and ablations.**
-  - Single multi-rate decoder vs per-length decoders: +0.23 dB mean for per-length decoders,
-    at 6× decoder memory.
-  - Fixed per-CBR codes lose most when slots are lost: −0.78 dB, −1.9 points.
+  - Single multi-rate decoder vs per-length decoders: +0.23 dB mean and 2.5-3 points at 30 dB
+    (decoded) for per-length decoders, at 6× decoder memory.
+  - One model per CBR is 0.17 dB / 3.3 points ahead of the single decoder with known slots, but
+    its length is fixed at encoding: with 25% of slots lost the single decoder leads (+0.54 dB),
+    and per-length decoders lead by +0.78 dB / +1.9 points (decoded).
   - Robustness over K, T, curve-prediction errors and correlated fading.
 
 ## VI. Conclusion (~0.3 page)
@@ -262,6 +271,11 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 - The system verdict: under the CSI real systems have, scheduled JSCC is ahead of digital with
   link adaptation and HARQ.
 - **Limitations.**
+  - At a hard target the abstraction's calibration error costs ~1.6 points per user; a
+    calibration-aware reward (the success probability under the calibration error) is the
+    natural fix, not evaluated.
+  - The programs model outdated reports but take Gaussian CQI errors as exact; under such
+    errors the closed-form planner (plan_adv) is the robust target policy.
   - Per-frame admission ignores long-run fairness (per-user debts are the fix).
   - Lost-slot runs fall outside the scaling theorems.
   - Analog symbols are not NR-compatible.
@@ -272,14 +286,14 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 
 ---
 
-## Assumptions to confirm (COMMANDS 21-22, later)
+## How the assumptions came out (COMMANDS 21-23)
 
 | assumed in the outline | run | if it comes out otherwise |
 |---|---|---|
 | ~~CLIC repeats Kodak~~ | 22 | confirmed (NOTES 6d) |
 | ~~MS-SSIM / LPIPS move with PSNR~~ | 22 | confirmed for the mean; at the target they show the cost to the users who miss (now in the text) |
 | ~~The relaxation's tie rule closes the 30 dB gap~~ | 22 | refuted, as were prices, re-solving and finer grids |
-| The 30 dB gap is the cost of the transmitter's curve errors | 23.1 | "near-optimal" for the mean only; the target gap stays a stated limitation with five causes ruled out |
+| ~~The 30 dB gap is the cost of the transmitter's curve errors~~ | 23.1 | confirmed: with the true curves the index meets the bound from K 16 on; the margin did not recover it (it made it worse), so the cost is reported as a finding and a limitation |
 | ~~The advantage index is at or above the PI index~~ | 22 | confirmed, by ~1 dB |
 | ~~The Lagrangian index holds decoded~~ | 21 | confirmed: it is the paper's scheduler for the mean and for the target with fresh reports |
-| JSCC's lead over digital with the single decoder is ~0.2 dB below the per-length-decoder numbers | not yet in the sheet | quote the measured lead; the qualitative verdict is unaffected unless it falls below ~0.5 dB |
+| ~~JSCC's lead over digital with the single decoder is ~0.2 dB below the per-length decoders'~~ | 23.2 | confirmed: 0.17-0.21 dB and 1.4-2.5 points below; the verdict is unchanged |

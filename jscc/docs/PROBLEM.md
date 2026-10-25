@@ -197,7 +197,11 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         stand-in with a binding 29 dB target (T 10), proper per-slot prices lower the bound by
         0.07 / 0.15 points per user at K 8 / 32. Diagnosis owed: docs/PAPER.md, owed item 9 (the
         relaxation's tie rule first; built 2026-10-22 with the price solver, grid and LP-update
-        variants, COMMANDS 22.2; on the stand-in the tie rule changes nothing). The lost-slot runs (--preempt) are outside these theorems
+        variants, COMMANDS 22.2; on the stand-in the tie rule changes nothing). Resolved
+        2026-10-25 (COMMANDS 23.1, docs/NOTES.md 6e): none of those, but the transmitter's curve
+        errors. Given the curves it plans with, the Lagrangian index is within +-0.3 points of
+        the bound from K 16 on; the calibrated curves cost ~1.6 points per user at every K at a
+        hard target and nothing measurable for the mean; uniform margins make it worse. The lost-slot runs (--preempt) are outside these theorems
         (a budget shared at random by all users; Zhang and Frazier list it as open). So the
         theory's regime holds, and at scale the programs' index is the scheduler to use; the
         closed form is its cheap approximation (one unit per slot: a tie). On stale reports (K
