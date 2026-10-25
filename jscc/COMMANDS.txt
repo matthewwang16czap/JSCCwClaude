@@ -1,16 +1,13 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-22. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-25. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: SECTIONS 21 AND 22, the last runs before the paper is written. Section 22 (at the
-end): four GPU chains (GPUs 1-4, ~2-3 h) and nine CPU chains (seven of ~1-4 h), all in the
-background. Section 21 too if it is not done (if 21.1 has not started, skip only 21.1: 22.1
-decodes the same frames with more policies). Everything through section 20 is done and
-recorded in docs/NOTES.md.
+WHAT TO RUN: SECTION 23 (CPU only, five background chains of ~1-2 h; no GPU). Sections 21 and
+22 are done (results recorded in docs/NOTES.md 6d). Everything through section 22 is done.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -44,10 +41,13 @@ recorded in docs/NOTES.md.
   20 C5 with HARQ, the stale-report            done (docs/NOTES.md 5, 6b, 6c)
      schedules decoded, the Lagrangian
      index's delay, margins on stale reports
-  21 the Lagrangian index on the main          TO RUN WITH 22 (GPUs 1-4 for 21.1, the
-     frames, its latency budget, decoded       rest CPU)
-  22 before writing: the 30 dB gap, the PI     TO RUN NOW (GPUs 1-4, the rest CPU)
+  21 the Lagrangian index on the main          done (docs/NOTES.md 6d)
+     frames, its latency budget, decoded
+  22 before writing: the 30 dB gap, the PI     done (docs/NOTES.md 6d)
      baseline, CLIC, MS-SSIM / LPIPS
+  23 the 30 dB gap's last suspect (the         TO RUN NOW (CPU only)
+     transmitter's curve errors); digital
+     against the single decoder
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2221,7 +2221,7 @@ cat results/s20_margin.txt                                                      
 #         on the posterior and plan the spare slots (plan_adv, aware).
 
 ================================================================================
- 21. TO RUN WITH 22 -- the Lagrangian index on the main frames and decoded by the codec
+ 21. DONE -- the Lagrangian index on the main frames and decoded by the codec
      (GPUs 1-4: 21.1, ~30 min after ~15 min of CPU dumps; the rest CPU, ~1-1.5 h)
 ================================================================================
 # Why (section 20 is recorded in docs/NOTES.md 5, 6b, 6c; docs/PAPER.md C3-C14): the programs'
@@ -2358,7 +2358,7 @@ cat results/s21_latency_mean.txt results/s21_latency_tgt.txt                    
 #         for its quality (the C14 headline, restated with the recommended scheduler).
 
 ================================================================================
- 22. TO RUN NOW -- what the paper still needs before writing: the 30 dB gap, the PI
+ 22. DONE -- what the paper still needs before writing: the 30 dB gap, the PI
      baseline, a second test set (CLIC) and perceptual metrics
      (GPUs 1-4: four chains of ~2-3 h; CPU: seven background chains of ~1-4 h)
 ================================================================================
@@ -2585,3 +2585,106 @@ cat results/s22_scale_mean.txt results/s22_main_mean.txt results/s22_main_tgt.tx
 #   MS-SSIM / LPIPS (22.4): the PSNR gains go with higher MS-SSIM and lower LPIPS: the main
 #     tables add both columns. If they disagree (a PSNR gain with a worse LPIPS), the paper says
 #     the scheduler optimises the distortion it is given and reports both.
+
+================================================================================
+ 23. TO RUN NOW -- the 30 dB gap's last suspect, and digital against the single decoder
+     (CPU only: five background chains, ~1-2 h each; no GPU)
+================================================================================
+# Why (sections 21-22 are recorded in docs/NOTES.md 6d):
+#   23.1  None of section 22's four fixes closed the 30 dB gap (tie rule, price solver,
+#         re-solving, finer grids). One difference between the bound and the policies was never
+#         tested: in every rmab_scale run so far (18.3, 22.2) the bound and the scores use the
+#         fitted curves (--utility), while the policies decide on the transmitter's calibrated
+#         curves (--belief), which are off by a few hundredths of a dB per image. For the mean
+#         that costs nothing measurable (the gap still falls to 0.005 dB). At a 0/1 target it can
+#         cost a fixed amount per user: the programs stop a user once it is predicted at 30 dB,
+#         and a user predicted at 30.02 dB but truly at 29.98 is a miss, at every K. The finer
+#         grids making the policies worse in 22.2d fits this (a sharper threshold, so more users
+#         stopped exactly at it). Test: (a) the policies given the true curves; (b, c) the
+#         calibrated curves with the policies aiming 0.25 / 0.5 dB above the target (new
+#         --margin; the bound and the score stay at 30 dB); (d) the true curves on finer grids.
+#   23.2  The paper's main system is now the single decoder (one encoder, one decoder for every
+#         prefix length). Digital's side of C5 (section 20.2, with HARQ) is unchanged; its JSCC
+#         side was the per-length decoders. This runs the single decoder on the same frames and
+#         axes (2000 frames; report correlation r = 1 ... 0 naive and aware; CQI error 0-3 dB).
+# Everything is skipped if its output exists. Order: 23.0, then 23.1-23.2 in the background,
+# then 23.3 when they are done.
+
+# 23.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p results logs_s23
+cat > logs_s23/env.sh <<'ENV'
+. logs_s22/env.sh
+NUT="--utility results/utility_snrc4_nested.json"
+R="1 0.95 0.9 0.8 0.6 0.4 0"
+GAP="--target 30 --frames 100 --workers 8 --policies pf whittle lagrange"
+ENV
+. logs_s23/env.sh
+#   inputs that must exist (send me any line saying "No such file"):
+ls results/utility_snrc4_nested.json results/belief_snrc4_nested.json results/s20_harq_mean.txt > /dev/null
+
+# 23.1 -- CPU, background, four chains (~1-2 h each; 8 processes each, 32 cores in all): the
+#   30 dB gap with the true curves (K 8 ... 128), with margins on the calibrated curves (K 8,
+#   32, 128), and with the true curves on finer grids (K 8, 32)
+. logs_s23/env.sh
+nohup bash -c "
+[ -s results/s23_gap_truth.txt ] || {
+python tools/rmab_scale.py $NUT $GAP --users 8 16 32 64 128 --out results/s23_gap_truth.json > results/s23_gap_truth.tmp 2>&1 ;
+mv results/s23_gap_truth.tmp results/s23_gap_truth.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s23_gap_m25.txt ] || {
+python tools/rmab_scale.py $NUB $GAP --users 8 32 128 --margin 0.25 --out results/s23_gap_m25.json > results/s23_gap_m25.tmp 2>&1 ;
+mv results/s23_gap_m25.tmp results/s23_gap_m25.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s23_gap_m50.txt ] || {
+python tools/rmab_scale.py $NUB $GAP --users 8 32 128 --margin 0.5 --out results/s23_gap_m50.json > results/s23_gap_m50.tmp 2>&1 ;
+mv results/s23_gap_m50.tmp results/s23_gap_m50.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s23_gap_truth_grid.txt ] || {
+python tools/rmab_scale.py $NUT $GAP --users 8 32 --ny 256 --ng 32 --out results/s23_gap_truth_grid.json > results/s23_gap_truth_grid.tmp 2>&1 ;
+mv results/s23_gap_truth_grid.tmp results/s23_gap_truth_grid.txt ; }
+" > /dev/null 2>&1 &
+
+# 23.2 -- CPU, background, one chain (~1-1.5 h): the single decoder (the prefix code snrc4, its
+#   nested curves and calibrated belief) on C5's axes, the closed-form policies as in 18.1a and
+#   17.3a (2000 frames; the digital numbers to compare with are results/s20_harq_*.txt)
+. logs_s23/env.sh
+nohup bash -c "
+[ -s results/s23_c5_single.txt ] || {
+python tools/schedule_sim.py $NUB --frames 2000 --policies pf fixed_uni fixed_slope slope_adv --cqi-corr $R > results/s23_c5_single.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 2000 --policies pf fixed_uni fixed_slope slope_adv --cqi-corr $R --cqi-aware >> results/s23_c5_single.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 2000 --target 30 --policies pf padc online plan_adv replan_adv --cqi-corr $R >> results/s23_c5_single.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 2000 --target 30 --policies pf padc online plan_adv replan_adv --cqi-corr $R --cqi-aware >> results/s23_c5_single.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 2000 --policies pf fixed_uni slope_adv --cqi-error 0 1 2 3 >> results/s23_c5_single.tmp 2>&1 ;
+python tools/schedule_sim.py $NUB --frames 2000 --target 30 --policies padc online plan_adv replan_adv --cqi-error 0 1 2 3 >> results/s23_c5_single.tmp 2>&1 ;
+mv results/s23_c5_single.tmp results/s23_c5_single.txt ; }
+" > /dev/null 2>&1 &
+sleep 30; ls results/s23_*.tmp
+
+# 23.3 -- reading (send back everything it prints), when results/s23_*.tmp are gone ----------
+. logs_s23/env.sh
+ls results/s23_*.tmp 2>&1
+cat results/s23_gap_truth.txt results/s23_gap_m25.txt results/s23_gap_m50.txt results/s23_gap_truth_grid.txt
+cat results/s23_c5_single.txt
+
+# Decision (docs/PAPER.md C5, C13; owed item 9):
+#   23.1  With the true curves, lagrange's per-user gap falls with K (the "gap x sqrt(K)" column
+#         flat or falling, against 4.5 -> 16.5 in 22.2a): the flat 30 dB gap is the cost of the
+#         transmitter's curve errors, not of the policy. The paper then states the Lagrangian
+#         index as near-optimal for both objectives on its own model, and the curve-error cost
+#         as a separate, measured term (with the margin that recovers most of it, 23.1b-c). If
+#         the gap stays flat with the true curves too, it stays a stated limitation with every
+#         candidate cause measured and ruled out.
+#   23.2  The single decoder's lead over digital with HARQ at 2 dB of CQI error and at r = 0.8
+#         (existing runs suggest about +1.1 dB and +1.5 dB, ~0.2-0.3 dB below the per-length
+#         decoders): C5 is stated with the single decoder; per-length decoders are the optional
+#         upgrade.

@@ -66,6 +66,12 @@ Per K the output also gives, at lambda* (the bound's programs), the demand that 
 above the precision) and the indifferent mass, as shares of the supply: the tie rule matters
 when the sure demand falls short of the supply and the indifferent mass fills it.
 
+--belief: the policies decide on the transmitter's calibrated curves, the users are scored and
+the bound is computed on --utility, so the gap to the bound includes the cost of the curves'
+errors (none for the mean, first order at a target, where a user is stopped at its predicted
+threshold); without --belief the policies know the true curves. --margin m: the policies'
+programs aim at target + m dB, a hedge against those errors.
+
 --delay (with --target): also when each user's decoded image reaches the target, per policy
 the share of users there by slots T/4, T/2, 3T/4 and T (a CDF over all users) and the mean slot
 with misses counted at T + 1 (docs/PROBLEM.md section 3, item 7).
@@ -279,8 +285,9 @@ def _work(args):
     res["bound"] = ub / K
     res["sure_share"], res["mid_share"] = info["sure_share"], info["mid_share"]
     pol_arms = arms
-    if belief is not util or (seen is not None and o.cqi_naive):
-        pol_arms = [Arm(belief, int(i), float(m), T, target=o.target, p_lost=p_user, clip=clip,
+    if belief is not util or (seen is not None and o.cqi_naive) or o.margin:
+        aim = None if o.target is None else o.target + o.margin   # the policies aim higher
+        pol_arms = [Arm(belief, int(i), float(m), T, target=aim, p_lost=p_user, clip=clip,
                         cqi_corr=1.0 if o.cqi_naive else r, **grid) for i, m in zip(imgs, means)]
     W_star = None
     if any(p in o.policies for p in PRICED):
@@ -321,6 +328,9 @@ def main():
                     help="--cqi-corr < 1: the policies take the reports as exact")
     ap.add_argument("--target", type=float, default=None,
                     help="score the share of users at this PSNR (adv is not run)")
+    ap.add_argument("--margin", type=float, default=0.0,
+                    help="with --target: the policies' programs aim at target + margin dB (the "
+                         "bound and the score stay at the target)")
     ap.add_argument("--policies", nargs="+", default=list(DEFAULT), choices=POLICIES)
     ap.add_argument("--delay", action="store_true",
                     help="with --target: when each user reaches it (a CDF by slot, mean slot)")
@@ -351,6 +361,8 @@ def main():
         ap.error("--preempt is in [0, 1)")
     if o.delay and o.target is None:
         ap.error("--delay needs --target")
+    if o.margin and o.target is None:
+        ap.error("--margin needs --target")
     if o.resolve < 1 or o.ny < 8 or o.ng < 2 or o.tie_band < 0:
         ap.error("--resolve >= 1, --ny >= 8, --ng >= 2, --tie-band >= 0")
     util = load_utility(o.utility)
@@ -362,7 +374,9 @@ def main():
     print(f"{o.slots} slots, {o.users_per_unit} users per unit, mean SNR U{o.mean_snr} dB, "
           f"Rayleigh{f', {100 * o.preempt:g}% of units preempted' if o.preempt else ''}"
           f"{f', stale reports (correlation {o.cqi_corr:g}, transmitter ' + ('naive' if o.cqi_naive else 'aware') + ')' if o.cqi_corr < 1 else ''}"
-          f"; {'mean PSNR' if o.target is None else f'share at {o.target:g} dB'}; utility "
+          f"; {'mean PSNR' if o.target is None else f'share at {o.target:g} dB'}"
+          f"{f' (policies aim at {o.target + o.margin:g})' if o.margin else ''}"
+          f"; transmitter curves {o.belief or 'the true ones'}; utility "
           f"{o.utility}{f' (not nested: largest rho deviation {dev:.3f}; the programs use its nested approximation)' if dev > 1e-6 else ''}")
     print(f"programs: Y grid {o.ny}, {o.ng} fading bins; prices: {o.price_steps} subgradient steps, "
           f"step scaled by {o.price_scale}{', at the kink' if o.kink_grad else ''}"

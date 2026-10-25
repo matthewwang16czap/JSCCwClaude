@@ -369,6 +369,115 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
   every checkpoint. On stale reports the two tie at the deadline and the bound is loose (each
   program knows its own true state); the guided policies collapse (ID 36%).
 
+## 6d. The runs before writing (COMMANDS 21-22, run 2026-10-23 to -25)
+
+Kodak, the snrc4 prefix code (one encoder, one decoder), nested curves, calibrated transmitter;
+K 8, T 24 unless stated. "Decoded": 60 frames decoded by the codec, paired by frame.
+
+**The Lagrangian index on the main frames (21.2, 500 frames, simulated).** Gain over PF (mean)
+or over PADC (share at 30 dB):
+
+| setting | lagrange | slope_adv / plan_adv | whittle | best other |
+|---|---|---|---|---|
+| mean, fresh | **+0.518** | +0.464 | +0.458 | |
+| mean, 2 dB CQI error | **+0.485** | +0.420 | +0.429 | |
+| mean, 25% of slots lost | **+0.483** | +0.269 | +0.440 | |
+| mean, r = 0.8 aware | **+0.486** | +0.473 | +0.374 | |
+| mean, T 16 | **+0.430** | +0.329 | +0.391 | |
+| 30 dB, fresh | **+11.1** | +8.8 (plan_adv) | +8.2 | online +8.0 |
+| 30 dB, 2 dB CQI error | +1.6 | **+8.3** (plan_adv) | +1.2 | online +1.7 |
+| 30 dB, 25% lost | +9.1 | | **+10.7** | replan_adv +9.5 |
+| 30 dB, r = 0.8 aware, 0.5 dB margin | +6.1 | **+9.7** (plan_adv) | +5.4 | |
+| 30 dB, T 16 | +9.2 | +9.6 (plan_adv) | **+10.8** | online +8.6 |
+
+For the mean the index is best everywhere. At 30 dB it is best with fresh, exact reports and
+fragile otherwise: its programs model stale reports (the report kernel) but take a Gaussian CQI
+error as exact, and they stop users at the predicted threshold; plan_adv (planned spare slots)
+is the robust target policy under CQI errors and stale reports, the Whittle index with lost slots
+and tight frames. Time to 30 dB: the Whittle index earliest (-2.63 slots against PADC over all
+users, -2.89 on the same users), the Lagrangian index -1.92 / -1.21. First decodable phase
+later than PF (7.1 vs 4.5).
+
+**Decoded (21.1, 22.1).** The model's error on every file: bias -0.022 ... +0.013 dB, MAE
+0.062-0.095: C2 holds on the index's schedules as on ours.
+
+| decoded, Kodak | mean, fresh | mean, r 0.8 | 30 dB, fresh | 30 dB, r 0.8 |
+|---|---|---|---|---|
+| lagrange minus slope_adv / padc | **+0.060** [0.021, 0.100] dB | +0.004 [-0.07, 0.08] | **+12.3** [9.6, 15.4] pts (22.1: +11.5) | +3.1-4.0 |
+| online / plan_adv minus padc | | | online +8.3-9.6 | **plan_adv +9.4-10.4** |
+| whittle minus the same base | -0.002 | -0.10 | +8.3-9.0 | +6.3 |
+| pf minus slope_adv | -0.468 | -0.512 | | |
+
+**Latency at equal quality (21.3).** The Lagrangian index needs 12.7% [10.8, 15.3] fewer slots
+than PF for its mean PSNR at T 16 and 19.9% [13.3, 24.1] at T 24 (2.4-3.1% fewer than our closed
+form). At 30 dB, online needs 32 slots for the index's 76% at T 24 (25% fewer for the index) and
+PADC more than 32; the Whittle index needs 4.4% fewer than the index at T 16; 70% at 30 dB takes
+17.5 slots (Whittle), 17.8 (Lagrangian), 20.4 (online), more than 32 (PADC).
+
+**The PI-type ratio index (22.1, 22.2e-f).** Worse than PF: -0.48 dB fresh, -0.42 at 2 dB CQI
+error, -0.25 at r 0.8 (main frames); decoded -0.96 [-1.20, -0.75] dB against our closed form
+(-0.82 at r 0.8); at scale 1.06-1.34 dB from the bound (our closed form 0.15-0.27, PF 0.52-0.71).
+It starves users: worst user 23.0 dB against PF's 25.9, and 8 of 480 decoded users got nothing.
+The ratio rewards a slot that is near the user's own best, whatever its absolute gain, and with
+a saturating quality the high-SNR users' gains are nearly flat, so their ratios are large. The
+difference form (C3) is the right certainty-equivalent rule.
+
+**Perceptual metrics (22.1, 22.4).** Mean PSNR gains carry over: our closed form vs PF +0.0057
+MS-SSIM, -0.0115 LPIPS (Kodak); the Lagrangian index vs our closed form +0.0009 MS-SSIM, +0.0025
+LPIPS (slightly worse; CLIC -0.0010, not significant). At the target the share costs the users
+who miss: the Lagrangian index's +11.5 points come with -0.0013 MS-SSIM (n.s.) and +0.011 LPIPS
+against PADC (its mean PSNR 30.53 vs 30.75), and on stale reports it gives up 44 of 480 users
+entirely (+0.085 LPIPS; plan_adv 32 users, +0.053). Online is the balanced target policy: +8.3
+points with +0.0073 MS-SSIM and unchanged LPIPS.
+
+**CLIC (22.1, 22.3; the first 60 test images).**
+* The abstraction holds: nested fit held-out MAE 0.05-0.11 dB per CBR (free fit the same), the
+  transmitter's belief from 12 decodes 0.05-0.09; master profile 0.574 0.227 0.131 0.046 0.013
+  0.009, kappa 1.94. Link abstractions on the held-out profiles (MAE, dB, sensitivity weights):
+  MMSE **0.083**, noise 0.135, EESM 0.159, mean dB 0.230, capacity 0.290, MIESM (equal weights)
+  0.439. The constant-SNR control s1 again obeys no rule (noise best at 0.147, MMSE 0.203, its
+  additive fit 2x worse: 0.13-0.24). Piecewise training costs 0.05-0.09 dB at constant SNR.
+* Decoded: model error bias -0.029 / -0.000, MAE 0.076 / 0.087 dB. Mean: our closed form +0.51
+  over PF, the Lagrangian index +0.12 [0.08, 0.17] over ours. 30 dB: the Lagrangian index +7.7
+  [5.4, 10.0] points over PADC, online +5.2 (PADC already at 83.5%: CLIC images reach 30 dB more
+  easily). Simulated (500 frames): mean +0.60 / +0.55 / +0.50 dB over PF (Lagrangian / Whittle /
+  ours); 30 dB +8.8 / +8.0 / +6.8 points over PADC (Lagrangian / plan_adv / online).
+
+**The 30 dB gap at scale (22.2, B = K/8, 100 frames).** Per-user gap to the bound (points):
+
+| K | 8 | 16 | 32 | 64 | 128 |
+|---|---|---|---|---|---|
+| lagrange (as before) | 1.59 | 1.90 | 1.36 | 1.67 | 1.46 |
+| lagrange_relax (the relaxation's tie rule) | 3.34 | 2.52 | 1.30 | 1.48 | 1.19 |
+| whittle | 5.72 | 4.09 | 3.05 | 2.92 | 2.39 |
+| lagrange, Y grid 256 / 32 bins | 2.99 | | 2.27 | | 2.25 |
+| lagrange_relax, Y grid 256 / 32 bins | 3.61 | | 1.68 | | 1.71 |
+
+* Indifferent users at lambda*: 1.9% of the supply at K 8, 0.0% from K 16 on (sure demand 76-79%).
+  The tie rule has almost no one to act on; it costs 1.75 points at one unit per slot (the
+  Whittle-index order among equal gains is the better one there) and gains 0.27 [0.07, 0.50] at
+  K 128. Caveat: the band (half the smallest grid price) is narrower than the golden-section
+  precision of lambda*, so users exactly at the kink may show gains just outside it.
+* Prices: the supply-scaled subgradient at the kink (30 steps) never improved on the constant
+  price at the target (bound and schedules identical to the old solver); for the mean it lowers
+  the bound by 0.007-0.008 dB per user, policies unchanged.
+* LP-update (re-solving every 6 slots) schedules exactly as lagrange_relax at K 32 and 128 (the
+  re-solved prices move, 0.33 -> 0.36 on the stand-in, but a price common to all users in a slot
+  does not change their ranking) and -0.6 points against lagrange at K 8.
+* Finer grids raise the bound by 0.15-0.17 points and make both policies worse by 0.3-1.4.
+* So none of the four closes it. The suspect left (COMMANDS 23.1): every one of these runs, and
+  18.3, scores and bounds on the fitted curves while the policies decide on the calibrated
+  belief. For the mean that costs nothing measurable (gap 0.005 dB at K 128, -0.004 with the new
+  prices); at a 0/1 target a user stopped at its predicted 30 dB is a miss whenever the belief
+  is a little optimistic, at every K. Finer grids (a sharper threshold, more users stopped right
+  at it) making the policies worse fits. A stand-in check with a 0.025 dB belief error showed no
+  flat component (7.3 vs 6.9 points at K 8, 3.1 vs 3.2 at K 32), which neither confirms nor rules
+  it out (the stand-in's gaps are 2-4x the real ones).
+
+**Mean at scale with the new prices (22.2e).** Unchanged: the Lagrangian index 0.207 -> 0.005 dB
+per user from K 8 to 128 (0.206 -> -0.004 with supply-scaled prices); the relaxation's tie rule
+identical for the mean.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -420,13 +529,18 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
    points; the gap 6.7 -> 3.9 points per user already falls like 1/sqrt(K); a 4x finer grid
    moves the bound by 0.004 per user. The stand-in does not show the flat gap, so only the real
    utility's runs can decide.
+   Run 2026-10-25 (COMMANDS 22.2, section 6d): none of the four closes it (the indifferent mass
+   at lambda* is ~0; the tie rule costs 1.75 points at one unit and gains 0.27 at K 128; prices
+   and re-solving change nothing; finer grids make the policies worse). Last suspect: the
+   transmitter's curve errors, which the bound does not have (COMMANDS 23.1).
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
    PSNR gain of user k's next phase at slot SNR s. Built 2026-10-22 as `--policies pi` in both
    tools (S' on 32 equiprobable fades at the user's mean SNR; aware SNRs on stale reports; ties,
    including infinite indices, by the largest gain): COMMANDS 22.1 (decoded), 22.2e-f
-   (docs/PAPER.md, owed item 10). CPU.
+   (docs/PAPER.md, owed item 10). CPU. Run 2026-10-25 (section 6d): it loses to PF (-0.48 dB) and
+   to our closed form by 0.96 dB decoded, and starves users; C3 stands.
 8. Optional, only if a referee asks: a two-layer superposition digital baseline with IR per layer
    (Steiner and Shamai, IEEE TWC 2008, read in full 2026-10-21) at r <= 0.6, where our 0-15 dB
    users sit in its best range (docs/PAPER.md, owed item 11). Its full text supports omitting

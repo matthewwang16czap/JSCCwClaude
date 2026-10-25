@@ -1059,7 +1059,8 @@ def check_relaxation(x):
     u.save(path)
     rows = {}
     for extra in (["--target", "29", "--policies", "pf", "whittle", "lagrange", "lagrange_relax",
-                   "lagrange_lpu", "--resolve", "3", "--price-scale", "supply", "--kink-grad"],
+                   "lagrange_lpu", "--resolve", "3", "--price-scale", "supply", "--kink-grad",
+                   "--margin", "0.25"],
                   ["--policies", "pf", "adv", "pi", "lagrange", "lagrange_relax"]):
         argv, buf = sys.argv, io.StringIO()
         sys.argv = ["rmab_scale.py", "--utility", path, "--users", "8", "16", "--frames", "2",
@@ -1077,7 +1078,8 @@ def check_relaxation(x):
     ok(all(np.isfinite(v[p]) and 0 <= v["mid_share"] and 0 <= v["sure_share"]
            for kind, per in rows.items() for v in per.values() for p in pols[kind]),
        "tools/rmab_scale.py: lagrange_relax, lagrange_lpu (LP-update), pi, supply-scaled and "
-       "kink prices, coarse grids; the sure demand and indifferent mass at lambda* per K")
+       "kink prices, a target margin, coarse grids; the sure demand and indifferent mass at "
+       "lambda* per K")
     from tools.schedule_sim import tie_keys
     same, clip = True, (-2.0, 22.0)
     for target, r, pol in ((None, 1.0, "lagrange_relax"), (29.0, 1.0, "lagrange_relax"),
