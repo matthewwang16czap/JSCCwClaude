@@ -320,6 +320,19 @@ IEEE Transactions on Wireless Communications (TWC).
    decision block: near-optimal at 30 dB (a fix closes it, or the bound tightens), or the target
    gap stays a measured limitation; C3 against `pi`; C12, C1-C4 on two test sets; perceptual
    columns in the main tables.
+28. **All of it measured (2026-10-25, COMMANDS 21-23; docs/NOTES.md 6d, 6e).** The Lagrangian
+   index is the paper's scheduler: best for the mean in every main-frame setting, decoded +0.06 /
+   +0.12 dB over our closed form (Kodak / CLIC), +11.5-12.3 points over PADC at 30 dB. The flat
+   30 dB gap was not the policy: given its own curves the index meets the bound from K 16 on, and
+   the gap was the cost of the transmitter's calibration error, ~1.6 points per user at a hard
+   target at every K (nothing for the mean), which uniform margins worsen. That turns a weakness
+   into a finding the paper can state: hard QoS targets make link-abstraction calibration
+   first-order. CLIC repeats the abstraction (MMSE 0.083 dB vs MIESM 0.44) and the decoded gains;
+   MS-SSIM and LPIPS follow PSNR for the mean and expose the target policies' cost to the users
+   who miss; the PI ratio index loses to PF. The single decoder keeps the CSI verdict (+1.1 dB
+   at 2 dB CQI error, +1.5 dB at r = 0.8; 0.2 dB below per-length decoders) and becomes the
+   main system. Nothing is owed before writing; a calibration-aware reward (owed item 13) is
+   optional.
 
 ## 1. Your four points, checked
 
