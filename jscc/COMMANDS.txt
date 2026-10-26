@@ -6,9 +6,10 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 25 only (CPU, ~1 min after the ~5 min setup; no GPU): the paper's figures,
-drawn from results/ into figures/. Sections 0-24 are done and recorded in docs/NOTES.md (21-22:
-6d; 23: 6e; 24: 6f); every claim of the paper outline (docs/PAPER_OUTLINE.md) is measured.
+WHAT TO RUN: section 26 only (CPU, no GPU): redraw the revised figures and tables now (~1 min),
+and four background runs (~1.5-2 h) that put the calibration-aware index, now the proposed
+target scheduler, into the three conditions it had not been run in and into the latency budget.
+Sections 0-25 are done (docs/NOTES.md 6d-6f; the figures: docs/FIGURES.md).
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -52,8 +53,11 @@ drawn from results/ into figures/. Sections 0-24 are done and recorded in docs/N
   24 calibration-aware programs (the soft      done (docs/NOTES.md 6f)
      target): how much of the curve errors'
      cost they recover
-  25 the paper's figures (tools/paper_figs.py, TO RUN NOW
+  25 the paper's figures (tools/paper_figs.py, done 2026-10-26 (first review: figures 1-5)
      docs/FIGURES.md)
+  26 the revised figures and tables; the       TO RUN NOW
+     calibration-aware index with lost slots,
+     at T 16, on CLIC, and its latency budget
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2832,7 +2836,7 @@ cat results/s24_main_soft.txt results/s24_main_soft_r80.txt
 #         codec itself, whose error the measured sigma does not include (hence sigma 0.15 too).
 
 ================================================================================
- 25. TO RUN NOW -- the paper's figures, drawn from results/ (CPU, ~1 min; no GPU)
+ 25. DONE -- the paper's figures, drawn from results/ (CPU, ~1 min; no GPU)
 ================================================================================
 # Why: every result graph of the paper outline (docs/PAPER_OUTLINE.md, section V), drawn with
 # matplotlib from the files sections 13-24 wrote; nothing is simulated or decoded again.
@@ -2863,3 +2867,76 @@ ls figures/
 #   and why) and look at figures/*.png. Tell me what to change (a series, an axis, a label, a
 #   figure to drop or merge) and I revise tools/paper_figs.py; the PDFs go into the paper.
 cat results/s25_figs.txt
+
+================================================================================
+ 26. TO RUN NOW -- the revised figures and tables; the calibration-aware index (the proposed
+     target scheduler) in every condition (CPU: ~1 min now, then four background chains of
+     ~1.5-2 h; no GPU)
+================================================================================
+# Why: after the first review (figures 1-5) the calibration-aware Lagrangian index is the
+# proposed scheduler for a quality target and the hard-target index moves to an ablation
+# (docs/NOTES.md 6f: never worse on the share at 30 dB in any condition run, +1.7 points [0.4,
+# 2.9] decoded on Kodak, 0.0% of users missed against 1.2%, the same computation; its price:
+# 0.22-0.25 dB lower mean PSNR, from the users who miss 30 dB anyway). The target figures now
+# show the indices in that form. Changes (docs/FIGURES.md has the list):
+#   fig01 -> table01 (LaTeX); fig02: the two trainings compared directly; fig03: the model's
+#   error along the PSNR (no scatter); fig04 + fig05 -> fig04 (gap per user vs K: mean PSNR and
+#   30 dB); fig05: the ablation (hard target / calibration-aware / true curves; the assumed
+#   sigma; it absorbs fig06); table02: the ablation decoded (share, missed, mean PSNR, LPIPS).
+# 24.2 ran the calibration-aware index fresh, at 2 dB CQI error and at r = 0.8. 26.2 runs it
+# with 25% of slots lost, at T = 16 and on CLIC (as 21.2 and 22.3 ran the hard one; the same
+# frames and baselines), and the latency budget (as 21.3). Until they finish, fig09 and fig12
+# show the hard-target index in those places, labelled "hard target".
+
+# 26.0 -- setup, ~5 min CPU (pull, lint, smoke) --------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+mkdir -p logs_s26
+cat > logs_s26/env.sh <<'ENV'
+. logs_s24/env.sh
+ENV
+. logs_s26/env.sh
+#   inputs that must exist (send me any line saying "No such file"):
+ls results/utility_snrc4_nested.json results/belief_snrc4_nested.json results/utility_clic_nested.json results/belief_clic_nested.json > /dev/null
+
+# 26.1 -- now, CPU ~1 min: the revised figures and tables (look at figures/*.png; the tables are
+#   figures/table01_abstraction.tex and table02_calibration.tex, also printed as text)
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s26_figs.txt
+
+# 26.2 -- CPU, background, four chains (~1.5-2 h each) --------------------------------------------
+. logs_s26/env.sh
+nohup bash -c "
+[ -s results/s26_tgt_lost.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --target 30 --policies padc online replan_adv whittle_soft lagrange_soft --preempt 0.25 > results/s26_tgt_lost.tmp 2>&1 ;
+mv results/s26_tgt_lost.tmp results/s26_tgt_lost.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s26_tgt_t16.txt ] || {
+python tools/schedule_sim.py $NUB --frames 500 --slots 16 --target 30 --policies padc online plan_adv whittle_soft lagrange_soft --delay > results/s26_tgt_t16.tmp 2>&1 ;
+mv results/s26_tgt_t16.tmp results/s26_tgt_t16.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s26_tgt_clic.txt ] || {
+python tools/schedule_sim.py $CNUB --frames 500 --target 30 --policies pf padc online plan_adv whittle_soft lagrange_soft > results/s26_tgt_clic.tmp 2>&1 ;
+mv results/s26_tgt_clic.tmp results/s26_tgt_clic.txt ; }
+" > /dev/null 2>&1 &
+nohup bash -c "
+[ -s results/s26_latency_tgt.txt ] || {
+python tools/latency.py $NUB --frames 300 --target 30 --slots 12 16 20 24 28 32 --policies padc online whittle_soft lagrange_soft --ref lagrange_soft --at 16 24 --levels 60 70 --out results/s26_latency_tgt.json > results/s26_latency_tgt.tmp 2>&1 ;
+mv results/s26_latency_tgt.tmp results/s26_latency_tgt.txt ; }
+" > /dev/null 2>&1 &
+sleep 60; ls results/s26_*.tmp
+
+# 26.3 -- when results/s26_*.tmp are gone: redraw (fig09 and fig12 pick up the new runs) and
+#   send back everything it prints, with the four runs' outputs ----------------------------------
+ls results/s26_*.tmp 2>&1
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s26_figs.txt
+cat results/s26_tgt_lost.txt results/s26_tgt_t16.txt results/s26_tgt_clic.txt results/s26_latency_tgt.txt
+
+# Reading: the next five figures for review are fig07-fig11 (fig01 is now table01 and fig06 is
+# part of fig05). 26.2 decides whether the calibration-aware index is the best target policy
+# with lost slots, at T = 16 and on CLIC as it is with fresh reports (C7: the planner stays the
+# choice under CQI errors and stale reports, where the errors are dB, not hundredths).

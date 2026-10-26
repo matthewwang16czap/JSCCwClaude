@@ -1,29 +1,34 @@
-"""The paper's result figures (IEEE TWC), drawn with matplotlib from the results/ files that
-COMMANDS sections 6-24 wrote. CPU, seconds; no GPU, no simulation.
+"""The paper's result figures and tables (IEEE TWC), drawn with matplotlib from the results/
+files that COMMANDS sections 13-26 wrote. CPU, seconds; no GPU, no simulation.
 
-    python tools/paper_figs.py                         # every figure: results/ -> figures/
-    python tools/paper_figs.py --only fig05 fig09      # some of them
-    python tools/paper_figs.py --list                  # what each figure shows and reads
+    python tools/paper_figs.py                         # everything: results/ -> figures/
+    python tools/paper_figs.py --only fig05 table02    # some of them
+    python tools/paper_figs.py --list                  # what each one shows and reads
     python tools/paper_figs.py --self-test             # synthetic inputs (no results needed)
 
-Each figure lists its input files (FIGS below). A figure whose required input is missing is
-skipped with a note; optional inputs (CLIC, a second variant) only add series or groups.
-Every figure is written as figures/<name>.pdf (vector, fonts embedded, for the paper) and
-figures/<name>.png (a preview), one IEEE column (3.5 in) or two (7.16 in) wide.
+Each figure and table lists its input files (FIGS, TABLES below). One whose required input is
+missing is skipped with a note; optional inputs (CLIC, a second variant) only add series or
+groups. Figures are written as figures/<name>.pdf (vector, fonts embedded, for the paper) and
+figures/<name>.png (a preview), one IEEE column (3.5 in) or two (7.16 in) wide; tables as
+figures/<name>.tex (LaTeX, \\hline rules) and printed as text.
+
+The proposed scheduler is the Lagrangian index; for a quality target its programs use the
+calibration-aware reward (schedule_sim.py / rmab_scale.py lagrange_soft, whittle_soft). The
+target figures show the indices in that form; the hard-target versions appear in the ablation
+(fig05, table02), and elsewhere only where a run had no calibration-aware version (labelled).
 
 The same encoding in every figure (colours checked for colour-vision deficiency on white;
 every series also has its own marker and line style, so the figures read in grayscale):
-    Lagrangian index       blue      calibration-aware: solid, filled; the hard-target index
-                                     next to it: dashed, hollow markers, hatched bars
+    Lagrangian index       blue      solid, filled; with a hard target: dashed, hollow, hatched
     closed form            orange    the advantage index (mean), the online rule (target)
-    Whittle index          aqua      calibration-aware / hard as for the Lagrangian index
+    Whittle index          aqua      as the Lagrangian index
     planner                yellow    plan_adv (replan_adv where slots are lost)
     PI ratio index         magenta   cross-hatched bars
     PF, PADC               greys     the baselines
-    JSCC                   green     one decoder: solid; a decoder per length: dashed, hollow
-    digital                greys     HEIC + IR-HARQ: dark, solid; 3 dB-gap code: dashed
+    codes, JSCC            green     piecewise-trained / one decoder: solid; a decoder per length:
+                                     dashed, hollow; constant-SNR-trained, digital: greys
     true curves (oracle)   ink       dotted
-    phases, user counts    a blue ramp (dark = the first phase, or the most users)
+    users, prefix lengths  a blue ramp (dark = the most users, or the longest prefix)
 Gains and gaps carry 95% bootstrap intervals over frames, as the tools print them.
 """
 
@@ -45,15 +50,16 @@ MAGENTA, GREEN = "#e87ba4", "#008300"
 RAMP = ("#0d366b", "#1c5cab", "#2a78d6", "#5598e7", "#86b6ef")         # blue steps, dark -> light
 COL1, COL2 = 3.5, 7.16                                                       # IEEE widths, in
 FONT = 8.0                                     # IEEE: 8-10 pt type in figures, at printed size
+CBRS = ("1/48", "1/24", "1/16", "1/12", "5/48", "1/8")
 
 ENT = {                                                    # entity -> (label, colour, marker)
-    "lagrange_soft": ("Lagrangian index, calibration-aware", BLUE, "o"),
     "lagrange": ("Lagrangian index", BLUE, "o"),
-    "true": ("Lagrangian index, true curves", INK, "x"),
+    "lagrange_hard": ("Lagrangian index, hard target", BLUE, "o"),
+    "true": ("hard target, true curves (oracle)", INK, "x"),
     "slope_adv": ("closed form (advantage index)", ORANGE, "s"),
     "online": ("closed form (online rule)", ORANGE, "s"),
-    "whittle_soft": ("Whittle index, calibration-aware", AQUA, "^"),
     "whittle": ("Whittle index", AQUA, "^"),
+    "whittle_hard": ("Whittle index, hard target", AQUA, "^"),
     "planner": ("planner", YELLOW, "D"),
     "pi": ("PI ratio index", MAGENTA, "P"),
     "pf": ("PF", MUTED, "v"),
@@ -62,52 +68,53 @@ ENT = {                                                    # entity -> (label, c
     "jscc_hd": ("JSCC, a decoder per length", GREEN, "o"),
     "heic": ("HEIC + IR-HARQ", INK2, "s"),
     "gap3": ("3 dB-gap code + IR-HARQ", MUTED, "^"),
-    "code": ("piecewise-trained, one decoder", GREEN, "o"),
-    "code_hd": ("piecewise-trained, a decoder per length", GREEN, "o"),
+    "code": ("piecewise-trained code", GREEN, "o"),
+    "code_s1": ("constant-SNR-trained code", MUTED, "d"),
+    "code_hd": ("a decoder per length (shared encoder)", GREEN, "o"),
     "percbr": ("one model per CBR", INK2, "h"),
-    "code_s1": ("constant-SNR-trained", MUTED, "d"),
+    "kodak": ("Kodak", GREEN, "o"),
+    "clic": ("CLIC", INK2, "s"),
 }
-ALT_ALWAYS = ("jscc_hd", "gap3", "code_hd")                # always dashed / hollow
-ALT_PAIRED = {"lagrange": "lagrange_soft", "whittle": "whittle_soft"}  # when the partner shows
+ALT = ("jscc_hd", "gap3", "code_hd", "lagrange_hard", "whittle_hard")  # dashed, hollow, hatched
 PLANNER = {"plan_adv": "planner", "replan_adv": "planner"}
+TARGET = dict(PLANNER, lagrange_soft="lagrange", whittle_soft="whittle",   # a target run's
+              lagrange="lagrange_hard", whittle="whittle_hard")            # policies -> entities
 MEAN_KEYS = ["slope_adv", "pi", "whittle", "lagrange"]
-TGT_KEYS = ["online", "planner", "whittle", "whittle_soft", "lagrange", "lagrange_soft"]
+TGT_KEYS = ["online", "planner", "whittle", "whittle_hard", "lagrange", "lagrange_hard"]
 
 
-def is_alt(key, keys):
-    return key in ALT_ALWAYS or (key in ALT_PAIRED and ALT_PAIRED[key] in keys)
+def prefer(d):
+    """Keep an index's calibration-aware version where it was run, its hard one otherwise."""
+    d = dict(d)
+    for k in ("whittle", "lagrange"):
+        if k in d:
+            d.pop(k + "_hard", None)
+    return d
 
 
-def style(key, keys=()):
-    """Line-plot keywords of an entity; keys: the entities in the same figure."""
-    label, color, marker = ENT[key]
-    alt = is_alt(key, keys)
-    kw = dict(color=color, marker=marker, label=label, lw=1.2, ms=4.2, zorder=3,
+def style(key, label=None):
+    """Line-plot keywords of an entity."""
+    lab, color, marker = ENT[key]
+    alt = key in ALT
+    kw = dict(color=color, marker=marker, label=label or lab, lw=1.2, ms=4.2, zorder=3,
               ls="--" if alt else "-", mfc=WHITE if alt else color, mec=color, mew=0.9)
     if key == "true":
         kw.update(ls=":", lw=1.1, ms=4.6, mew=1.0)
     return kw
 
 
-def dot_style(key, keys=()):
-    kw = style(key, keys)
-    kw.update(ls="none", ms=4.6)
-    kw.pop("lw")
-    return kw
-
-
-def bar_style(key, keys=()):
-    label, color, _ = ENT[key]
-    if is_alt(key, keys):
-        return dict(facecolor=WHITE, edgecolor=color, hatch="////", linewidth=0.7, label=label)
+def bar_style(key, label=None):
+    lab, color, _ = ENT[key]
+    lab = label or lab
+    if key in ALT:
+        return dict(facecolor=WHITE, edgecolor=color, hatch="////", linewidth=0.7, label=lab)
     if key == "pi":
-        return dict(facecolor=color, edgecolor=WHITE, hatch="xxx", linewidth=0.4, label=label)
-    return dict(facecolor=color, edgecolor=WHITE, linewidth=0.4, label=label)
+        return dict(facecolor=color, edgecolor=WHITE, hatch="xxx", linewidth=0.4, label=lab)
+    return dict(facecolor=color, edgecolor=WHITE, linewidth=0.4, label=lab)
 
 
 def ordinal(n):
-    """n steps of one blue ramp, dark to light (phase 1, or the most users, is the darkest),
-    spread evenly through the palette's steps."""
+    """n steps of one blue ramp, dark to light, spread evenly through the palette's steps."""
     from matplotlib.colors import LinearSegmentedColormap, to_hex
     if n <= 1:
         return [BLUE]
@@ -156,16 +163,16 @@ def k_axis(ax, Ks, label="users K (B = K / 8 resource units per slot)"):
     ax.set_xlabel(label)
 
 
-SHORT = {"lagrange": "Lagrangian index", "lagrange_soft": "Lagrangian index",
-         "whittle": "Whittle index", "whittle_soft": "Whittle index",
-         "true": "true curves (oracle)"}             # cell labels under a column header
+def cbr_axis(ax, label="prefix length: phases (CBR)"):
+    ax.set_xticks(range(1, 7))
+    ax.set_xticklabels([f"{n}\n{c}" for n, c in zip(range(1, 7), CBRS)])
+    ax.set_xlabel(label)
 
 
-def fig_legend(fig, axes, ncol, extra=(), rows=None, header=None):
+def fig_legend(fig, axes, ncol, extra=(), rows=None):
     """One legend above the figure for every series in `axes` (first label wins). rows: the
-    legend as a table of entity keys, one tuple per row (None: an empty cell), so a hard-target
-    index sits next to its calibration-aware partner; header: a title per column (the cells
-    then carry short names). A plain legend loses columns until it fits the figure's width."""
+    legend as a table, one tuple per row of entity keys or labels (None: an empty cell);
+    series it does not name come last. A plain legend loses columns until it fits."""
     from matplotlib.lines import Line2D
     seen = {}
     for ax in np.ravel(axes):
@@ -178,35 +185,24 @@ def fig_legend(fig, axes, ncol, extra=(), rows=None, header=None):
         return
     handles, labels = list(seen.values()), list(seen)
     if rows:
-        rows = [r for r in rows if any(k is not None and ENT[k][0] in seen for k in r)]
+        def lab(k):
+            return None if k is None else ENT[k][0] if k in ENT else k
+        rows = [r for r in rows if any(lab(k) in seen for k in r)]
         ncol = max(len(r) for r in rows)
-        handles, labels, placed = [], [], set()
+        handles, labels = [], []
         for c in range(ncol):                                   # matplotlib fills by column
-            if header:
-                handles.append(Line2D([], [], ls="none"))
-                labels.append(header[c])
             for r in rows:
-                k = r[c] if c < len(r) else None
-                lab = ENT[k][0] if k is not None else None
-                if lab in seen:
-                    handles.append(seen[lab])
-                    labels.append(SHORT.get(k, lab) if header else lab)
-                    placed.add(lab)
-                else:
-                    handles.append(Line2D([], [], ls="none"))
-                    labels.append(" ")
-        rest = [lab for lab in seen if lab not in placed]
-        handles += [seen[lab] for lab in rest]
+                name = lab(r[c]) if c < len(r) else None
+                handles.append(seen[name] if name in seen else Line2D([], [], ls="none"))
+                labels.append(name if name in seen else " ")
+        rest = [x for x in seen if x not in labels]
+        handles += [seen[x] for x in rest]
         labels += rest
     ncol = min(ncol, len(labels))
     while True:
         leg = fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 1.0),
                          ncol=ncol, frameon=False, columnspacing=1.1, handletextpad=0.5,
                          borderaxespad=0.1)
-        for t in leg.get_texts():
-            if header and t.get_text() in header:
-                t.set_color(INK2)
-                t.set_fontstyle("italic")
         wide = leg.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
         if rows or ncol <= 1 or wide <= fig.get_figwidth() - 0.04:
             return
@@ -241,12 +237,26 @@ class Inputs:
         with open(p) as f:
             return json.load(f)
 
+    def first(self, names):
+        """The first of these JSON files that exists, or None."""
+        for n in names:
+            d = self.json(n, required=False)
+            if d is not None:
+                return d
+        return None
+
 
 def rmab(d):
     """tools/rmab_scale.py --out: ({K: row}, scale): a target run's values are shares, x 100
     gives points."""
     rows = {int(k): v for k, v in d["per_K"].items()}
     return rows, (1.0 if d["args"].get("target") is None else 100.0)
+
+
+def rmab_entities(rows, raws, names):
+    """{entity: raw policy} of the policies these rows have, renamed by `names`."""
+    have = [r for r in raws if any(f"{r}_gap" in row for row in rows.values())]
+    return prefer({names.get(r, r): r for r in have})
 
 
 F = r"[+-]?(?:\d+(?:\.\d+)?|nan|inf)"
@@ -336,12 +346,26 @@ def pick(blocks, kind, want):
 
 
 def sim_rows(blocks, kind, want, field="vs", base="pf"):
-    """{entity: (value, (lo, hi))} of the block matching `want`: the gain over `base`."""
+    """{entity: (value, (lo, hi))} of the block matching `want`: the gain over `base` (mean
+    runs) or over PADC (field "vs_padc"); a target run's policies renamed (TARGET)."""
     b = pick(blocks, kind, want)
     if b is None or (field == "vs" and b["base"] != base):
         return None
     ci = "ci" if field == "vs" else "ci_padc"
-    return {PLANNER.get(p, p): (r[field], r[ci]) for p, r in b["rows"].items() if field in r}
+    names = TARGET if kind == "target" else PLANNER
+    out = {names.get(p, p): (r[field], r[ci]) for p, r in b["rows"].items() if field in r}
+    return prefer(out) if kind == "target" else out
+
+
+def first_rows(I, files, kind, want, field="vs"):
+    """sim_rows of the first of these files that has a matching block (newer runs first)."""
+    for fn in files:
+        p = I.path(fn, required=False)
+        if p:
+            r = sim_rows(parse_sim(p), kind, want, field)
+            if r:
+                return r
+    return None
 
 
 ABS_RULES = (("mean dB", "mean_db"), ("noise variance", "noise"),
@@ -402,10 +426,12 @@ def decoded_frames(spec, metric="psnr", target=None):
     return per
 
 
-def paired(spec, base, metric="psnr", target=None, scale=1.0):
-    """{entity: (mean, (lo, hi))}: each policy minus `base` per frame, the bootstrap of
-    tools/replay_report.py."""
+def paired(spec, base, metric="psnr", target=None, scale=1.0, names=None):
+    """{entity: (mean, (lo, hi))}: each policy minus `base` (a policy as the file names it)
+    per frame, the bootstrap of tools/replay_report.py. names: the renaming (default: TARGET
+    with a target, else PLANNER; {} keeps the file's names)."""
     from tools.schedule_sim import bootstrap
+    names = (TARGET if target is not None else PLANNER) if names is None else names
     per = decoded_frames(spec, metric, target)
     if base not in per:
         return {}
@@ -416,15 +442,16 @@ def paired(spec, base, metric="psnr", target=None, scale=1.0):
             continue
         d = [np.mean(frames[f]) - np.mean(per[base][f]) for f in common]
         lo, hi = bootstrap(d)
-        out[PLANNER.get(p, p)] = (scale * float(np.mean(d)), (scale * lo, scale * hi))
+        out[names.get(p, p)] = (scale * float(np.mean(d)), (scale * lo, scale * hi))
     return out
 
 
-def missed_share(spec, target):
+def missed_share(spec, target, names=None):
     """{entity: (%, (lo, hi))}: the users the model predicted at the target whose decode fell
     below it (tools/mixed_snr.py's 'missed'), per frame, bootstrap over frames."""
     from tools.replay_report import score
     from tools.schedule_sim import bootstrap
+    names = TARGET if names is None else names
     per = {}
     for e in spec["entries"]:
         miss = e.get("predicted_psnr", 0.0) >= target and score(e) < target
@@ -434,7 +461,25 @@ def missed_share(spec, target):
         d = [np.mean(v) for v in frames.values()]
         if len(d) > 1:
             lo, hi = bootstrap(d)
-            out[PLANNER.get(p, p)] = (100.0 * float(np.mean(d)), (100.0 * lo, 100.0 * hi))
+            out[names.get(p, p)] = (100.0 * float(np.mean(d)), (100.0 * lo, 100.0 * hi))
+    return out
+
+
+def policy_stats(spec, target):
+    """Per policy (the file's names) of a decoded target replay: users at the target (%),
+    missed (%), mean PSNR (dB) and mean LPIPS (None if not decoded with it)."""
+    from tools.replay_report import score
+    per = {}
+    for e in spec["entries"]:
+        per.setdefault(e.get("policy", "?"), []).append(e)
+    out = {}
+    for p, es in per.items():
+        q = np.array([score(e) for e in es])
+        pre = np.array([e.get("predicted_psnr", 0.0) for e in es])
+        lp = [e["actual_lpips"] for e in es if e.get("actual_lpips") is not None]
+        out[p] = {"share": 100.0 * float(np.mean(q >= target)),
+                  "missed": 100.0 * float(np.mean((pre >= target) & (q < target))),
+                  "mean": float(q.mean()), "lpips": float(np.mean(lp)) if lp else None}
     return out
 
 
@@ -470,7 +515,7 @@ def bars(ax, groups, keys, ylabel):
                 vs.append(v)
                 el.append(max(v - lo, 0.0))
                 eh.append(max(hi - v, 0.0))
-        ax.bar(xs, vs, width=w * 0.9, zorder=2, **bar_style(k, present))
+        ax.bar(xs, vs, width=w * 0.9, zorder=2, **bar_style(k))
         ax.errorbar(xs, vs, yerr=[el, eh], ls="none", ecolor=INK2, elinewidth=0.7, zorder=3)
     ax.set_xticks(range(len(groups)))
     ax.set_xticklabels([g[0] for g in groups])
@@ -479,14 +524,21 @@ def bars(ax, groups, keys, ylabel):
     ax.set_ylabel(ylabel)
 
 
-def gap_line(ax, rows, Ks, p, sc, kw):
+def gap_line(ax, rows, Ks, p, sc, kw, log_floor=None):
+    """One policy's gap to the bound against K with its 95% interval (p: the rows' name). On a
+    log axis (log_floor: its bottom) an interval reaching 0 runs off the bottom."""
     Ks = [k for k in Ks if f"{p}_gap" in rows.get(k, {})]
     if not Ks:
         return
     g = np.array([rows[k][f"{p}_gap"] for k in Ks]) * sc
     ci = np.array([rows[k][f"{p}_gap_ci"] for k in Ks]) * sc
-    ax.errorbar(Ks, g, yerr=np.vstack([np.maximum(g - ci[:, 0], 0), np.maximum(ci[:, 1] - g, 0)]),
-                elinewidth=0.7, **kw)
+    lo, hi = np.maximum(g - ci[:, 0], 0), np.maximum(ci[:, 1] - g, 0)
+    Ks = np.array(Ks)
+    if log_floor is not None:
+        ok = g > 0
+        Ks, g, hi = Ks[ok], g[ok], hi[ok]
+        lo = np.where(ci[ok, 0] > 0, lo[ok], g - 0.5 * log_floor)
+    ax.errorbar(Ks, g, yerr=np.vstack([lo, hi]), elinewidth=0.7, **kw)
 
 
 def _k(p):
@@ -495,77 +547,61 @@ def _k(p):
 
 
 # ------------------------------------------------------------------------------ figures -------
-RULE_ROWS = (("MIESM (capacity, equal weights)", "capacity", 0), ("capacity", "capacity", 1),
-             ("mean dB", "mean_db", 1), ("EESM", "eesm", 1), ("noise variance", "noise", 1),
-             ("MMSE (ours)", "mmse", 1))
-
-
-def fig01(I, plt):
-    """Link abstraction (C12): the held-out error of each rule that maps a delivery history
-    to one effective SNR on the image's own constant-SNR curve; sensitivity weights except
-    MIESM. Four codes on Kodak, two on CLIC."""
-    kod = parse_abstractions(I.path("s13_abstractions.txt"))
-    p = I.path("s22_clic.txt", required=False)
-    clic = parse_abstractions(p) if p else []
-    panels = [x for x in (("Kodak", kod, (("code", 0), ("code_hd", 2), ("percbr", 3),
-                                          ("code_s1", 1))),
-                          ("CLIC (first 60 images)", clic, (("code", 0), ("code_s1", 1)))) if x[1]]
-    if not panels:
-        raise Missing("s13_abstractions.txt (no abstraction table in it)")
-    fig, axes = plt.subplots(1, len(panels), figsize=(COL2 if len(panels) == 2 else COL1, 2.2),
-                             sharey=True, squeeze=False)
-    y = np.arange(len(RULE_ROWS))[::-1].astype(float)
-    for ax, (name, blocks, codes), letter in zip(axes[0], panels, "ab"):
-        shown = [(k, blocks[i]) for k, i in codes if i < len(blocks)]
-        offs = np.linspace(-0.22, 0.22, len(shown)) if len(shown) > 1 else [0.0]
-        for (k, blk), dy in zip(shown, offs):
-            x = [_f(blk.get(key, (None, None))[w]) for _, key, w in RULE_ROWS]
-            ax.plot(x, y + dy, **dot_style(k))
-        ax.set_yticks(y)
-        ax.set_yticklabels([r[0] for r in RULE_ROWS])
-        ax.tick_params(axis="y", length=0)
-        ax.grid(axis="x")
-        ax.grid(axis="y", visible=False)
-        ax.set_xlim(left=0)
-        ax.set_xlabel("held-out error of the predicted PSNR, MAE (dB)")
-        panel(ax, letter, name)
-    fig_legend(fig, axes, 4)
-    return fig
-
-
 def fig02(I, plt):
-    """The decoder weighs its phases (C1): mean PSNR with one phase's SNR varied, the
-    others at the base SNR; piecewise-trained vs constant-SNR-trained code."""
-    runs = [(I.json("p2_full_snrc4.json"), "piecewise-trained code")]
+    """The two trainings compared (C1, C12): (a) how much each phase's slot moves the PSNR (its
+    SNR from the lowest to the highest grid value, the other phases at the base SNR; the
+    decoder weighs its phases, which is why the abstraction weights slots and why the
+    scheduler protects the first ones); (b) what piecewise training costs at constant SNR."""
+    a = I.json("p2_full_snrc4.json")
     b = I.json("p2_full_s1.json", required=False)
-    if b is not None:
-        runs.append((b, "constant-SNR-trained code"))
-    fig, axes = plt.subplots(1, len(runs), figsize=(COL2 if len(runs) == 2 else COL1, 2.3),
-                             sharey=True, squeeze=False)
-    for ax, (d, title), letter in zip(axes[0], runs, "ab"):
-        cbr = "1/8" if "1/8" in d["summary"] else list(d["summary"])[-1]
+    codes = [("code", a)] + ([("code_s1", b)] if b is not None else [])
+    fig, axes = plt.subplots(1, 2 if b is not None else 1,
+                             figsize=(COL2 if b is not None else COL1, 2.4), squeeze=False)
+    a1 = axes[0, 0]
+    cbr = "1/8" if "1/8" in a["summary"] else list(a["summary"])[-1]
+    lo, hi = a["grid"][0], a["grid"][-1]
+    w = 0.8 / len(codes)
+    for i, (k, d) in enumerate(codes):
         rows = d["summary"][cbr]["oat"]
-        marks = ("o", "s", "^", "D", "v", "P", "X", "h")
-        for j, (vals, col) in enumerate(zip(rows, ordinal(len(rows)))):
-            ax.plot(d["grid"], vals, color=col, marker=marks[j % len(marks)], ms=3.6, lw=1.2,
-                    label=f"phase {j + 1}")
-        ax.set_xticks(d["grid"])
-        ax.set_xlabel(f"SNR of the varied phase (dB; the others at {d['base_snr']:g} dB)")
-        panel(ax, letter, f"{title}, CBR {cbr}")
-    axes[0, 0].set_ylabel("mean PSNR (dB)")
-    fig_legend(fig, axes[0, :1], 6)
+        swing = [r[-1] - r[0] for r in rows]
+        xs = np.arange(1, len(rows) + 1) + (i - (len(codes) - 1) / 2) * w
+        a1.bar(xs, swing, width=w * 0.92, zorder=2, **bar_style(k))
+    a1.set_xticks(range(1, len(a["summary"][cbr]["oat"]) + 1))
+    a1.tick_params(axis="x", length=0)
+    a1.set_xlabel(f"phase whose slot's SNR is varied (the others at {a['base_snr']:g} dB)")
+    a1.set_ylabel(f"PSNR gain, its SNR {lo:g} to {hi:g} dB (dB)")
+    panel(a1, "a", f"how much each phase's slot matters (CBR {cbr})")
+    if b is not None:
+        a2 = axes[0, 1]
+        ca, cb = constant_curves(a), constant_curves(b)
+        Ls = sorted(set(ca) & set(cb))
+        mean, el, eh = [], [], []
+        for L in Ls:
+            dd = [ca[L][s] - cb[L][s] for s in ca[L] if s in cb[L]]
+            mean.append(float(np.mean(dd)))
+            el.append(mean[-1] - float(np.min(dd)))
+            eh.append(float(np.max(dd)) - mean[-1])
+        a2.bar(Ls, mean, width=0.6, zorder=2, facecolor=GREEN, edgecolor=WHITE, linewidth=0.4,
+               label="_cost")
+        a2.errorbar(Ls, mean, yerr=[el, eh], ls="none", ecolor=INK2, elinewidth=0.7, zorder=3)
+        zero(a2)
+        cbr_axis(a2)
+        a2.tick_params(axis="x", length=0)
+        a2.set_ylabel("PSNR difference (dB)")
+        panel(a2, "b", f"piecewise- minus constant-SNR-trained, constant SNR {lo:g}-{hi:g} dB")
+    fig_legend(fig, axes, 2)
     return fig
 
 
 def fig03(I, plt):
-    """The abstraction as a link-to-system model (C2): the PSNR it predicts for scheduled
-    histories against the PSNR the codec decodes, every policy's schedules."""
-    sets = (("Kodak", GREEN, ("s22_dec_mean.json", "s22_dec_tgt.json", "s22_dec_r80_mean.json",
-                              "s22_dec_r80_tgt.json", "s24_dec_auto.json", "s24_dec_r80.json")),
-            ("CLIC", INK2, ("s22_clic_dec_mean.json", "s22_clic_dec_tgt.json",
-                            "s24_dec_clic.json")))
+    """The abstraction as a link-to-system model (C2): the model's error on every decoded
+    history (every policy's schedules), (a) along the predicted PSNR: median and 10-90% range
+    per 1 dB; (b) its distribution."""
+    sets = (("kodak", ("s22_dec_mean.json", "s22_dec_tgt.json", "s22_dec_r80_mean.json",
+                       "s22_dec_r80_tgt.json", "s24_dec_auto.json", "s24_dec_r80.json")),
+            ("clic", ("s22_clic_dec_mean.json", "s22_clic_dec_tgt.json", "s24_dec_clic.json")))
     data = []
-    for name, col, files in sets:
+    for key, files in sets:
         pts = []
         for fn in files:
             d = I.json(fn, required=False)
@@ -573,87 +609,89 @@ def fig03(I, plt):
                 pts += [(e["predicted_psnr"], e["actual_psnr"]) for e in d["entries"]
                         if e.get("actual_psnr") is not None and "predicted_psnr" in e]
         if pts:
-            data.append((name, col, np.asarray(pts, dtype=np.float64)))
+            data.append((key, np.asarray(pts, dtype=np.float64)))
     if not data:
         raise Missing("s22_dec_mean.json")
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL2, 2.6),
-                                 gridspec_kw={"width_ratios": [1.0, 1.3]})
-    lo = min(float(p.min()) for _, _, p in data) - 0.3
-    hi = max(float(p.max()) for _, _, p in data) + 0.3
-    a1.plot([lo, hi], [lo, hi], color=AXIS, lw=0.8, zorder=1)
-    for name, col, pts in data:
-        a1.scatter(pts[:, 0], pts[:, 1], s=1.6, color=col, alpha=0.25, lw=0, rasterized=True,
-                   zorder=2, label=name)
-    a1.set_xlim(lo, hi)
-    a1.set_ylim(lo, hi)
-    a1.set_aspect("equal")
-    a1.grid(axis="both")
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL2, 2.5))
+    for key, pts in data:
+        pred, err = pts[:, 0], pts[:, 0] - pts[:, 1]
+        edges = np.arange(np.floor(pred.min()), np.ceil(pred.max()) + 1.0, 1.0)
+        idx = np.digitize(pred, edges) - 1
+        xs, med, p10, p90 = [], [], [], []
+        for j in range(len(edges) - 1):
+            e = err[idx == j]
+            if len(e) >= max(30, 0.002 * len(err)):
+                xs.append(edges[j] + 0.5)
+                med.append(np.median(e))
+                p10.append(np.percentile(e, 10))
+                p90.append(np.percentile(e, 90))
+        col = ENT[key][1]
+        a1.fill_between(xs, p10, p90, color=col, alpha=0.15, lw=0, zorder=1)
+        a1.plot(xs, med, **dict(style(key, f"{ENT[key][0]} ({len(err)} histories)"), ms=3.2))
+    zero(a1)
     a1.set_xlabel("predicted PSNR (dB)")
-    a1.set_ylabel("decoded PSNR (dB)")
-    panel(a1, "a", "every decoded history")
-    edges = np.arange(-0.5, 0.5 + 1e-9, 0.02)
-    for name, col, pts in data:
+    a1.set_ylabel("predicted minus decoded PSNR (dB)")
+    panel(a1, "a", "along the PSNR: median, 10-90% range")
+    width = 0.025
+    edges = np.arange(-0.5, 0.5 + 1e-9, width)
+    notes, top = [], 0.0
+    for key, pts in data:
         err = pts[:, 0] - pts[:, 1]
-        a2.hist(np.clip(err, edges[0], edges[-1]), bins=edges, density=True, histtype="step",
-                color=col, lw=1.1, label=f"{name}: bias {err.mean():+.3f} dB, MAE "
-                f"{np.abs(err).mean():.3f} dB ({len(err)} histories)")
+        inside = np.abs(err) <= 0.5
+        h = a2.hist(err[inside], bins=edges, histtype="step", color=ENT[key][1], lw=1.1,
+                    weights=np.full(inside.sum(), 1.0 / (len(err) * width)))[0]
+        top = max(top, float(np.max(h)))
+        notes.append(f"{ENT[key][0]}: bias {err.mean():+.3f}, MAE {np.abs(err).mean():.3f} dB; "
+                     f"{100 * (1 - inside.mean()):.1f}% beyond 0.5 dB")
     zero(a2, horizontal=False)
+    a2.set_ylim(0, 1.45 * top)                                     # room for the numbers
+    a2.text(0.02, 0.97, "\n".join(notes), transform=a2.transAxes, va="top", ha="left", color=INK2)
     a2.set_xlabel("predicted minus decoded PSNR (dB)")
     a2.set_ylabel("density")
-    panel(a2, "b", "the model's error")
-    fig.legend(*a2.get_legend_handles_labels(), loc="lower center", bbox_to_anchor=(0.5, 1.0),
-               ncol=1, frameon=False)
+    panel(a2, "b", "distribution")
+    fig_legend(fig, [a1], 2)
     return fig
 
 
 def fig04(I, plt):
-    """Mean PSNR at scale (C13, C3): the gap to the Lagrangian bound per user and summed over
-    the frame's users, B = K / 8."""
-    rows, _ = rmab(I.json("s22_scale_mean.json"))
-    Ks = sorted(rows)
-    pols = [p for p in ("pf", "slope_adv", "pi", "whittle", "lagrange")
-            if f"{_k(p)}_gap" in rows[Ks[0]]]
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.5))
-    for ax, total, letter, title in ((axes[0], False, "a", "per user"),
-                                     (axes[1], True, "b", "per frame (summed over the K users)")):
-        for p in pols:
-            g = np.array([rows[k][f"{_k(p)}_gap"] for k in Ks])
-            ci = np.array([rows[k][f"{_k(p)}_gap_ci"] for k in Ks])
-            m = np.array(Ks, dtype=np.float64) if total else np.ones(len(Ks))
-            y, lo, hi = g * m, ci[:, 0] * m, ci[:, 1] * m
-            ok = y > 0
-            if ok.any():
-                yerr = np.vstack([np.clip(y - lo, 0, 0.9 * y), np.clip(hi - y, 0, None)])[:, ok]
-                ax.errorbar(np.array(Ks)[ok], y[ok], yerr=yerr, elinewidth=0.7, **style(p, pols))
-        ax.set_yscale("log")
-        k_axis(ax, Ks)
-        ax.set_ylabel("gap to the bound (dB)")
-        panel(ax, letter, title)
-    fig_legend(fig, axes, 5)
-    return fig
-
-
-def fig05(I, plt):
-    """A 30 dB target at scale (C13): the hard-target indices on the calibrated curves, the
-    calibration-aware indices on the same curves, and the hard index given the true curves."""
-    d = I.json("s24_soft_auto.json", required=False)
-    rows, sc = rmab(d if d is not None else I.json("s22_gap_ties.json"))
-    tr = I.json("s23_gap_truth.json", required=False)
-    trow, tsc = rmab(tr) if tr else ({}, 100.0)
-    Ks = sorted(set(rows) | set(trow))
-    series = [p for p in ("whittle", "whittle_soft", "lagrange", "lagrange_soft")
-              if any(f"{p}_gap" in r for r in rows.values())]
-    keys = series + (["true"] if trow else [])
-    fig, ax = plt.subplots(figsize=(COL1, 2.5))
-    zero(ax)
-    for p in series:
-        gap_line(ax, rows, Ks, p, sc, style(p, keys))
-    if trow:
-        gap_line(ax, trow, Ks, "lagrange", tsc, style("true", keys))
-    k_axis(ax, Ks)
-    ax.set_ylabel("gap to the bound per user (points at 30 dB)")
-    fig_legend(fig, [ax], 2, rows=[("whittle", "whittle_soft"), ("lagrange", "lagrange_soft"),
-                                   ("true", None)], header=("hard target", "calibration-aware"))
+    """The policies against the Lagrangian bound as the cell grows (C13, C3, C4): each one's
+    gap per user, (a) mean PSNR, (b) users at 30 dB (the indices calibration-aware); B = K/8
+    resource units per slot."""
+    mrows, _ = rmab(I.json("s22_scale_mean.json"))
+    tgt = I.first(("s24_soft_auto.json", "s22_gap_ties.json"))
+    fig, axes = plt.subplots(1, 2 if tgt is not None else 1,
+                             figsize=(COL2 if tgt is not None else COL1, 2.5), squeeze=False)
+    a1 = axes[0, 0]
+    Ks = sorted(mrows)
+    ents = [p for p in ("pf", "slope_adv", "pi", "whittle", "lagrange")
+            if any(f"{_k(p)}_gap" in r for r in mrows.values())]
+    pos = [v[f"{_k(p)}_gap"] for v in mrows.values() for p in ents
+           if v.get(f"{_k(p)}_gap", 0) > 0]
+    floor = 0.5 * min(pos) if pos else 1e-3
+    for p in ents:
+        gap_line(a1, mrows, Ks, _k(p), 1.0, style(p), log_floor=floor)
+    a1.set_yscale("log")
+    a1.set_ylim(bottom=floor)
+    k_axis(a1, Ks)
+    a1.set_ylabel("gap to the bound per user (dB)")
+    panel(a1, "a", "mean PSNR")
+    if tgt is not None:
+        a2 = axes[0, 1]
+        rows, sc = rmab(tgt)
+        ents = rmab_entities(rows, ("pf", "whittle", "lagrange", "whittle_soft", "lagrange_soft"),
+                             TARGET)
+        zero(a2)
+        for e in ("whittle", "whittle_hard", "lagrange", "lagrange_hard"):
+            if e in ents:
+                gap_line(a2, rows, sorted(rows), ents[e], sc, style(e))
+        if "pf" in ents:                          # PF is an order of magnitude away: a note
+            g = [sc * r["pf_gap"] for r in rows.values() if "pf_gap" in r]
+            a2.text(0.98, 0.97, f"PF: {min(g):.1f}-{max(g):.1f} points (off the axis)",
+                    transform=a2.transAxes, ha="right", va="top", color=INK2)
+        k_axis(a2, sorted(rows))
+        a2.set_ylabel("gap to the bound per user (points)")
+        panel(a2, "b", "users at 30 dB")
+    fig_legend(fig, axes, 6)
     return fig
 
 
@@ -668,44 +706,56 @@ def _measured_sigma(I):
     return 0.04
 
 
-def fig06(I, plt):
-    """The calibration-aware index does not need the spread exactly (C13): its gap at the
-    measured sigma and at 0.05 / 0.1 / 0.2 dB; 0 = the hard target; dotted: the hard index
-    on the true curves."""
-    from matplotlib.lines import Line2D
-    auto, sc = rmab(I.json("s24_soft_auto.json"))
+def fig05(I, plt):
+    """Ablation, the calibration-aware reward (C13): (a) the Lagrangian index's gap to the
+    bound at 30 dB deciding on the transmitter's estimated curves with a hard target, the same
+    with the calibration-aware reward (proposed), and with a hard target on the true curves
+    (an oracle); (b) the calibration-aware index against the curve error its reward assumes
+    (0: the hard target), K 8 / 32 / 128, the oracle dotted."""
+    rows, sc = rmab(I.json("s24_soft_auto.json"))
+    tr = I.json("s23_gap_truth.json", required=False)
+    trow, tsc = rmab(tr) if tr else ({}, 100.0)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL2, 2.5))
+    Ks = sorted(set(rows) | set(trow))
+    zero(a1)
+    gap_line(a1, rows, Ks, "lagrange", sc, style("lagrange_hard", "hard target"))
+    gap_line(a1, rows, Ks, "lagrange_soft", sc, style("lagrange", "calibration-aware (proposed)"))
+    if trow:
+        gap_line(a1, trow, Ks, "lagrange", tsc, style("true"))
+    k_axis(a1, Ks)
+    a1.set_ylabel("gap to the bound per user (points)")
+    panel(a1, "a", "against the number of users")
     runs = []
     for s, fn in ((0.05, "s24_soft_s05.json"), (0.1, "s24_soft_s10.json"),
                   (0.2, "s24_soft_s20.json")):
         d = I.json(fn, required=False)
         if d is not None:
             runs.append((s, rmab(d)[0]))
-    tr = I.json("s23_gap_truth.json", required=False)
-    trow, tsc = rmab(tr) if tr else ({}, 100.0)
     sig = _measured_sigma(I)
-    Ks = [k for k in (8, 32, 128) if k in auto] or sorted(auto)[:3]
-    fig, ax = plt.subplots(figsize=(COL1, 2.5))
-    zero(ax)
-    for k, col in zip(Ks, ordinal(len(Ks))[::-1]):
-        pts = [(0.0, auto[k]["lagrange_gap"] * sc), (sig, auto[k]["lagrange_soft_gap"] * sc)]
+    sel = [k for k in (8, 32, 128) if k in rows] or sorted(rows)[:3]
+    zero(a2)
+    for k, col, mk in zip(sel, ordinal(len(sel))[::-1], ("^", "s", "D")):
+        pts = [(0.0, rows[k]["lagrange_gap"] * sc), (sig, rows[k]["lagrange_soft_gap"] * sc)]
         pts += [(s, r[k]["lagrange_soft_gap"] * sc) for s, r in runs
                 if "lagrange_soft_gap" in r.get(k, {})]
         pts.sort()
-        ax.plot([p[0] for p in pts], [p[1] for p in pts], color=col, marker="o", ms=3.8, lw=1.2,
+        a2.plot([p[0] for p in pts], [p[1] for p in pts], color=col, marker=mk, ms=4.0, lw=1.2,
                 label=f"K = {k}", zorder=3)
         if "lagrange_gap" in trow.get(k, {}):
-            ax.axhline(trow[k]["lagrange_gap"] * tsc, color=col, lw=0.9, ls=":", zorder=2)
-    ax.axvline(sig, color=AXIS, lw=0.8, ls="--", zorder=1)
-    ax.text(sig, 0.98, " measured", transform=ax.get_xaxis_transform(), ha="left", va="top",
+            a2.axhline(trow[k]["lagrange_gap"] * tsc, color=col, lw=0.9, ls=":", zorder=2)
+    a2.axvline(sig, color=AXIS, lw=0.8, ls="--", zorder=1)
+    a2.text(sig, 0.98, " measured", transform=a2.get_xaxis_transform(), ha="left", va="top",
             color=INK2)
     ticks = [0.0, 0.05, 0.1, 0.15, 0.2]
-    ax.set_xticks(ticks)
-    ax.set_xticklabels([f"{t:g}" for t in ticks])
-    ax.set_xlabel(r"assumed curve error $\sigma$ (dB; 0: the hard target)")
-    ax.set_ylabel("gap to the bound per user (points at 30 dB)")
-    extra = [Line2D([], [], color=INK2, lw=0.9, ls=":", label="hard index, true curves")] \
-        if trow else []
-    fig_legend(fig, [ax], 2, extra)
+    a2.set_xticks(ticks)
+    a2.set_xticklabels([f"{t:g}" for t in ticks])
+    a2.set_xlabel(r"curve error the reward assumes, $\sigma$ (dB; 0: hard target)")
+    a2.set_ylabel("gap to the bound per user (points)")
+    panel(a2, "b", r"against the assumed $\sigma$")
+    fig_legend(fig, [a1, a2], 3, rows=[
+        ("hard target", "calibration-aware (proposed)", "true"),
+        (f"K = {sel[0]}", f"K = {sel[1]}" if len(sel) > 1 else None,
+         f"K = {sel[2]}" if len(sel) > 2 else None)])
     return fig
 
 
@@ -765,13 +815,12 @@ def fig08(I, plt):
     main = parse_sim(I.path("s22_main_mean.txt"))
     groups = [("fresh reports", sim_rows(main, "mean", {"cqi_error": 0.0, "corr": 1.0})),
               ("CQI error 2 dB", sim_rows(main, "mean", {"cqi_error": 2.0})),
-              ("reports r = 0.8", sim_rows(main, "mean", {"corr": 0.8}))]
-    for label, fn, want in (("25% of slots lost", "s21_lag_mean_more.txt", {"preempt": 0.25}),
-                            ("T = 16 slots", "s21_lag_t16.txt", {"slots": 16}),
-                            ("CLIC images", "s22_clic.txt", {"cqi_error": 0.0, "corr": 1.0})):
-        p = I.path(fn, required=False)
-        if p:
-            groups.append((label, sim_rows(parse_sim(p), "mean", want)))
+              ("reports r = 0.8", sim_rows(main, "mean", {"corr": 0.8})),
+              ("25% of slots lost", first_rows(I, ("s21_lag_mean_more.txt",), "mean",
+                                               {"preempt": 0.25})),
+              ("T = 16 slots", first_rows(I, ("s21_lag_t16.txt",), "mean", {"slots": 16})),
+              ("CLIC images", first_rows(I, ("s22_clic.txt",), "mean",
+                                         {"cqi_error": 0.0, "corr": 1.0}))]
     groups = [(n, g) for n, g in groups if g]
     fig, ax = plt.subplots(figsize=(COL2, 2.3))
     bars(ax, groups, MEAN_KEYS, "mean PSNR gain over PF (dB)")
@@ -780,38 +829,39 @@ def fig08(I, plt):
 
 
 def fig09(I, plt):
-    """A 30 dB target on the main frames (C4, C7, C13): the share of users at 30 dB, every
-    policy's gain over PADC, fresh and under each impairment."""
+    """A 30 dB target on the main frames (C4, C7): the share of users at 30 dB, every policy's
+    gain over PADC, fresh and under each impairment (the indices calibration-aware)."""
     soft = parse_sim(I.path("s24_main_soft.txt"))
-    groups = [("fresh reports", sim_rows(soft, "target", {"cqi_error": 0.0, "corr": 1.0},
-                                         "vs_padc")),
-              ("CQI error 2 dB", sim_rows(soft, "target", {"cqi_error": 2.0}, "vs_padc"))]
-    for label, fn, want in (("reports r = 0.8", "s24_main_soft_r80.txt", {"corr": 0.8}),
-                            ("25% of slots lost", "s21_lag_tgt_more.txt", {"preempt": 0.25}),
-                            ("T = 16 slots", "s21_lag_t16.txt", {"slots": 16}),
-                            ("CLIC images", "s22_clic.txt", {"cqi_error": 0.0, "corr": 1.0})):
-        p = I.path(fn, required=False)
-        if p:
-            groups.append((label, sim_rows(parse_sim(p), "target", want, "vs_padc")))
+    tv = "vs_padc"
+    groups = [("fresh reports", sim_rows(soft, "target", {"cqi_error": 0.0, "corr": 1.0}, tv)),
+              ("CQI error 2 dB", sim_rows(soft, "target", {"cqi_error": 2.0}, tv)),
+              ("reports r = 0.8", first_rows(I, ("s24_main_soft_r80.txt",), "target",
+                                             {"corr": 0.8}, tv)),
+              ("25% of slots lost", first_rows(I, ("s26_tgt_lost.txt", "s21_lag_tgt_more.txt"),
+                                               "target", {"preempt": 0.25}, tv)),
+              ("T = 16 slots", first_rows(I, ("s26_tgt_t16.txt", "s21_lag_t16.txt"), "target",
+                                          {"slots": 16}, tv)),
+              ("CLIC images", first_rows(I, ("s26_tgt_clic.txt", "s22_clic.txt"), "target",
+                                         {"cqi_error": 0.0, "corr": 1.0}, tv))]
     groups = [(n, {k: v for k, v in g.items() if k != "padc"}) for n, g in groups if g]
     fig, ax = plt.subplots(figsize=(COL2, 2.4))
     bars(ax, groups, TGT_KEYS, "users at 30 dB: gain over PADC (points)")
-    fig_legend(fig, [ax], 3)
+    fig_legend(fig, [ax], 6)
     return fig
 
 
 def fig10(I, plt):
     """A 30 dB target, decoded by the codec (C4, C13): (a) the gain in users at 30 dB over
-    PADC, paired by frame; (b) the users the model put at 30 dB that decoded below it (the
-    calibration-aware index hedges against them). 60 frames of each policy's schedules."""
+    PADC, paired by frame; (b) the users the model put at 30 dB that decoded below it. 60
+    frames of each policy's schedules; the indices calibration-aware."""
     gains, missed = [], []
     for n, fn in (("Kodak", "s24_dec_auto.json"), ("Kodak, r = 0.8", "s24_dec_r80.json"),
                   ("CLIC", "s24_dec_clic.json")):
         d = I.json(fn, required=False)
         if d is not None:
             tgt = d.get("target") or 30.0
-            gains.append((n, paired(d, "padc", target=tgt, scale=100.0)))
-            missed.append((n, missed_share(d, tgt)))
+            gains.append((n, prefer(paired(d, "padc", target=tgt, scale=100.0))))
+            missed.append((n, prefer(missed_share(d, tgt))))
     if not any(g for _, g in gains):
         raise Missing("s24_dec_auto.json")
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL2, 2.5))
@@ -820,8 +870,7 @@ def fig10(I, plt):
     bars(a2, missed, ["padc"] + TGT_KEYS, "share of users (%)")
     a2.set_ylim(bottom=0)
     panel(a2, "b", "predicted at 30 dB, decoded below it")
-    fig_legend(fig, [a1, a2], 4, rows=[("padc", "online", "whittle", "lagrange"),
-                                       (None, "planner", "whittle_soft", "lagrange_soft")])
+    fig_legend(fig, [a2, a1], 5)
     return fig
 
 
@@ -850,28 +899,31 @@ def fig11(I, plt):
 
 
 def fig12(I, plt):
-    """The latency budget (C14): quality against the frame length, K 8; the arrow shows how
-    many slots the baseline needs for the Lagrangian index's quality at T 24."""
+    """The latency budget (C14): quality against the frame length, K 8; the arrow: how many
+    slots the baseline needs for the Lagrangian index's quality at T 24."""
     a = I.json("s21_latency_mean.json", required=False)
-    b = I.json("s21_latency_tgt.json", required=False)
+    b = I.first(("s26_latency_tgt.json", "s21_latency_tgt.json"))
     if a is None and b is None:
         raise Missing("s21_latency_mean.json")
     fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.4), squeeze=False)
-    for ax, d, letter, ylab, pols, sc, ref in (
+    for ax, d, letter, ylab, keys, sc, ref, names in (
             (axes[0, 0], a, "a", "mean PSNR (dB)", ("pf", "slope_adv", "whittle", "lagrange"),
-             1.0, "pf"),
-            (axes[0, 1], b, "b", "users at 30 dB (%)", ("padc", "online", "whittle", "lagrange"),
-             100.0, "padc")):
+             1.0, "pf", PLANNER),
+            (axes[0, 1], b, "b", "users at 30 dB (%)", ("padc", "online", "whittle",
+                                                        "whittle_hard", "lagrange",
+                                                        "lagrange_hard"), 100.0, "padc", TARGET)):
         if d is None:
             ax.set_visible(False)
             continue
         Ts = d["slots"]
-        pols = [p for p in pols if p in d["curves"]]
-        for p in pols:
-            ax.plot(Ts, sc * np.asarray(d["curves"][p], dtype=np.float64), **style(p, pols))
+        curves = {names.get(p, p): v for p, v in d["curves"].items()}
+        curves = prefer(curves) if names is TARGET else curves
+        for k in keys:
+            if k in curves:
+                ax.plot(Ts, sc * np.asarray(curves[k], dtype=np.float64), **style(k))
         m = d.get("match", {}).get("24")
         r = (m or {}).get("rows", {}).get(ref)
-        if r and not r.get("flag") and d["args"].get("ref", "lagrange") in pols:
+        if r and not r.get("flag"):
             lv = sc * m["level"]                  # every curve is below it left of T = 24
             ax.annotate("", xy=(r["needed"], lv), xytext=(24, lv),
                         arrowprops=dict(arrowstyle="->", color=INK2, lw=0.8, shrinkA=0,
@@ -888,23 +940,22 @@ def fig12(I, plt):
 
 def fig13(I, plt):
     """Time to the target (C14): the share of all users at 30 dB by each slot of the frame
-    (fresh reports, K 8, T 24)."""
+    (fresh reports, K 8, T 24; the indices calibration-aware)."""
     b = next((x for x in parse_sim(I.path("s24_main_soft.txt")) if x["delay"]), None)
     if b is None:
         raise Missing("s24_main_soft.txt (its --delay table)")
-    order = ("padc", "online", "plan_adv", "whittle", "whittle_soft", "lagrange", "lagrange_soft")
-    pols = [p for p in order if p in b["delay"]]
-    keys = [PLANNER.get(p, p) for p in pols]
+    delay = prefer({TARGET.get(p, p): v for p, v in b["delay"].items()})
     fig, ax = plt.subplots(figsize=(COL1, 2.6))
-    for p in pols:
-        ax.plot([0] + b["cuts"], [0.0] + b["delay"][p], **style(PLANNER.get(p, p), keys))
+    for k in ("padc", "online", "planner", "whittle", "whittle_hard", "lagrange",
+              "lagrange_hard"):
+        if k in delay:
+            ax.plot([0] + b["cuts"], [0.0] + delay[k], **style(k))
     ax.set_xticks([0] + b["cuts"])
     ax.set_xlim(0, b["cuts"][-1] + 0.5)
     ax.set_ylim(bottom=0)
     ax.set_xlabel(f"slot of the frame (T = {b['set']['slots']})")
     ax.set_ylabel("users at 30 dB so far (%)")
-    fig_legend(fig, [ax], 2, rows=[("padc", "online"), ("planner", None),
-                                   ("whittle", "whittle_soft"), ("lagrange", "lagrange_soft")])
+    fig_legend(fig, [ax], 2)
     return fig
 
 
@@ -948,7 +999,6 @@ def fig14(I, plt):
 
     series = (("jscc", single, single, everything), ("jscc_hd", hd, hd, everything),
               ("heic", dig, dig_t, ir("cqi")), ("gap3", dig, dig_t, ir("shannon")))
-    keys = [k for k, m, t, _ in series if m or t]
     R, S = (1.0, 0.95, 0.9, 0.8, 0.6, 0.4, 0.0), (0.0, 1.0, 2.0, 3.0)
     fig, axes = plt.subplots(2, 2, figsize=(COL2, 4.2), sharex="col")
     for col, (axis, xs, xlabel) in enumerate((("cqi", S, "CQI error sd (dB)"),
@@ -961,7 +1011,7 @@ def fig14(I, plt):
                 pts = [(x, _best(blocks, kind, axis, x, pred)) for x in xs]
                 pts = [(x, sc * y) for x, y in pts if y is not None]
                 if pts:
-                    ax.plot([p[0] for p in pts], [p[1] for p in pts], **style(key, keys))
+                    ax.plot([p[0] for p in pts], [p[1] for p in pts], **style(key))
             if axis == "corr":
                 ax.set_xlim(1.04, -0.04)
                 ax.set_xticks([1.0, 0.8, 0.6, 0.4, 0.2, 0.0])
@@ -1043,46 +1093,153 @@ def fig16(I, plt):
             mean.append(float(np.mean(d)))
             el.append(mean[-1] - float(np.min(d)))
             eh.append(float(np.max(d)) - mean[-1])
-        ax.errorbar(Ls, mean, yerr=[el, eh], elinewidth=0.7, **style(key, list(out)))
-    cbrs = ("1/48", "1/24", "1/16", "1/12", "5/48", "1/8")
-    ax.set_xticks(range(1, 7))
-    ax.set_xticklabels([f"{n}\n{c}" for n, c in zip(range(1, 7), cbrs)])
-    ax.set_xlabel("prefix length: phases (CBR)")
+        ax.errorbar(Ls, mean, yerr=[el, eh], elinewidth=0.7, **style(key))
+    cbr_axis(ax)
     ax.set_ylabel("PSNR over the one-decoder code (dB)")
     fig_legend(fig, [ax], 1)
     return fig
 
 
+# ------------------------------------------------------------------------------- tables -------
+RULE_ROWS = (("MIESM (capacity, equal weights)", "capacity", 0), ("capacity", "capacity", 1),
+             ("mean dB", "mean_db", 1), ("EESM", "eesm", 1), ("noise variance", "noise", 1),
+             ("MMSE (ours)", "mmse", 1))
+
+
+def _text_table(head, rows):
+    cols = list(zip(*([head] + rows)))
+    w = [max(len(str(c)) for c in col) for col in cols]
+    fmt = lambda r: "  ".join(str(c).rjust(n) if i else str(c).ljust(n)   # noqa: E731
+                              for i, (c, n) in enumerate(zip(r, w)))
+    return "\n".join([fmt(head)] + [fmt(r) for r in rows])
+
+
+def table01(I):
+    """Link abstraction (C12): the held-out MAE of each effective-SNR rule, four codes on
+    Kodak and two on CLIC (replaces a figure)."""
+    kod = parse_abstractions(I.path("s13_abstractions.txt"))
+    p = I.path("s22_clic.txt", required=False)
+    clic = parse_abstractions(p) if p else []
+    cols = [(s, tag, blocks[i]) for s, tag, blocks, i in (
+        ("Kodak", "(i)", kod, 0), ("Kodak", "(ii)", kod, 2), ("Kodak", "(iii)", kod, 3),
+        ("Kodak", "(iv)", kod, 1), ("CLIC", "(i)", clic, 0), ("CLIC", "(iv)", clic, 1))
+        if i < len(blocks)]
+    if not cols:
+        raise Missing("s13_abstractions.txt (no abstraction table in it)")
+    vals = [[_f(c[2].get(key, (None, None))[w]) for c in cols] for _, key, w in RULE_ROWS]
+    best = [np.nanmin([v[j] for v in vals]) for j in range(len(cols))]
+    sets = list(dict.fromkeys(c[0] for c in cols))
+    tex = ["% tools/paper_figs.py table01: results/s13_abstractions.txt, s22_clic.txt",
+           r"\begin{table}[t]", r"\centering",
+           r"\caption{Held-out error (MAE, dB) of effective-SNR link abstractions: each delivery "
+           r"history mapped to one SNR on the image's own constant-SNR curve, with sensitivity "
+           r"weights except MIESM. Codes: (i) piecewise-trained, one decoder; (ii) "
+           r"piecewise-trained, a decoder per length; (iii) one model per CBR; (iv) "
+           r"constant-SNR-trained. Bold: the best rule per code.}",
+           r"\label{tab:abstraction}",
+           r"\begin{tabular}{l" + "c" * len(cols) + "}", r"\hline",
+           " & " + " & ".join(rf"\multicolumn{{{sum(c[0] == s for c in cols)}}}{{c}}{{{s}}}"
+                              for s in sets) + r" \\",
+           "Rule & " + " & ".join(c[1] for c in cols) + r" \\", r"\hline"]
+    for (name, _, _), v in zip(RULE_ROWS, vals):
+        cells = [("-" if np.isnan(x) else rf"\textbf{{{x:.3f}}}" if abs(x - b) < 1e-12
+                  else f"{x:.3f}") for x, b in zip(v, best)]
+        tex.append(name + " & " + " & ".join(cells) + r" \\")
+    tex += [r"\hline", r"\end{tabular}", r"\end{table}"]
+    head = ["rule"] + [f"{c[0]} {c[1]}" for c in cols]
+    rows = [[name] + ["-" if np.isnan(x) else f"{x:.3f}" for x in v]
+            for (name, _, _), v in zip(RULE_ROWS, vals)]
+    text = ("held-out MAE (dB); (i) piecewise-trained, one decoder; (ii) a decoder per length; "
+            "(iii) one model per CBR; (iv) constant-SNR-trained\n" + _text_table(head, rows))
+    return "\n".join(tex) + "\n", text
+
+
+def table02(I):
+    """Ablation, the calibration-aware reward, decoded (C13): the Lagrangian index with a hard
+    target and with the calibration-aware reward on the same frames: users at 30 dB, the paired
+    gain, the users the model put at 30 dB that decoded below it, mean PSNR and LPIPS."""
+    rows = []
+    for name, tex_name, fn in (("Kodak", "Kodak", "s24_dec_auto.json"),
+                               ("Kodak, sigma 0.15 dB", r"Kodak, $\sigma = 0.15$ dB",
+                                "s24_dec_s15.json"),
+                               ("CLIC", "CLIC", "s24_dec_clic.json"),
+                               ("Kodak, r = 0.8", r"Kodak, $r = 0.8$", "s24_dec_r80.json")):
+        d = I.json(fn, required=False)
+        if d is None:
+            continue
+        tgt = d.get("target") or 30.0
+        st = policy_stats(d, tgt)
+        if "lagrange" not in st or "lagrange_soft" not in st:
+            continue
+        gain = paired(d, "lagrange", target=tgt, scale=100.0, names={}).get("lagrange_soft")
+        rows.append((name, tex_name, st["lagrange"], st["lagrange_soft"], gain))
+    if not rows:
+        raise Missing("s24_dec_auto.json")
+
+    def lp(x):
+        return "-" if x is None else f"{x:.3f}"
+
+    def g(x, tex=False):
+        if x is None:
+            return "-"
+        v, (lo, hi) = x
+        return (f"${v:+.2f}$ [{lo:.2f}, {hi:.2f}]" if tex else f"{v:+.2f} [{lo:.2f}, {hi:.2f}]")
+
+    tex = ["% tools/paper_figs.py table02: results/s24_dec_*.json", r"\begin{table*}[t]",
+           r"\centering",
+           r"\caption{Ablation of the calibration-aware reward, decoded by the codec (60 frames "
+           r"of each schedule, 30 dB target): the Lagrangian index with a hard target and with "
+           r"the calibration-aware reward (proposed) on the same frames. Gain: paired by frame, "
+           r"95\% bootstrap interval. Missed: users the model put at 30 dB that decoded below "
+           r"it.}",
+           r"\label{tab:calibration}", r"\begin{tabular}{lccccccccc}", r"\hline",
+           r" & \multicolumn{2}{c}{Users at 30 dB (\%)} & Gain (points) & "
+           r"\multicolumn{2}{c}{Missed (\%)} & \multicolumn{2}{c}{Mean PSNR (dB)} & "
+           r"\multicolumn{2}{c}{LPIPS} \\",
+           r"Schedules & hard & aware & aware $-$ hard & hard & aware & hard & aware & hard & "
+           r"aware \\", r"\hline"]
+    text_rows = []
+    for name, tex_name, h, s, gain in rows:
+        tex.append(f"{tex_name} & {h['share']:.1f} & {s['share']:.1f} & {g(gain, True)} & "
+                   f"{h['missed']:.1f} & {s['missed']:.1f} & {h['mean']:.2f} & {s['mean']:.2f} & "
+                   f"{lp(h['lpips'])} & {lp(s['lpips'])}" + r" \\")
+        text_rows.append([name, f"{h['share']:.1f}", f"{s['share']:.1f}", g(gain),
+                          f"{h['missed']:.1f}", f"{s['missed']:.1f}", f"{h['mean']:.2f}",
+                          f"{s['mean']:.2f}", lp(h["lpips"]), lp(s["lpips"])])
+    tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
+    head = ["schedules", "30dB hard", "aware", "gain [95% CI]", "missed hard", "aware",
+            "PSNR hard", "aware", "LPIPS hard", "aware"]
+    return "\n".join(tex) + "\n", _text_table(head, text_rows)
+
+
 FIGS = (
-    ("fig01_abstraction", fig01, "held-out error of each effective-SNR rule, four codes, Kodak "
-     "and CLIC", "s13_abstractions.txt [s22_clic.txt]"),
-    ("fig02_phase_weights", fig02, "mean PSNR with one phase's SNR varied, two codes",
-     "p2_full_snrc4.json [p2_full_s1.json]"),
-    ("fig03_predicted_vs_decoded", fig03, "predicted vs decoded PSNR of scheduled histories",
-     "s22_dec_*.json s24_dec_*.json [s22_clic_dec_*.json s24_dec_clic.json]"),
-    ("fig04_mean_scaling", fig04, "mean PSNR: gap to the bound vs K, per user and per frame",
-     "s22_scale_mean.json"),
-    ("fig05_target_scaling", fig05, "30 dB: gap to the bound vs K, hard / calibration-aware / "
-     "true curves", "s24_soft_auto.json (or s22_gap_ties.json) [s23_gap_truth.json]"),
-    ("fig06_soft_sigma", fig06, "30 dB: the calibration-aware index vs the sigma it assumes",
-     "s24_soft_auto.json [s24_soft_s05/s10/s20.json s24_soft_auto.txt s23_gap_truth.json]"),
-    ("fig07_target_variants", fig07, "30 dB: every variant tested, gap at K 8 / 32 / 128",
+    ("fig02_codes", fig02, "the two trainings: how much each phase's slot matters; the cost of "
+     "piecewise training at constant SNR", "p2_full_snrc4.json [p2_full_s1.json]"),
+    ("fig03_model_error", fig03, "the model's error on every decoded history: along the PSNR, "
+     "and its distribution", "s22_dec_*.json s24_dec_*.json [s22_clic_dec_*.json "
+     "s24_dec_clic.json]"),
+    ("fig04_scaling", fig04, "gap to the bound per user vs K: (a) mean PSNR, (b) users at 30 dB",
+     "s22_scale_mean.json [s24_soft_auto.json or s22_gap_ties.json]"),
+    ("fig05_ablation_calibration", fig05, "ablation: hard target vs calibration-aware vs true "
+     "curves against K; the assumed sigma", "s24_soft_auto.json [s23_gap_truth.json "
+     "s24_soft_s05/s10/s20.json s24_soft_auto.txt]"),
+    ("fig07_target_variants", fig07, "30 dB: every variant tried on the gap, K 8 / 32 / 128",
      "two or more of s22_gap_ties/prices/lpu/grid.json s23_gap_m25/m50/truth.json "
      "s24_soft_auto.json"),
     ("fig08_main_mean", fig08, "main frames: mean PSNR gain over PF per impairment",
      "s22_main_mean.txt [s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt]"),
     ("fig09_main_target", fig09, "main frames: gain in users at 30 dB over PADC per impairment",
-     "s24_main_soft.txt [s24_main_soft_r80.txt s21_lag_tgt_more.txt s21_lag_t16.txt "
-     "s22_clic.txt]"),
+     "s24_main_soft.txt [s24_main_soft_r80.txt s26_tgt_lost/t16/clic.txt (else "
+     "s21_lag_tgt_more.txt s21_lag_t16.txt s22_clic.txt)]"),
     ("fig10_decoded_target", fig10, "30 dB, decoded: gain over PADC; users predicted at 30 dB "
      "that decoded below", "s24_dec_auto.json [s24_dec_r80.json s24_dec_clic.json]"),
     ("fig11_decoded_mean", fig11, "mean, decoded: gains over PF in PSNR, MS-SSIM and LPIPS",
      "s22_dec_mean.json [s22_dec_r80_mean.json s22_clic_dec_mean.json]"),
     ("fig12_latency", fig12, "quality vs frame length: the latency budget",
-     "s21_latency_mean.json and/or s21_latency_tgt.json"),
+     "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json)"),
     ("fig13_time_to_target", fig13, "share of users at 30 dB by each slot",
      "s24_main_soft.txt"),
-    ("fig14_digital", fig14, "JSCC vs digital with IR-HARQ: CQI errors and outdated reports",
+    ("fig14_digital", fig14, "JSCC vs digital with IR-HARQ, CQI errors and outdated reports",
      "s23_c5_single.txt s20_harq_mean.txt [s20_harq_tgt*.txt s18_stale_jscc.txt "
      "s13_cqi_jscc.txt]"),
     ("fig15_scheduler_channel", fig15, "SNR lift of the first phases vs report age and K",
@@ -1090,22 +1247,29 @@ FIGS = (
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "
      "decoder, by length", "p2_full_snrc4.json and p4_full_h*.json and/or p3_full_fix*.json"),
 )
+TABLES = (
+    ("table01_abstraction", table01, "held-out MAE of each effective-SNR rule per code",
+     "s13_abstractions.txt [s22_clic.txt]"),
+    ("table02_calibration", table02, "ablation, decoded: hard target vs calibration-aware",
+     "s24_dec_auto.json [s24_dec_s15.json s24_dec_clic.json s24_dec_r80.json]"),
+)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--results", default="results", help="the folder the COMMANDS runs wrote")
     ap.add_argument("--out", default="figures")
-    ap.add_argument("--only", nargs="+", default=None, help="figure names or prefixes (fig05 ...)")
+    ap.add_argument("--only", nargs="+", default=None,
+                    help="figure / table names or prefixes (fig05 table01 ...)")
     ap.add_argument("--formats", nargs="+", default=["pdf", "png"])
     ap.add_argument("--dpi", type=int, default=300, help="PNG (and rasterised scatter) resolution")
-    ap.add_argument("--list", action="store_true", help="list the figures and their inputs")
+    ap.add_argument("--list", action="store_true", help="list the figures, tables and inputs")
     ap.add_argument("--self-test", action="store_true",
-                    help="draw every figure from synthetic inputs in the real tools' formats "
-                         "(tools/paper_figs_selftest.py; seconds, CPU), stamped as synthetic")
+                    help="draw everything from synthetic inputs in the real tools' formats "
+                         "(tools/paper_figs_selftest.py; ~40 s, CPU), stamped as synthetic")
     a = ap.parse_args()
     if a.list:
-        for name, _, what, files in FIGS:
+        for name, _, what, files in FIGS + TABLES:
             print(f"{name:28s} {what}\n{'':28s} reads {files}")
         return
     tmp = None
@@ -1118,8 +1282,12 @@ def main():
     plt = setup()
     os.makedirs(a.out, exist_ok=True)
     done, skipped = [], []
+
+    def wanted(name):
+        return not a.only or any(name.startswith(o) for o in a.only)
+
     for name, fn, what, _ in FIGS:
-        if a.only and not any(name.startswith(o) for o in a.only):
+        if not wanted(name):
             continue
         I = Inputs(a.results)
         try:
@@ -1145,11 +1313,27 @@ def main():
         plt.close(fig)
         done.append(name)
         print(f"  wrote {name}: {what} (from {', '.join(dict.fromkeys(I.used))})")
-    print(f"{len(done)} figures in {a.out}/" + (f", {len(skipped)} skipped" if skipped else ""))
+    for name, fn, what, _ in TABLES:
+        if not wanted(name):
+            continue
+        I = Inputs(a.results)
+        try:
+            tex, text = fn(I)
+        except Missing as e:
+            skipped.append(name)
+            print(f"  skip  {name}: needs {e}")
+            continue
+        with open(os.path.join(a.out, f"{name}.tex"), "w") as f:
+            f.write(tex)
+        done.append(name)
+        print(f"  wrote {name}.tex: {what} (from {', '.join(dict.fromkeys(I.used))})")
+        print("    " + text.replace("\n", "\n    "))
+    print(f"{len(done)} figures and tables in {a.out}/"
+          + (f", {len(skipped)} skipped" if skipped else ""))
     if tmp is not None:
         tmp.cleanup()
         if skipped:
-            raise SystemExit("self-test: a figure was skipped")
+            raise SystemExit("self-test: a figure or table was skipped")
 
 
 if __name__ == "__main__":

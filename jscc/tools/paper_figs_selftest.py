@@ -52,8 +52,8 @@ def code(N, seed, gain_db=None, kind="piecewise"):
         if kind == "piecewise":
             F = phi(n, 1.9) @ nested_rho(MASTER, L)
             sd = 0.04
-        else:
-            F = phi(n.mean(1), 40.0)
+        else:                                       # ordered too, but its slots add as noise
+            F = phi(n @ nested_rho(MASTER, L), 40.0)
             sd = 0.12
         D = dsrc[:, L - 1:L] + csens[:, L - 1:L] * F[None, :]
         return -10 * np.log10(D) + rng.normal(0.0, sd, D.shape)
@@ -206,6 +206,20 @@ def write_sims(d, rng):
     sim_file(J("s24_main_soft_r80.txt"), [
         (args(target=30.0, margin=0.5, cqi_aware=True), JSCC,
          target_summary(dict(zip(t6, (.55, .647, .60, .59, .61, .621))), rng), 0, 0.8)])
+    t5s = ("padc", "online", "plan_adv", "whittle_soft", "lagrange_soft")
+    sim_file(J("s26_tgt_lost.txt"), [
+        (args(preempt=0.25, target=30.0), JSCC,
+         target_summary(dict(zip(("padc", "online", "replan_adv", "whittle_soft",
+                                  "lagrange_soft"), (.52, .60, .605, .63, .625))), rng), 0, 1)])
+    sim_file(J("s26_tgt_t16.txt"), [
+        (args(slots=16, target=30.0, delay=True), JSCC,
+         target_summary(dict(zip(t5s, (.55, .62, .625, .655, .66))), rng, 16,
+                        dict(zip(t5s, ([.03, .2, .42], [.02, .15, .4], [.03, .17, .42],
+                                       [.2, .45, .6], [.12, .38, .58])))), 0, 1)])
+    sim_file(J("s26_tgt_clic.txt"), [
+        (args(target=30.0, utility="results/utility_clic_nested.json",
+              belief="results/belief_clic_nested.json"), JSCC,
+         target_summary(dict(zip(("pf",) + t5s, (.50, .58, .64, .645, .66, .67))), rng), 0, 1)])
 
     # C5: the single decoder, the per-length decoders, digital with HARQ
     sm_r = np.array([31.42, 31.30, 31.17, 30.90, 30.42, 30.09, 29.84])
@@ -375,6 +389,11 @@ def write_latency(d):
                  {"padc": [.35, .47, .58, .66, .72, .77], "online": [.40, .55, .67, .75, .81, .85],
                   "whittle": [.45, .58, .69, .75, .80, .84],
                   "lagrange": [.44, .58, .69, .767, .82, .86]}, 30.0, Ts)
+    latency_file(os.path.join(d, "s26_latency_tgt.json"),
+                 {"padc": [.35, .47, .58, .66, .72, .77], "online": [.40, .55, .67, .75, .81, .85],
+                  "whittle_soft": [.46, .59, .70, .77, .81, .85],
+                  "lagrange_soft": [.45, .59, .71, .783, .83, .87]}, 30.0, Ts,
+                 ref="lagrange_soft")
 
 
 # ---------------------------------------------------------------- banks, decoded replays -----
@@ -453,6 +472,7 @@ def write_decoded(d, rng):
                                              "whittle_soft", "lagrange_soft"), rng, **kw)
     decoded_file(J("s24_dec_r80.json"), sel("padc", "plan_adv", "lagrange", "lagrange_soft"),
                  rng, **kw)
+    decoded_file(J("s24_dec_s15.json"), sel("padc", "lagrange", "lagrange_soft"), rng, **kw)
     decoded_file(J("s24_dec_clic.json"), sel("padc", "online", "lagrange", "lagrange_soft"),
                  rng, **kw)
 
