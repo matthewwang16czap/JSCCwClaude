@@ -6,9 +6,9 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: NOTHING this turn. Sections 0-24 are done and recorded in docs/NOTES.md (21-22: 6d;
-23: 6e; 24: 6f). Every claim of the paper outline (docs/PAPER_OUTLINE.md) is measured; the next
-step is writing.
+WHAT TO RUN: section 25 only (CPU, ~1 min after the ~5 min setup; no GPU): the paper's figures,
+drawn from results/ into figures/. Sections 0-24 are done and recorded in docs/NOTES.md (21-22:
+6d; 23: 6e; 24: 6f); every claim of the paper outline (docs/PAPER_OUTLINE.md) is measured.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -52,6 +52,8 @@ step is writing.
   24 calibration-aware programs (the soft      done (docs/NOTES.md 6f)
      target): how much of the curve errors'
      cost they recover
+  25 the paper's figures (tools/paper_figs.py, TO RUN NOW
+     docs/FIGURES.md)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2828,3 +2830,36 @@ cat results/s24_main_soft.txt results/s24_main_soft_r80.txt
 #         and how far each decodes below its prediction (the hard index: 1.3 points on Kodak).
 #         The simulation's truth is the fitted curves; the decodes test the hedge against the
 #         codec itself, whose error the measured sigma does not include (hence sigma 0.15 too).
+
+================================================================================
+ 25. TO RUN NOW -- the paper's figures, drawn from results/ (CPU, ~1 min; no GPU)
+================================================================================
+# Why: every result graph of the paper outline (docs/PAPER_OUTLINE.md, section V), drawn with
+# matplotlib from the files sections 13-24 wrote; nothing is simulated or decoded again.
+# tools/paper_figs.py writes figures/<name>.pdf (vector, fonts embedded: for the paper) and
+# figures/<name>.png (300 dpi: to look at), one IEEE column (3.5 in) or two (7.16 in) wide,
+# 8 pt text. A figure whose input is missing is skipped with a note naming the file; optional
+# inputs only add series. docs/FIGURES.md lists the 16 figures: what each shows, the claim it
+# carries, the files it reads, and which ones I suggest for the main text.
+
+# 25.0 -- setup, ~5 min CPU (skip the smoke test if you are short of time: 25.1 needs only the
+#   pull and matplotlib) ------------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: [paper figures])
+python -c "import matplotlib; print('matplotlib', matplotlib.__version__)" || pip install matplotlib
+
+# 25.1 -- draw every figure (CPU, ~1 min) ---------------------------------------------------------
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s25_figs.txt
+ls figures/
+
+# 25.2 -- optional, CPU ~1 min: the same 16 figures from synthetic inputs, stamped "synthetic
+#   self-test data" (the layout alone, for comparing with 25.1; never results)
+# python tools/paper_figs.py --self-test --out figures_selftest
+
+# 25.3 -- reading: send back what 25.1 printed (which figures were written and which skipped,
+#   and why) and look at figures/*.png. Tell me what to change (a series, an axis, a label, a
+#   figure to drop or merge) and I revise tools/paper_figs.py; the PDFs go into the paper.
+cat results/s25_figs.txt

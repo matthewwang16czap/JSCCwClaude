@@ -1771,6 +1771,85 @@ def check_freeze(x):
                f"{len(tc)}/{len(tk)} {other} tensors moved")
 
 
+def check_figures():
+    """tools/paper_figs.py reads the tools' outputs back: its parsers round-trip the tables
+    tools/schedule_sim.py prints (its own report functions) and tools/utility_fit.py's
+    abstraction table, its decoded pairing matches tools/replay_report.py, and (with
+    matplotlib) a figure is drawn from tools/paper_figs_selftest.py's synthetic inputs."""
+    import contextlib
+    import importlib.util
+    import io
+    import json
+    import re
+
+    import numpy as np
+
+    import tools.paper_figs as pf
+    import tools.paper_figs_selftest as st
+    import tools.replay_report as rr
+
+    print("[paper figures]")
+    rng = np.random.default_rng(0)
+    mean = st.mean_summary({"pf": 0.0, "slope_adv": 0.47, "pi": -0.48, "lagrange": 0.52}, 31.1,
+                           rng)
+    shares = {"padc": .656, "online": .75, "lagrange": .767, "lagrange_soft": .783}
+    tgt = st.target_summary(shares, rng, 24, {p: [.05, .30, .55] for p in shares})
+    with tempfile.TemporaryDirectory() as tmp:
+        sim = os.path.join(tmp, "s22_main_mean.txt")
+        st.sim_file(sim, [(st.args(), st.JSCC, mean, 0, 1),
+                          (st.args(cqi_aware=True), st.JSCC, mean, 0, 0.8),
+                          (st.args(target=30.0, delay=True, preempt=0.25), st.JSCC, tgt, 2.0, 1)])
+        b = pf.parse_sim(sim)
+        lo, hi = mean["lagrange"]["vs_pf_ci"]
+        ok(len(b) == 3 and [x["kind"] for x in b] == ["mean", "mean", "target"]
+           and b[0]["base"] == "pf" and abs(b[0]["rows"]["lagrange"]["vs"] - 0.52) < 1e-9
+           and np.allclose(b[0]["rows"]["lagrange"]["ci"], [lo, hi], atol=6e-4)
+           and b[1]["set"]["corr"] == 0.8 and b[1]["set"]["aware"]
+           and b[2]["set"]["cqi_error"] == 2.0 and b[2]["set"]["preempt"] == 0.25
+           and abs(b[2]["rows"]["lagrange_soft"]["vs_padc"] - 12.7) < 1e-9
+           and b[2]["cuts"] == [6, 12, 18, 24] and b[2]["delay"]["padc"][:2] == [5.0, 30.0]
+           and pf.pick(b, "mean", {"corr": 0.8}) is b[1],
+           "figures: schedule_sim.py's tables parse back (mean, target, delay; CQI error, stale "
+           "reports, lost slots)")
+        mixed = os.path.join(tmp, "mixed.json")
+        st.mixed_run(mixed, st.code(8, 1), range(1, 7), [f"im{i}" for i in range(8)], 1)
+        txt = os.path.join(tmp, "abs.txt")
+        with open(txt, "w") as f:
+            f.write(st.compare([mixed]))
+        ab = pf.parse_abstractions(txt)
+        ok(len(ab) == 1 and set(ab[0]) == {"mean_db", "noise", "capacity", "eesm", "mmse"}
+           and all(None not in v for v in ab[0].values())
+           and ab[0]["mmse"][1] < ab[0]["capacity"][0],
+           f"figures: utility_fit.py's abstraction table parses back (MMSE {ab[0]['mmse'][1]:.3f} "
+           f"dB, MIESM {ab[0]['capacity'][0]:.3f} on an additive-MMSE code)")
+        dec = os.path.join(tmp, "dec.json")
+        st.decoded_file(dec, {"pf": 0.0, "lagrange": 0.5}, rng, frames=20)
+        with open(dec) as f:
+            spec = json.load(f)
+        argv, buf = sys.argv, io.StringIO()
+        sys.argv = ["replay_report.py", dec, "--base", "pf"]
+        try:
+            with contextlib.redirect_stdout(buf):
+                rr.main()
+        finally:
+            sys.argv = argv
+        line = [ln for ln in buf.getvalue().splitlines() if ln.strip().startswith("lagrange")][-1]
+        m = [float(v) for v in re.findall(r"[+-]\d+\.\d+", line)[:3]]
+        mine = pf.paired(spec, "pf")["lagrange"]
+        ok(np.allclose(m, [mine[0], *mine[1]], atol=6e-4),
+           f"figures: decoded pairing = replay_report.py's ({mine[0]:+.3f} dB [{mine[1][0]:+.3f}, "
+           f"{mine[1][1]:+.3f}])")
+        if importlib.util.find_spec("matplotlib") is None:
+            print("    --  figures: matplotlib not installed; drawing not checked")
+            return
+        plt = pf.setup()
+        fig = pf.fig08(pf.Inputs(tmp), plt)
+        out = os.path.join(tmp, "fig08.pdf")
+        fig.savefig(out, bbox_inches="tight")
+        plt.close(fig)
+        ok(os.path.getsize(out) > 1000, "figures: a figure is drawn and saved (PDF)")
+
+
 def main():
     torch.set_num_threads(os.cpu_count() or 1)
     print(f"[shared] channel backend: {BACKEND}")
@@ -1800,6 +1879,7 @@ def main():
     check_allocation(x)
     check_frontier()
     check_freeze(x)
+    check_figures()
     print("all checks passed")
 
 
