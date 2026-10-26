@@ -704,11 +704,17 @@ objective gives up a little more on the users who miss.
    it otherwise: it is designed for no transmit CSI, and its gain needs a channel fixed between
    rounds and few retransmissions, while our chain has CQI, newly faded retransmission slots and
    4 IR rounds.
-9. The paper's figures (2026-10-26): `tools/paper_figs.py` draws the 16 result figures from
-   results/ (COMMANDS 25, CPU, ~1 min; PDF + PNG at IEEE sizes). docs/FIGURES.md lists each
-   figure's claim, inputs and suggested use. Checked on synthetic inputs in the tools' own formats
-   (`--self-test`; smoke: the parsers read schedule_sim.py's and utility_fit.py's tables back and
-   pair decodes exactly as replay_report.py does); not yet drawn from the real results.
+9. The paper's figures (2026-10-26): `tools/paper_figs.py` draws the result figures and two
+   LaTeX tables from results/ (COMMANDS 25-26, CPU, ~1 min; PDF + PNG at IEEE sizes);
+   docs/FIGURES.md lists each one's claim, inputs and suggested use. Checked on synthetic inputs
+   in the tools' own formats (`--self-test`; smoke: the parsers read schedule_sim.py's and
+   utility_fit.py's tables back and pair decodes exactly as replay_report.py does). First review
+   of the real figures 1-5 (2026-10-26): the abstraction figure became Table I; the phase-weight
+   figure compares the two trainings directly; the predicted-vs-decoded scatter became the
+   error along the PSNR; the mean and 30 dB scaling figures merged (gap per user only); and the
+   calibration-aware index became the proposed target scheduler, the hard-target index an
+   ablation (fig05, Table II). COMMANDS 26 runs it with lost slots, at T 16, on CLIC and in the
+   latency budget, the conditions only the hard index had run in.
 
 ## 8. Experiment index
 

@@ -67,7 +67,11 @@ consequences for scheduling, for training, and for the JSCC-versus-digital quest
    calibration-aware Lagrangian index is as close to the bound as the hard index given the true
    curves (within +-0.3 points per user from 16 users on), whatever the spread assumed from 0.03
    to 0.2 dB, and its schedules decode exactly as predicted (0.0% of users missed against the
-   hard index's 1.2%; +1.7 points decoded, +14.8 over PADC).
+   hard index's 1.2%; +1.7 points decoded, +14.8 over PADC). Decided 2026-10-26 (first figure
+   review): the paper proposes the index with the calibration-aware reward for quality targets;
+   the hard-target index is an ablation (V-F: fig05, Table II), never better on the share at
+   30 dB in any condition run, at the same computation; the reward's price, 0.22-0.25 dB of mean
+   PSNR from the users who miss 30 dB anyway, is stated with it.
 3. **The system verdict: JSCC beats digital under the CSI real systems have.** Against HEVC intra
    with CQI-table link adaptation and incremental-redundancy HARQ, under the same schedulers:
    on par with fresh, error-free CQI (+0.1 dB, as theory and single-link studies predict),
