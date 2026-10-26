@@ -529,7 +529,8 @@ fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the fr
   user at K 8 / 32 (gap 7.07 / 4.59 against 6.86 / 3.18 with the true curves); the soft index
   recovers +0.63 [-0.21, +1.41] at K 32 (about 45%) and -0.42 [-1.88, +1.04] at K 8 (nothing to
   recover); the soft Whittle index gains nothing (0.00 / -0.42). Suggestive, not significant:
-  the real curves' runs (100 frames, K to 128) decide.
+  the real curves' runs (100 frames, K to 128) decide. They did (section 6f): with the real
+  curves the soft index recovers all of it.
 
 **C5 with the single decoder (23.2).** The prefix code snrc4 (one encoder, one decoder), its
 nested curves and calibrated transmitter, 2000 frames, the frames of section 20.2; best policy
@@ -559,6 +560,74 @@ points to every lead. On stale reports the naive target policies break as in sec
 -4.0 points under PADC at r = 0.8 naive, +3.3 aware); plan_adv aware is the best target policy
 from r = 0.95 to 0.4, PADC at r = 0. The JSCC side holds decoded at r = 0.8 with this decoder
 (section 6d: model error MAE 0.076-0.095 dB, bias -0.012 / +0.013).
+
+## 6f. Calibration-aware programs recover the curve errors' cost (COMMANDS 24, run 2026-10-26)
+
+The soft target (alloc/whittle.Arm(soft=...), soft_spread): at the target a user's terminal
+reward is the probability that its true PSNR reaches 30 dB when the transmitter's curves are off
+by N(bias, sigma^2), Phi((q + bias - Q) / sigma), not 1{q >= Q}. Measured on the Kodak curves
+(fitted against calibrated, pooled over images): sigma 0.031 0.044 0.047 0.040 0.033 0.028 dB and
+bias +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB at 1-6 phases.
+
+**At scale (24.1, calibrated curves, B = K/8, the frames of 18.3-23).** Per-user gap to the bound
+(points):
+
+| K | 8 | 16 | 32 | 64 | 128 |
+|---|---|---|---|---|---|
+| lagrange, hard (as 22.2a) | 1.59 | 1.90 | 1.36 | 1.67 | 1.46 |
+| **lagrange_soft** (measured sigma) | **0.84** | **-0.10** | **-0.30** | **+0.01** | **-0.19** |
+| lagrange, hard, TRUE curves (23.1a) | 0.84 | -0.23 | -0.27 | +0.06 | -0.19 |
+| lagrange_soft - lagrange (paired) | +0.75 [0.00, 1.63] | +2.00 [1.38, 2.69] | +1.66 [1.25, 2.16] | +1.66 [1.36, 1.97] | +1.66 [1.45, 1.89] |
+| whittle hard / soft / true curves | 5.72 / 4.34 / 4.84 | 4.09 / 2.71 / 3.09 | 3.05 / 1.49 / 1.80 | 2.92 / 1.51 / 1.73 | 2.39 / 1.12 / 1.34 |
+| lagrange_soft, sigma 0.05 / 0.1 / 0.2 dB (no bias) | 1.09 / 0.72 / 0.97 | | -0.23 / -0.11 / +0.14 | | -0.23 / -0.09 / +0.05 |
+
+* The calibration-aware Lagrangian index, deciding on the calibrated curves, is exactly as close
+  to the bound as the hard index given the true curves: it recovers 100% of the curve errors'
+  cost at K 8 and 99% pooled over K 16-128 (identical values at K 8 and 128). The flat ~1.6
+  points were a decision artefact of trusting the curves at a hard threshold, not an information
+  limit: the curves' error is 0.03-0.05 dB, and a program that knows it hedges by a fraction of
+  a phase where that is cheap.
+* Insensitive to sigma: anything from the measured 0.03-0.05 dB up to 0.2 dB recovers it (at
+  K >= 32 every sigma lands within +-0.3 points of the bound; 0.2 dB slightly over-hedges). No
+  tuning is needed beyond the offline calibration statistics.
+* The soft Whittle index gains 1.3-1.6 points too and ends above even the hard Whittle index
+  with the true curves (the smooth reward also helps the index itself, whose 0/1 programs are
+  6-13% non-indexable), but stays 1.3-3.5 points behind the soft Lagrangian index.
+
+**Main frames (24.2, K 8, T 24, 500 frames; share at 30 dB, gain over PADC):**
+
+| policy | fresh | 2 dB CQI error | r = 0.8 aware, 0.5 dB margin |
+|---|---|---|---|
+| lagrange | +11.1 | +1.6 | +6.1 |
+| **lagrange_soft** | **+12.7** (77.2%) | +6.1 | +7.1 |
+| whittle / whittle_soft | +8.2 / +9.8 | +1.2 / +5.1 | +5.4 / +6.3 |
+| plan_adv | +8.8 | **+8.3** | **+9.7** |
+| online | +8.0 | +1.7 | |
+
+With fresh reports the soft index is the best target policy (+1.5 points over the hard one). It
+also hedges part of the CQI errors' damage (+4.5 points over the hard index), though the planner
+plan_adv stays best under CQI errors and stale reports, whose errors are dB, not hundredths.
+Time to 30 dB: like the hard index (-1.85 slots vs PADC over all users, -1.04 on the same users;
+the Whittle indices remain earliest). Its mean PSNR is 0.22 dB below the hard index's: the share
+objective gives up a little more on the users who miss.
+
+**Decoded by the codec (24.3, 60 frames; share at 30 dB):**
+
+| file | lagrange | lagrange_soft | soft - hard (paired) | soft over PADC | missed (soft / hard) |
+|---|---|---|---|---|---|
+| Kodak, measured sigma | 78.8% | **80.4%** | **+1.67 [0.42, 2.92]** | +14.8 [11.7, 17.9] | 0.0% / 1.2% |
+| Kodak, sigma 0.15 dB | 78.1% | 80.2% | +2.08 [0.00, 4.38] | +14.4 | 0.2% / 1.7% |
+| CLIC, measured sigma | 91.2% | 91.7% | +0.42 [-0.63, 1.67] | +8.1 | 0.0% / 0.8% |
+| Kodak, r = 0.8 aware | 63.3% | 64.0% | +0.63 [-1.67, 2.92] | +4.4 (plan_adv +10.4) | 2.3% / 1.7% |
+
+* The soft schedules decode exactly as the curves predict (Kodak: 80.4% decoded, 80.4% predicted,
+  0.0% missed; the hard index loses 1.2% of its users to the codec's error): no user is left
+  within the curves' error of the threshold, so the hedge also covers the codec's own error,
+  which the measured sigma does not include. The soft Whittle index does the same (77.3 = 77.3).
+* CLIC is near its ceiling (PADC 83.5%, the index 91%); the gain there is within noise.
+* On stale reports the misses come from the reports, not the curves, and the planner stays best.
+* The price, as in the simulation: lower mean PSNR (30.27 vs 30.52 dB decoded) and worse LPIPS
+  (+0.013 against the hard index, +0.025 against PADC) for the users who miss.
 
 ## 7. Open
 
@@ -617,7 +686,10 @@ from r = 0.95 to 0.4, PADC at r = 0. The JSCC side holds decoded at r = 0.8 with
    transmitter's curve errors, which the bound does not have (COMMANDS 23.1).
    Resolved 2026-10-25 (COMMANDS 23.1, section 6e): with the true curves the index meets the
    bound from K 16 on (within +-0.3 points); the curve errors cost ~1.6 points per user at the
-   target and nothing measurable for the mean; uniform margins make it worse.
+   target and nothing measurable for the mean; uniform margins make it worse. And recovered
+   2026-10-26 (COMMANDS 24, section 6f): calibration-aware programs (the success probability
+   under the curves' measured error) bring the index on the calibrated curves to the bound
+   (99-100% of the cost), and their schedules decode exactly as predicted.
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted

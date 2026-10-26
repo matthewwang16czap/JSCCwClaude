@@ -201,7 +201,10 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         2026-10-25 (COMMANDS 23.1, docs/NOTES.md 6e): none of those, but the transmitter's curve
         errors. Given the curves it plans with, the Lagrangian index is within +-0.3 points of
         the bound from K 16 on; the calibrated curves cost ~1.6 points per user at every K at a
-        hard target and nothing measurable for the mean; uniform margins make it worse. The lost-slot runs (--preempt) are outside these theorems
+        hard target and nothing measurable for the mean; uniform margins make it worse.
+        Recovered 2026-10-26 (COMMANDS 24, docs/NOTES.md 6f): a terminal reward equal to the
+        probability of success under the curves' measured error brings the index on the
+        calibrated curves to the bound (99-100% of the cost, every K). The lost-slot runs (--preempt) are outside these theorems
         (a budget shared at random by all users; Zhang and Frazier list it as open). So the
         theory's regime holds, and at scale the programs' index is the scheduler to use; the
         closed form is its cheap approximation (one unit per slot: a tie). On stale reports (K

@@ -333,6 +333,17 @@ IEEE Transactions on Wireless Communications (TWC).
    at 2 dB CQI error, +1.5 dB at r = 0.8; 0.2 dB below per-length decoders) and becomes the
    main system. Nothing is owed before writing; a calibration-aware reward (owed item 13) is
    optional.
+29. **The calibration-aware reward closes the target gap (2026-10-26, COMMANDS 24; NOTES 6f).**
+   Rewarding the probability of success under the curves' measured 0.03-0.05 dB error, instead
+   of 1 at the predicted threshold, recovers 99-100% of the ~1.6 points per user at every K: on
+   the transmitter's calibrated curves the Lagrangian index is now as close to the bound as the
+   hard index given the true curves, insensitive to the assumed spread (0.03-0.2 dB). Decoded it
+   adds +1.7 points over the hard index (+14.8 over PADC on Kodak) and its schedules decode
+   exactly as predicted (0.0% missed). C13 holds for both objectives on the transmitter's own
+   information; the finding the paper keeps is that a hard target makes the abstraction's
+   calibration first-order, and that knowing its spread is enough. Under CQI errors and stale
+   reports the planner (plan_adv) stays the robust target policy; the soft index's price is the
+   users who miss (-0.25 dB mean PSNR, +0.013 LPIPS).
 
 ## 1. Your four points, checked
 
