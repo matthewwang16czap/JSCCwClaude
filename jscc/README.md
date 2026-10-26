@@ -107,6 +107,8 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         target within a frame)
                         stream_sim.py (continuous traffic: requests arriving over time, a
                         deadline each; reliability within d slots, capacity, delay)
+                        paper_figs.py (the paper's figures from results/, matplotlib, PDF +
+                        PNG at IEEE sizes; --self-test draws them from synthetic inputs)
 docs/NOTES.md           results by topic, condensed (the full chronological notes: git ec9cc68)
 docs/CASCADE.md         the cascade: design, module choices per rate and interface, training
 docs/ASSESSMENT.md      v2: what the paper can claim, the IEEE TWC framing, gates G-A..G-D
@@ -114,6 +116,8 @@ docs/SURVEY.md          related work by threat level: rate-adaptive JSCC, token 
                         adaptive tokenizers, allocation; the novelty matrix
 docs/PROBLEM.md         the target problem: system, why this codec, scheduler, baselines, gates
 docs/PAPER.md           the paper plan: story, contributions and evidence, outline, what is owed
+docs/PAPER_OUTLINE.md   title, abstract and section summaries (IEEE TWC), with the measured numbers
+docs/FIGURES.md         the paper's figures: what each shows, the claim it carries, the files it reads
 docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
                         setup, the rules, one frame played slot by slot, the measured results
 ```
@@ -200,6 +204,11 @@ units per slot (`--cqi-corr`, `--target`, `--preempt` too; the price solver: `--
 supply`, `--kink-grad`; the programs' grids: `--ny`, `--ng`). `mixed_snr.py --design file
 --replay-metrics msssim lpips` scores decoded schedules on those metrics too, and
 `replay_report.py --metric msssim` pairs policies on them.
+
+`tools/paper_figs.py --results results --out figures` draws the paper's 16 result figures from
+those files (COMMANDS 25; PDF for the paper, PNG to look at; a figure whose input is missing is
+skipped with a note), and `--self-test` draws them from synthetic inputs in the tools' formats.
+The list, with each figure's claim and inputs: `docs/FIGURES.md`.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and
