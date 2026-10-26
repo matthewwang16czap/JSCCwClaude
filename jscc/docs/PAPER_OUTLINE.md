@@ -1,7 +1,7 @@
 # Paper outline (IEEE TWC): title, abstract, section summaries
 
 Drafted 2026-10-23 from `docs/PAPER.md` (claims C1-C14) and `docs/NOTES.md` (numbers); updated
-2026-10-25 with COMMANDS 21-23 (NOTES 6d, 6e). Every number is now measured: no assumption is
+2026-10-26 with COMMANDS 21-24 (NOTES 6d-6f). Every number is now measured: no assumption is
 left (the list at the end records how each one came out). The main system is the single prefix
 code: one encoder and one decoder, trained over every rate. Per-length decoders are an optional
 upgrade.
@@ -17,26 +17,26 @@ Alternatives:
 - *A Link Abstraction for Scheduling Deep Joint Source-Channel Codes in Multi-User Downlinks*
 - *What Is a Slot Worth to a Learned Code? Link Abstraction and Deadline Scheduling for Deep JSCC*
 
-## Abstract (~240 words; TWC: one paragraph, at most 250 words, no citations)
+## Abstract (~250 words; TWC: one paragraph, at most 250 words, no citations)
 
 Deep joint source-channel coding (JSCC) is evaluated on single links, yet a cellular downlink
 delivers data slot by slot, through a scheduler, to many users before a deadline. Scheduling
 theory needs to know what a slot is worth to each user, which no model provides for learned
-codes. We show that a learned prefix code trained under
-slot-varying SNR obeys a simple link abstraction: its distortion is the source distortion plus a
-sensitivity-weighted sum of per-slot minimum mean-square-error terms. On two test sets it
-predicts quality within 0.06-0.08 dB, against 0.44-0.49 dB for the mutual-information
-mapping of digital system simulation; a transmitter calibrates it from 12 decodes per image, and
-it holds only when the code is trained for slot-varying SNR. With it, each user is a two-number
-state and deadline scheduling becomes a finite-horizon restless bandit, so per-user dynamic
-programs, a Lagrangian bound on every causal scheduler and Lagrangian index policies apply
-exactly. The index's gap to the bound vanishes as the cell grows, for mean PSNR and for a quality
-target; at a hard target, however, the abstraction's calibration error becomes a fixed cost
-of 1.6 percentage points of satisfied users. Decoded, the index gains 0.5-0.6 dB over
-proportional fair and brings 8-12 points more users to 30 dB than per-image rate selection.
-Under CQI errors and outdated reports, scheduled JSCC outperforms a digital chain with CQI-table
-link adaptation and incremental-redundancy HARQ by 1.1-1.5 dB, and training the code on the
-channel its scheduler creates adds 0.28 dB.
+codes. We show that a learned prefix code trained under slot-varying SNR obeys a simple link
+abstraction: its distortion is the source distortion plus a sensitivity-weighted sum of per-slot
+minimum mean-square-error terms. On two test sets it predicts quality within 0.06-0.08 dB,
+against 0.44-0.49 dB for the mutual-information mapping of digital system simulation; calibrated
+from 12 decodes per image, it holds only when the code is trained for slot-varying SNR. With it,
+each user is a two-number state and deadline scheduling becomes a finite-horizon restless
+bandit, so per-user dynamic programs, a Lagrangian bound on every causal scheduler and
+Lagrangian index policies apply exactly. The index's gap to the bound vanishes as the cell
+grows, for mean PSNR and for a quality target, once the programs reward the probability of
+success under the abstraction's 0.04 dB calibration error, which, ignored, costs 1.6 points of
+satisfied users. Decoded, the index gains 0.5-0.6 dB over proportional fair and brings 8-15
+points more users to 30 dB than per-image rate selection. Under CQI errors and outdated reports,
+scheduled JSCC outperforms a digital chain with CQI-table link adaptation and
+incremental-redundancy HARQ by 1.1-1.5 dB, and training the code on the channel its scheduler
+creates adds 0.28 dB.
 
 **Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
 restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, image transmission.
@@ -75,10 +75,13 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
      - The Lagrangian bound and index apply exactly and run on a CPU.
      - The Lagrangian index's gap to the bound vanishes as the cell grows, for both
        objectives (mean: 0.005 dB per user at 128 users; 30 dB target: within ±0.3 points
-       from 16 users on, given the curves the transmitter plans with). A closed-form
-       certainty-equivalent rule captures most of the mean gain at small scale.
-     - A hard target makes the abstraction's calibration error first-order: ~1.6 points per
-       user at every K, which no uniform margin recovers, while the mean is immune.
+       from 16 users on). A closed-form certainty-equivalent rule captures most of the mean
+       gain at small scale.
+     - A hard target makes the abstraction's calibration error first-order: a scheduler that
+       trusts its calibrated curves loses ~1.6 points per user at every K (a uniform margin
+       makes it worse; the mean is immune). Programs that reward the probability of success
+       under the error's measured spread recover all of it, and their schedules decode
+       exactly as predicted.
      - For a quality target, admission by smallest remaining need plus online stopping beats
        per-image rate selection. The gains also read as 9-39% shorter frames.
   3. *System verdict under realistic CSI* (C5, C6).
@@ -182,6 +185,12 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
       and is worse at one unit per slot (-1.75 points at 30 dB), and at scale it has almost
       no one to act on.
     - The Whittle index, taken at the top of the indifference range.
+  - *Calibration-aware reward.* At a target the terminal reward is
+    Φ((q + μ_n − Q)/σ_n), the probability that the true PSNR reaches Q when the calibrated
+    curves are off by N(μ_n, σ_n²) at n phases; σ_n and μ_n are calibration statistics,
+    measured offline over images (0.03-0.05 dB). Exact Bayes for a Gaussian curve error: the
+    decisions reveal nothing about it within the frame, so only the terminal reward changes.
+    The bound keeps the hard reward on the true curves.
   - *Outdated reports.* The programs decide on the report through a report-to-channel kernel,
     so the bound stays valid for every scheduler that sees only reports.
 - **D. Closed-form schedulers.**
@@ -226,20 +235,25 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 - **C. Quality target and latency** (Fig.: share at 30 dB; CDF of the time to the target).
   - The online rule gains +11.0 points over PADC's rule, decoded (+14 over PF). The
     decomposition: sizing +5, stopping +4, timing +3, admission +2.
-  - The Lagrangian index brings the most users to 30 dB with fresh reports: +11.1 points over
-    PADC simulated, +11.5-12.3 decoded (CLIC +7.7). It is fragile under CQI errors (+1.6) and
-    stale reports (+6.1), where plan_adv is robust (+8.3, +9.7); with lost slots and tight
-    frames the Whittle index leads. A table of which policy when (C7).
-  - The share has a price for the users who miss: the Lagrangian index's LPIPS is 0.011 worse
-    than PADC's; online gains +8.3 points with better MS-SSIM and the same LPIPS.
-  - Gap to the bound at scale (Fig.: per-user gap vs K, true vs calibrated curves). Given the
-    curves it plans with, the Lagrangian index is 0.84 points from the bound at K 8 and within
-    ±0.3 from K 16 to 128, inside the bound's own discretisation error (0.15-0.17). Deciding on
-    the calibrated curves adds ~1.6 points per user at every K (0.75 at K 8): the cost of the
-    abstraction's calibration error at a hard threshold. Margins of 0.25 / 0.5 dB make it worse;
-    the tie rule, the price solver, re-solving and finer grids change nothing. The decodes show
-    the same effect against the codec (the Lagrangian index's share decodes 1.3 points below its
-    prediction, PADC's 0.3).
+  - The calibration-aware Lagrangian index brings the most users to 30 dB with fresh reports:
+    +12.7 points over PADC simulated (the hard index +11.1), +14.8 decoded (Kodak; CLIC +8.1).
+    Under CQI errors (+6.1) and stale reports (+7.1) the planner plan_adv stays best (+8.3,
+    +9.7); with lost slots and tight frames the Whittle index leads. A table of which policy
+    when (C7).
+  - The share has a price for the users who miss: the calibration-aware index's mean PSNR is
+    0.25 dB below the hard index's and its LPIPS 0.013 worse; online gains +8-9 points with
+    better MS-SSIM and the same LPIPS as PADC.
+  - Gap to the bound at scale (Fig.: per-user gap vs K; hard on the true curves, hard on the
+    calibrated curves, calibration-aware on the calibrated curves). The hard index on the
+    calibrated curves loses ~1.6 points per user at every K (0.75 at K 8); given the true
+    curves it is 0.84 points from the bound at K 8 and within ±0.3 from K 16 to 128, inside
+    the bound's own discretisation error (0.15-0.17). The calibration-aware index on the
+    calibrated curves lands on the true-curves values (0.84; −0.10, −0.30, +0.01, −0.19):
+    99-100% of the cost recovered, for any assumed spread from 0.03 to 0.2 dB. Ruled out on
+    the way: margins (worse), the tie rule, the price solver, re-solving, finer grids.
+  - Decoded, the calibration-aware schedules land exactly on their prediction (80.4% decoded
+    and predicted, 0.0% of users missed, against 1.2% for the hard index): the hedge also
+    covers the codec's own error, which the measured spread does not include.
   - Latency at equal quality: the Lagrangian index needs 12.7% / 19.9% fewer slots than PF at
     T 16 / 24; online 39% fewer than PADC; at T 24 online needs a third more slots than the
     Lagrangian index for its share at 30 dB.
@@ -271,9 +285,9 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 - The system verdict: under the CSI real systems have, scheduled JSCC is ahead of digital with
   link adaptation and HARQ.
 - **Limitations.**
-  - At a hard target the abstraction's calibration error costs ~1.6 points per user; a
-    calibration-aware reward (the success probability under the calibration error) is the
-    natural fix (being measured: COMMANDS 24).
+  - At a hard target the calibration-aware index buys the share with the quality of the users
+    who miss (−0.25 dB mean PSNR, +0.013 LPIPS against the hard index); where that matters,
+    online is the balanced target policy.
   - The programs model outdated reports but take Gaussian CQI errors as exact; under such
     errors the closed-form planner (plan_adv) is the robust target policy.
   - Per-frame admission ignores long-run fairness (per-user debts are the fix).
@@ -286,7 +300,7 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 
 ---
 
-## How the assumptions came out (COMMANDS 21-23)
+## How the assumptions came out (COMMANDS 21-24)
 
 | assumed in the outline | run | if it comes out otherwise |
 |---|---|---|
@@ -297,3 +311,4 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 | ~~The advantage index is at or above the PI index~~ | 22 | confirmed, by ~1 dB |
 | ~~The Lagrangian index holds decoded~~ | 21 | confirmed: it is the paper's scheduler for the mean and for the target with fresh reports |
 | ~~JSCC's lead over digital with the single decoder is ~0.2 dB below the per-length decoders'~~ | 23.2 | confirmed: 0.17-0.21 dB and 1.4-2.5 points below; the verdict is unchanged |
+| ~~A calibration-aware reward recovers the curve errors' cost~~ | 24 | confirmed: 99-100% at every K, insensitive to the assumed spread; decoded +1.7 points over the hard index and 0.0% missed; the target result is now near-optimal |
