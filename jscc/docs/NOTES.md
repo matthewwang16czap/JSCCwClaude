@@ -762,7 +762,16 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
    error along the PSNR; the mean and 30 dB scaling figures merged (gap per user only); and the
    calibration-aware index became the proposed target scheduler, the hard-target index an
    ablation (fig05, Table II). COMMANDS 26 ran it with lost slots, at T 16, on CLIC and in the
-   latency budget (section 6g); the figures draw from those runs.
+   latency budget (section 6g); the figures draw from those runs. Second review (figures 7-11,
+   2026-10-27): figures show contributions, not which of our schedulers wins. The variants on
+   the 30 dB gap became Table V (appendix); the four bar figures of every policy (main frames,
+   decoded) became Table III (the proposed scheduler over the baselines under each condition,
+   simulated and decoded), fig08 (decoded: the share of users at or above each PSNR, baseline
+   against the proposed scheduler) and Table IV (appendix: every scheduler, which policy when);
+   the latency figures show the baseline and the proposed scheduler only, the time to the target
+   as fig12(c). The gaps in the old decoded bars were runs that decoded different policy sets
+   (r = 0.8: PADC, plan_adv and the two Lagrangian indices; CLIC: no Whittle index) and 0.0%
+   bars of zero height. Each run of the script now deletes the outputs of the previous one.
 
 ## 8. Experiment index
 
@@ -785,5 +794,5 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
 | Before writing | 21, 22 | 10-23 to 10-25 | the Lagrangian index best for the mean everywhere and at 30 dB with fresh reports; the PI index loses to PF; CLIC, MS-SSIM and LPIPS hold; the 30 dB gap survives the tie rule, prices, LP update, grids |
 | The 30 dB gap; C5 with one decoder | 23 | 10-25 | the gap is the curve errors' cost (true curves meet the bound), margins worse; the single decoder leads digital by +1.1 / +1.5 dB at 2 dB CQI error / r 0.8 |
 | Calibration-aware programs | 24 | 10-26 | 99-100% of the curve errors' cost recovered at every K, any assumed sigma 0.03-0.2 dB; decoded +1.7 points, 0.0% missed |
-| Figures | 25 | 10-26 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation |
+| Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
 | Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |

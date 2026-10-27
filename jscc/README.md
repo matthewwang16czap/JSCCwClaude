@@ -206,10 +206,11 @@ supply`, `--kink-grad`; the programs' grids: `--ny`, `--ng`). `mixed_snr.py --de
 `replay_report.py --metric msssim` pairs policies on them.
 
 `tools/paper_figs.py --results results --out figures` draws the paper's result figures and
-writes its two LaTeX tables from those files (COMMANDS 25-26; PDF for the paper, PNG to look at;
-anything whose input is missing is skipped with a note), and `--self-test` draws them from
-synthetic inputs in the tools' formats. The list, with each one's claim and inputs:
-`docs/FIGURES.md`.
+writes its LaTeX tables from those files (COMMANDS 25-28; PDF for the paper, PNG to look at;
+anything whose input is missing is skipped with a note). Each run first deletes the figures and
+tables an earlier run left in the folder and lists what it drew in `figures/INDEX.txt`;
+`--self-test` draws them from synthetic inputs in the tools' formats (into `figures_selftest/`).
+The list, with each one's claim and inputs: `docs/FIGURES.md`.
 
 Rate: `--rate-sampling uniform` (continuous CBR in [1/48, 1/8]; prefix default), `grid`
 (the five predefined CBRs; cascade default) or `sandwich` (grid, always the smallest and
