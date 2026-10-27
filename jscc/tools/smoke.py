@@ -1839,15 +1839,41 @@ def check_figures():
         ok(np.allclose(m, [mine[0], *mine[1]], atol=6e-4),
            f"figures: decoded pairing = replay_report.py's ({mine[0]:+.3f} dB [{mine[1][0]:+.3f}, "
            f"{mine[1][1]:+.3f}])")
+        st.decoded_file(os.path.join(tmp, "s22_dec_mean.json"), {"pf": 0.0, "lagrange": 0.5},
+                        rng, frames=20)
+        st.decoded_file(os.path.join(tmp, "s24_dec_auto.json"),
+                        {"padc": 0.0, "lagrange": 0.5, "lagrange_soft": 0.6}, rng, frames=20,
+                        target=30.0, level=30.4, spread=1.6)
+        _, text = pf.table03(pf.Inputs(tmp))
+        rows = {ln[:20].strip(): ln for ln in text.splitlines()[2:]}
+        with open(os.path.join(tmp, "s24_dec_auto.json")) as f:
+            soft = pf.paired(json.load(f), "padc", target=30.0, scale=100.0)["lagrange"]
+        kodak = rows.get("Kodak, fresh reports", "")
+        ok(set(rows) == {"Kodak, fresh reports", "reports r = 0.8"}
+           and f"+0.52 [{lo:.2f}, {hi:.2f}]" in kodak
+           and f"{soft[0]:+.1f} [{soft[1][0]:.1f}, {soft[1][1]:.1f}]" in kodak
+           and rows["reports r = 0.8"].count(" -") == 5,
+           "figures: table03 takes the proposed index from each run (simulated, decoded; the "
+           "calibration-aware one at the target) and leaves the rest empty")
+        out = os.path.join(tmp, "out")
+        os.makedirs(out)
+        for fn in ("fig07_target_variants.png", "fig08_users.pdf", "table03_main.tex", "notes.txt",
+                   "INDEX.txt"):
+            open(os.path.join(out, fn), "w").close()
+        some = pf.clear(out, {"fig08_users"})
+        rest = pf.clear(out)
+        ok(some == ["fig08_users.pdf"] and rest == ["fig07_target_variants.png", "table03_main.tex"]
+           and sorted(os.listdir(out)) == ["INDEX.txt", "notes.txt"],
+           "figures: a run deletes only its own earlier outputs (old names too; --only: its own)")
         if importlib.util.find_spec("matplotlib") is None:
             print("    --  figures: matplotlib not installed; drawing not checked")
             return
         plt = pf.setup()
         fig = pf.fig08(pf.Inputs(tmp), plt)
-        out = os.path.join(tmp, "fig08.pdf")
-        fig.savefig(out, bbox_inches="tight")
+        pdf = os.path.join(tmp, "fig08.pdf")
+        fig.savefig(pdf, bbox_inches="tight")
         plt.close(fig)
-        ok(os.path.getsize(out) > 1000, "figures: a figure is drawn and saved (PDF)")
+        ok(os.path.getsize(pdf) > 1000, "figures: a figure is drawn and saved (PDF)")
 
 
 def main():

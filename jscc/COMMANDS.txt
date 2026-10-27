@@ -1,15 +1,16 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-26. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-27. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 26 only (CPU, no GPU): redraw the revised figures and tables now (~1 min),
-and four background runs (~1.5-2 h) that put the calibration-aware index, now the proposed
-target scheduler, into the three conditions it had not been run in and into the latency budget.
-Sections 0-25 are done (docs/NOTES.md 6d-6f; the figures: docs/FIGURES.md).
+WHAT TO RUN: section 28 only (CPU, ~1 min, no GPU): pull and redraw the figures and tables
+(figures only for the contributions; the comparison of our schedulers and the variants on the
+30 dB gap as appendix tables; each run now deletes the previous run's figures first). Sections
+0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md); after it, the next figures
+to review are fig12-fig16.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -55,9 +56,12 @@ Sections 0-25 are done (docs/NOTES.md 6d-6f; the figures: docs/FIGURES.md).
      cost they recover
   25 the paper's figures (tools/paper_figs.py, done 2026-10-26 (first review: figures 1-5)
      docs/FIGURES.md)
-  26 the revised figures and tables; the       TO RUN NOW
+  26 the revised figures and tables; the       done (docs/NOTES.md 6g)
      calibration-aware index with lost slots,
      at T 16, on CLIC, and its latency budget
+  27 redraw (fig02, fig12)                     done 2026-10-27 (second review: figures 7-11)
+  28 redraw: figures for the contributions,    TO RUN NOW
+     the policy comparison as tables
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2869,7 +2873,7 @@ ls figures/
 cat results/s25_figs.txt
 
 ================================================================================
- 26. TO RUN NOW -- the revised figures and tables; the calibration-aware index (the proposed
+ 26. DONE -- the revised figures and tables; the calibration-aware index (the proposed
      target scheduler) in every condition (CPU: ~1 min now, then four background chains of
      ~1.5-2 h; no GPU)
 ================================================================================
@@ -2940,3 +2944,54 @@ cat results/s26_tgt_lost.txt results/s26_tgt_t16.txt results/s26_tgt_clic.txt re
 # part of fig05). 26.2 decides whether the calibration-aware index is the best target policy
 # with lost slots, at T = 16 and on CLIC as it is with fresh reports (C7: the planner stays the
 # choice under CQI errors and stale reports, where the errors are dB, not hundredths).
+
+================================================================================
+ 27. DONE -- redraw the figures (CPU, ~1 min; no GPU)
+================================================================================
+# Why: section 26 is recorded (docs/NOTES.md 6g: the calibration-aware index is best or tied
+# with exact reports in every condition; +2.1 / +2.3 / +0.7 points over the hard index with lost
+# slots / T 16 / CLIC; 24% fewer slots than online at T 16). Two drawing fixes: fig02 came out
+# 7.36 in wide (its panel (b) title was too long; (b) is now one line: the cost of piecewise
+# training against SNR at CBR 1/8), and fig12(b) now shows an arrow when PADC never reaches the
+# index's share within the frame lengths run. fig09 and fig12 draw from the section 26 runs.
+
+# 27.1 -- pull and redraw (send back what it prints; then the next five figures: fig07-fig11)
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s27_figs.txt
+
+================================================================================
+ 28. TO RUN NOW -- redraw: figures for the contributions, the policy comparison as tables
+     (CPU, ~1 min; no GPU)
+================================================================================
+# Why: the second review (figures 7-11). A figure now shows a contribution, not which of our
+# schedulers wins; the proposed scheduler is compared with the baseline it replaces (PF for
+# mean PSNR, PADC for a target), and the rest of the comparison is a table:
+#   fig07 (the variants tried on the 30 dB gap) -> table05_variants (appendix)
+#   fig08-fig11 (bars of every policy)          -> table03_main (Table III: the proposed
+#                                                  scheduler over PF / PADC under each
+#                                                  condition, simulated and decoded)
+#                                                  fig08_users (decoded: the share of users at
+#                                                  or above each PSNR, baseline vs proposed)
+#                                                  table04_schedulers (appendix: every scheduler
+#                                                  under every condition, which policy when)
+#   fig12 + fig13 (latency)                     -> fig12_latency: baseline vs proposed only, the
+#                                                  time to the target within a frame as (c)
+# The old fig10 had no missing data: the decoded runs decoded different policy sets (r = 0.8:
+# PADC, plan_adv and the two Lagrangian indices; CLIC: no Whittle index), so the bars left
+# holes, and a 0.0% bar has no height. tools/paper_figs.py now deletes the fig*/table* files of
+# the previous run before drawing (only those; anything else in figures/ stays), so figures/
+# holds exactly this run's outputs, listed in figures/INDEX.txt with the time and the commit.
+
+# 28.1 -- pull and redraw (send back what it prints: the new tables are printed as text)
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s28_figs.txt
+ls figures/
+
+# Reading: the new outputs are fig08_users and fig12_latency, and table03_main,
+# table04_schedulers and table05_variants (printed in results/s28_figs.txt; LaTeX in
+# figures/table0*.tex). fig07, fig09-fig11 and fig13 no longer exist (docs/FIGURES.md lists
+# where each went). After these, the next figures to review are fig12-fig16.

@@ -214,8 +214,10 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
   - Main frame: K 8, T 24, 2000 simulated frames.
   - Decoded replays: the codec itself decodes 60 frames of every policy's schedules.
   - Every comparison is paired by frame, with 95% bootstrap confidence intervals.
-  - Figures: `tools/paper_figs.py` (COMMANDS 25) draws them all from results/; the list, with
-    each figure's claim and inputs, is in docs/FIGURES.md (fig02 ... fig16, table01-02 below).
+  - Figures: `tools/paper_figs.py` (COMMANDS 25-28) draws them all from results/; the list,
+    with each figure's claim and inputs, is in docs/FIGURES.md (fig02 ... fig16, table01-05
+    below). Each figure shows a contribution; how our schedulers compare with each other is
+    one appendix table (Table IV), not figures.
 - **A. Link abstraction accuracy** (Table I = table01: MAE per mapping and code; fig02: the two
   trainings compared, how much each phase's slot matters and what piecewise training costs at
   constant SNR; fig03: the model's error on every decoded schedule).
@@ -225,8 +227,10 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
     index's included.
   - CLIC: MMSE 0.083 dB vs noise 0.135, EESM 0.16, MIESM 0.44; the constant-SNR code again
     obeys no rule; decoded histories within 0.076-0.087 dB.
-- **B. Mean PSNR: policies against the bound** (fig04a: gap per user vs K, B = K/8; fig08: the
-  main frames under each impairment; fig11: decoded, with MS-SSIM and LPIPS).
+- **B. Mean PSNR: near the bound, and over PF** (fig04a: gap per user vs K, B = K/8; Table III
+  = table03: the proposed scheduler over PF under each condition, simulated and decoded, with
+  MS-SSIM and LPIPS; fig08a: what it does to the users, decoded; Table IV (appendix) =
+  table04: the other schedulers).
   - The Lagrangian index goes 0.21 → 0.005 dB per user from K 8 to 128; total gap 1.66 → 0.64 dB.
   - Whittle 0.27 → 0.016. The closed form plateaus at 0.15; PF sits at 0.52.
   - Main frame (500 frames): the Lagrangian index is the best policy in every setting, +0.52
@@ -237,17 +241,21 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
     users: the ratio form fails on a saturating quality, the difference form is the right one.
   - MS-SSIM and LPIPS move with PSNR (closed form vs PF: +0.006 MS-SSIM, -0.012 LPIPS).
   - At K 8 the Lagrangian index is within 0.21 dB of the bound, the closed form within 0.27.
-- **C. Quality target and latency** (fig04b: gap per user vs K; fig09: share at 30 dB under
-  each impairment; fig10: decoded; fig12: the latency budget; fig13: the time to the target).
+- **C. Quality target and latency** (fig04b: gap per user vs K; Table III: users at 30 dB over
+  PADC under each condition, simulated and decoded; fig08b: what the index does to the users,
+  decoded: the share over 30 dB and the quality of the users below it; fig12: the latency
+  budget (a, b) and the time to the target within a frame (c); Table IV: which policy when).
   The Whittle and Lagrangian indices here use the calibration-aware reward (IV-C); the
   hard-target versions are the ablation of F.
   - The online rule gains +11.0 points over PADC's rule, decoded (+14 over PF). The
     decomposition: sizing +5, stopping +4, timing +3, admission +2.
-  - The Lagrangian index (calibration-aware) brings the most users to 30 dB with fresh reports:
-    +12.7 points over PADC simulated, +14.8 decoded (Kodak; CLIC +8.1).
-    Under CQI errors (+6.1) and stale reports (+7.1) the planner plan_adv stays best (+8.3,
-    +9.7); with lost slots and tight frames the Whittle index leads. A table of which policy
-    when (C7).
+  - The Lagrangian index (calibration-aware) brings the most users to 30 dB with exact
+    reports: +12.7 points over PADC simulated with fresh reports, +14.8 decoded (Kodak; CLIC
+    +8.1 decoded, +9.5 simulated); with 25% of slots lost and at T 16 it ties the
+    calibration-aware Whittle index (+11.2 / +11.5 vs +11.6), both ~2 points above the
+    planner. Under CQI errors (+6.1) and stale reports (+7.1) the planner plan_adv stays best
+    (+8.3, +9.7). A table of which policy when (C7): the index with exact reports, the
+    planner with CSI errors.
   - The share has a price for the users who miss: the index's mean PSNR is 0.25 dB below the
     hard-target index's and its LPIPS 0.013 worse (F); online gains +8-9 points with better
     MS-SSIM and the same LPIPS as PADC.
@@ -257,9 +265,10 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
   - Decoded, its schedules land exactly on their prediction (80.4% decoded and predicted,
     0.0% of users missed): the hedge also covers the codec's own error, which the measured
     spread does not include.
-  - Latency at equal quality: the Lagrangian index needs 12.7% / 19.9% fewer slots than PF at
-    T 16 / 24; online 39% fewer than PADC; at T 24 online needs a third more slots than the
-    Lagrangian index for its share at 30 dB.
+  - Latency at equal quality: for the mean the Lagrangian index needs 12.7% / 19.9% fewer slots
+    than PF at T 16 / 24. At 30 dB it needs 24% [15, 33] fewer than online at T 16, and at T 24
+    no other policy reaches its share within 32 slots; 70% of users at 30 dB take it 15.8
+    slots, online 20.4, PADC more than 32 (the hard-target index 17.8: F).
 - **D. Imperfect CSI and the digital baseline** (fig14: mean PSNR / share vs σ and vs r).
   - On par with exact CQI (+0.3 dB).
   - With HARQ, the single decoder: +1.1 dB / +10.7 points at σ = 2 dB and +1.5 dB / +13.5
@@ -273,17 +282,18 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
   - +0.28 dB on the same slots; codes learn their scheduler.
   - The lift keeps 65% of itself at r = 0.8 and 8% at 0.3.
 - **F. System choice and ablations** (fig05 and Table II = table02: the calibration-aware
-  reward; fig07: everything else tried on the 30 dB gap; fig16: what a decoder per length or a
-  model per CBR adds, by prefix length).
+  reward; Table V (appendix) = table05: everything else tried on the 30 dB gap; fig16: what a
+  decoder per length or a model per CBR adds, by prefix length).
   - The calibration-aware reward (fig05a): with a hard target on the same calibrated curves the
     Lagrangian index loses ~1.6 points per user at every K (0.75 at K 8); the calibration-aware
     reward lands on what a hard target achieves on the true curves (0.84; −0.10, −0.30, +0.01,
     −0.19): 99-100% of the curve errors' cost recovered, for any assumed spread from 0.03 to
     0.2 dB (fig05b). Main frames: +1.6 points fresh, +4.5 at 2 dB CQI error, +1.0 at r = 0.8
-    over the hard target. Decoded (Table II): +1.7 [0.4, 2.9] points on Kodak, 0.0% of users
-    missed against 1.2%; the price −0.25 dB mean PSNR and +0.013 LPIPS, from the users who
-    miss. Ruled out on the way (fig07): margins (worse), the relaxation's tie rule, the price
-    solver, re-solving, finer grids.
+    over the hard target; +2.1 with 25% of slots lost, +2.3 at T 16, +0.7 on CLIC; 70% of
+    users at 30 dB in 15.8 slots instead of 17.8. Decoded (Table II): +1.7 [0.4, 2.9] points on
+    Kodak, 0.0% of users missed against 1.2%; the price −0.25 dB mean PSNR and +0.013 LPIPS,
+    from the users who miss. Ruled out on the way (Table V): margins (worse), the relaxation's tie
+    rule, the price solver, re-solving, finer grids.
   - Single multi-rate decoder vs per-length decoders: +0.23 dB mean and 2.5-3 points at 30 dB
     (decoded) for per-length decoders, at 6× decoder memory.
   - One model per CBR is 0.17 dB / 3.3 points ahead of the single decoder with known slots, but

@@ -8,14 +8,25 @@ files that COMMANDS sections 13-26 wrote. CPU, seconds; no GPU, no simulation.
 
 Each figure and table lists its input files (FIGS, TABLES below). One whose required input is
 missing is skipped with a note; optional inputs (CLIC, a second variant) only add series or
-groups. Figures are written as figures/<name>.pdf (vector, fonts embedded, for the paper) and
+rows. Figures are written as figures/<name>.pdf (vector, fonts embedded, for the paper) and
 figures/<name>.png (a preview), one IEEE column (3.5 in) or two (7.16 in) wide; tables as
-figures/<name>.tex (LaTeX, \\hline rules) and printed as text.
+figures/<name>.tex (LaTeX, \\hline rules) and printed as text. Every run first deletes the
+fig*/table* files an earlier run left in --out (with --only, those of the names it redraws), so
+what is there is what this run drew; figures/INDEX.txt lists it.
+
+What the figures are for: each one shows a contribution (the abstraction, the bound and how
+close the index gets to it, the calibration-aware reward, latency, JSCC against digital, the
+scheduler's channel, the decoders). The proposed scheduler is compared with the baselines it
+replaces (PF for mean PSNR, PADC for a target): table03 holds the numbers, fig08 what it does
+to the users. How the schedulers built on the abstraction compare with each other is a fact,
+not a contribution: one appendix table (table04), as are the variants tried on the 30 dB gap
+(table05).
 
 The proposed scheduler is the Lagrangian index; for a quality target its programs use the
 calibration-aware reward (schedule_sim.py / rmab_scale.py lagrange_soft, whittle_soft). The
-target figures show the indices in that form; the hard-target versions appear in the ablation
-(fig05, table02), and elsewhere only where a run had no calibration-aware version (labelled).
+target figures and tables show the indices in that form; the hard-target versions appear in the
+ablation (fig05, table02), and elsewhere only where a run had no calibration-aware version
+(labelled).
 
 The same encoding in every figure (colours checked for colour-vision deficiency on white;
 every series also has its own marker and line style, so the figures read in grayscale):
@@ -79,8 +90,36 @@ ALT = ("jscc_hd", "gap3", "code_hd", "lagrange_hard", "whittle_hard")  # dashed,
 PLANNER = {"plan_adv": "planner", "replan_adv": "planner"}
 TARGET = dict(PLANNER, lagrange_soft="lagrange", whittle_soft="whittle",   # a target run's
               lagrange="lagrange_hard", whittle="whittle_hard")            # policies -> entities
-MEAN_KEYS = ["slope_adv", "pi", "whittle", "lagrange"]
-TGT_KEYS = ["online", "planner", "whittle", "whittle_hard", "lagrange", "lagrange_hard"]
+
+PROPOSED = "Lagrangian index (proposed)"           # the label where only it and a baseline show
+
+
+def _cond(name, tex, short, short_tex, mean, tgt, want, dec_mean=None, dec_tgt=None, dec=None):
+    return dict(name=name, tex=tex, short=short, short_tex=short_tex, mean=mean, tgt=tgt,
+                want=want, dec_mean=dec_mean, dec_tgt=dec_tgt, dec=dec)
+
+
+# The main frames (K 8, T 24 unless the label says otherwise): the schedule_sim.py outputs of
+# the mean and the target runs (newer runs first), the settings that pick the run out of its
+# file, and the decoded replays of the same condition (dec: their short label).
+CONDITIONS = (
+    _cond("Kodak, fresh reports", "Kodak, fresh reports", "fresh", "fresh",
+          ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 0.0, "corr": 1.0},
+          "s22_dec_mean.json", "s24_dec_auto.json", "Kodak"),
+    _cond("CQI error 2 dB", r"CQI error 2~dB", "CQI 2 dB", r"CQI 2~dB",
+          ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 2.0}),
+    _cond("reports r = 0.8", r"reports $r = 0.8$", "r = 0.8", r"$r = 0.8$",
+          ("s22_main_mean.txt",), ("s24_main_soft_r80.txt",), {"corr": 0.8},
+          "s22_dec_r80_mean.json", "s24_dec_r80.json", "r = 0.8"),
+    _cond("25% of slots lost", r"25\% of slots lost", "25% lost", r"25\% lost",
+          ("s21_lag_mean_more.txt",), ("s26_tgt_lost.txt", "s21_lag_tgt_more.txt"),
+          {"preempt": 0.25}),
+    _cond("T = 16 slots", r"$T = 16$ slots", "T = 16", r"$T = 16$",
+          ("s21_lag_t16.txt",), ("s26_tgt_t16.txt", "s21_lag_t16.txt"), {"slots": 16}),
+    _cond("CLIC, fresh reports", "CLIC, fresh reports", "CLIC", "CLIC",
+          ("s22_clic.txt",), ("s26_tgt_clic.txt", "s22_clic.txt"), {"cqi_error": 0.0, "corr": 1.0},
+          "s22_clic_dec_mean.json", "s24_dec_clic.json", "CLIC"),
+)
 
 
 def prefer(d):
@@ -167,6 +206,14 @@ def cbr_axis(ax, label="prefix length: phases (CBR)"):
     ax.set_xticks(range(1, 7))
     ax.set_xticklabels([f"{n}\n{c}" for n, c in zip(range(1, 7), CBRS)])
     ax.set_xlabel(label)
+
+
+def baselines_first(fig, axes):
+    """A one-row legend: the baselines, then the proposed scheduler (only the series drawn)."""
+    drawn = {ln.get_label() for ax in np.ravel(axes) for ln in ax.get_lines()}
+    order = [x for x in (ENT["pf"][0], ENT["padc"][0], PROPOSED, ENT["lagrange_hard"][0])
+             if x in drawn]
+    fig_legend(fig, axes, len(order), rows=[tuple(order)])
 
 
 def fig_legend(fig, axes, ncol, extra=(), rows=None):
@@ -501,29 +548,6 @@ def _f(v):
 
 
 # --------------------------------------------------------------------------- drawing aids -----
-def bars(ax, groups, keys, ylabel):
-    """Grouped bars with 95% intervals: groups = [(label, {entity: (v, (lo, hi))})]."""
-    present = [k for k in keys if any(k in g for _, g in groups)]
-    n = max(len(present), 1)
-    w = min(0.82 / n, 0.2)
-    for i, k in enumerate(present):
-        xs, vs, el, eh = [], [], [], []
-        for gi, (_, g) in enumerate(groups):
-            if k in g:
-                v, (lo, hi) = g[k]
-                xs.append(gi + (i - (n - 1) / 2) * w)
-                vs.append(v)
-                el.append(max(v - lo, 0.0))
-                eh.append(max(hi - v, 0.0))
-        ax.bar(xs, vs, width=w * 0.9, zorder=2, **bar_style(k))
-        ax.errorbar(xs, vs, yerr=[el, eh], ls="none", ecolor=INK2, elinewidth=0.7, zorder=3)
-    ax.set_xticks(range(len(groups)))
-    ax.set_xticklabels([g[0] for g in groups])
-    ax.tick_params(axis="x", length=0)
-    zero(ax)
-    ax.set_ylabel(ylabel)
-
-
 def gap_line(ax, rows, Ks, p, sc, kw, log_floor=None):
     """One policy's gap to the bound against K with its 95% interval (p: the rows' name). On a
     log axis (log_floor: its bottom) an interval reaching 0 runs off the bottom."""
@@ -548,10 +572,10 @@ def _k(p):
 
 # ------------------------------------------------------------------------------ figures -------
 def fig02(I, plt):
-    """The two trainings compared (C1, C12): (a) how much each phase's slot moves the PSNR (its
-    SNR from the lowest to the highest grid value, the other phases at the base SNR; the
-    decoder weighs its phases, which is why the abstraction weights slots and why the
-    scheduler protects the first ones); (b) what piecewise training costs at constant SNR."""
+    """The two trainings compared (C1, C12), at CBR 1/8: (a) how much each phase's slot moves
+    the PSNR (its SNR from the lowest to the highest grid value, the other phases at the base
+    SNR): the decoder weighs its phases, which is why the abstraction weights slots and why the
+    scheduler protects the first ones; (b) what piecewise training costs at constant SNR."""
     a = I.json("p2_full_snrc4.json")
     b = I.json("p2_full_s1.json", required=False)
     codes = [("code", a)] + ([("code_s1", b)] if b is not None else [])
@@ -568,27 +592,21 @@ def fig02(I, plt):
         a1.bar(xs, swing, width=w * 0.92, zorder=2, **bar_style(k))
     a1.set_xticks(range(1, len(a["summary"][cbr]["oat"]) + 1))
     a1.tick_params(axis="x", length=0)
-    a1.set_xlabel(f"phase whose slot's SNR is varied (the others at {a['base_snr']:g} dB)")
-    a1.set_ylabel(f"PSNR gain, its SNR {lo:g} to {hi:g} dB (dB)")
-    panel(a1, "a", f"how much each phase's slot matters (CBR {cbr})")
+    a1.set_xlabel(f"phase (the other phases at {a['base_snr']:g} dB)")
+    a1.set_ylabel(f"PSNR gain, its slot {lo:g} to {hi:g} dB (dB)")
+    panel(a1, "a", f"each phase's weight, CBR {cbr}")
     if b is not None:
         a2 = axes[0, 1]
-        ca, cb = constant_curves(a), constant_curves(b)
-        Ls = sorted(set(ca) & set(cb))
-        mean, el, eh = [], [], []
-        for L in Ls:
-            dd = [ca[L][s] - cb[L][s] for s in ca[L] if s in cb[L]]
-            mean.append(float(np.mean(dd)))
-            el.append(mean[-1] - float(np.min(dd)))
-            eh.append(float(np.max(dd)) - mean[-1])
-        a2.bar(Ls, mean, width=0.6, zorder=2, facecolor=GREEN, edgecolor=WHITE, linewidth=0.4,
-               label="_cost")
-        a2.errorbar(Ls, mean, yerr=[el, eh], ls="none", ecolor=INK2, elinewidth=0.7, zorder=3)
+        L = max(set(constant_curves(a)) & set(constant_curves(b)))
+        ca, cb = constant_curves(a)[L], constant_curves(b)[L]
+        snrs = sorted(set(ca) & set(cb))
         zero(a2)
-        cbr_axis(a2)
-        a2.tick_params(axis="x", length=0)
-        a2.set_ylabel("PSNR difference (dB)")
-        panel(a2, "b", f"piecewise- minus constant-SNR-trained, constant SNR {lo:g}-{hi:g} dB")
+        a2.plot(snrs, [ca[x] - cb[x] for x in snrs], color=GREEN, marker="o", ms=4.2, lw=1.2,
+                zorder=3, label="_cost")
+        a2.set_xticks(snrs)
+        a2.set_xlabel("SNR of every slot (dB)")
+        a2.set_ylabel("PSNR, piecewise minus\nconstant-SNR-trained (dB)")
+        panel(a2, "b", f"the cost of piecewise training, CBR {CBRS[L - 1]}")
     fig_legend(fig, axes, 2)
     return fig
 
@@ -759,203 +777,146 @@ def fig05(I, plt):
     return fig
 
 
-VARIANTS = (("hard target, as first run", "s22_gap_ties.json", "lagrange"),
-            ("the relaxation's tie rule", "s22_gap_ties.json", "lagrange_relax"),
-            ("supply-scaled kink prices", "s22_gap_prices.json", "lagrange"),
-            ("LP update every 6 slots", "s22_gap_lpu.json", "lagrange_lpu"),
-            ("finer program grids", "s22_gap_grid.json", "lagrange"),
-            ("margin 0.25 dB", "s23_gap_m25.json", "lagrange"),
-            ("margin 0.5 dB", "s23_gap_m50.json", "lagrange"),
-            ("calibration-aware reward", "s24_soft_auto.json", "lagrange_soft"),
-            ("true curves (oracle)", "s23_gap_truth.json", "lagrange"))
+def user_psnr(spec, policy):
+    """Every user's decoded PSNR under one policy of a decoded replay (an entry per user and
+    frame), scored as tools/replay_report.py scores it, and whether the user got any phase (a
+    user sent nothing scores the model's empty-prefix PSNR)."""
+    from tools.replay_report import score
+    es = [e for e in spec["entries"] if e.get("policy", "?") == policy]
+    return (np.array([score(e) for e in es], dtype=np.float64),
+            np.array([len(e.get("snrs") or []) > 0 for e in es], dtype=bool))
 
 
-def fig07(I, plt):
-    """What closed the 30 dB gap (owed items 9 and 13): every variant of the Lagrangian index
-    tested, its gap to the bound per user at K = 8, 32, 128."""
-    found = []
-    for label, fn, p in VARIANTS:
-        d = I.json(fn, required=False)
-        if d is not None:
-            rows, sc = rmab(d)
-            if any(f"{p}_gap" in r for r in rows.values()):
-                found.append((label, rows, sc, p))
-    if len(found) < 2:
-        raise Missing("s22_gap_ties.json and the other gap runs")
-    allK = sorted({k for _, rows, _, _ in found for k in rows})
-    Ks = [k for k in (8, 32, 128) if k in allK] or allK[:3]
-    fig, ax = plt.subplots(figsize=(COL1, 2.9))
-    zero(ax, horizontal=False)
-    y = np.arange(len(found))[::-1].astype(float)
-    for i, (k, col, mk) in enumerate(zip(Ks, ordinal(len(Ks))[::-1], ("o", "s", "D"))):
-        xs, ys, el, eh = [], [], [], []
-        for yy, (_, rows, sc, p) in zip(y, found):
-            r = rows.get(k, {})
-            if f"{p}_gap" in r:
-                g, (lo, hi) = r[f"{p}_gap"] * sc, r[f"{p}_gap_ci"]
-                xs.append(g)
-                ys.append(yy - (i - (len(Ks) - 1) / 2) * 0.24)              # K = 8 on top
-                el.append(max(g - lo * sc, 0))
-                eh.append(max(hi * sc - g, 0))
-        ax.errorbar(xs, ys, xerr=[el, eh], ls="none", marker=mk, ms=3.8, color=col, mec=col,
-                    elinewidth=0.7, label=f"K = {k}", zorder=3)
-    ax.set_yticks(y)
-    ax.set_yticklabels([f[0] for f in found])
-    ax.tick_params(axis="y", length=0)
-    ax.grid(axis="x")
-    ax.grid(axis="y", visible=False)
-    ax.set_xlabel("gap to the bound per user (points at 30 dB)")
-    fig_legend(fig, [ax], 3)
-    return fig
+def proposed_in(spec, target):
+    """(the replay's name, entity) of the proposed scheduler: the Lagrangian index; for a
+    target its calibration-aware version where the replay has one."""
+    have = {e.get("policy", "?") for e in spec["entries"]}
+    order = ((("lagrange", "lagrange"),) if target is None else
+             (("lagrange_soft", "lagrange"), ("lagrange", "lagrange_hard")))
+    return next(((raw, ent) for raw, ent in order if raw in have), (None, None))
+
+
+def share_curve(ax, v, kw, marks=5):
+    """The share of users whose PSNR is at or above x, against x: a step line with a few
+    markers."""
+    v = np.sort(v)
+    n = len(v)
+    step = max(n // marks, 1)
+    ax.plot(v, 100.0 * (n - np.arange(n)) / n, drawstyle="steps-pre",
+            markevery=slice(step // 2, None, step), **kw)
 
 
 def fig08(I, plt):
-    """Mean PSNR on the main frames, K 8, T 24 (C3, C13): every policy's gain over PF, fresh
-    and under each impairment."""
-    main = parse_sim(I.path("s22_main_mean.txt"))
-    groups = [("fresh reports", sim_rows(main, "mean", {"cqi_error": 0.0, "corr": 1.0})),
-              ("CQI error 2 dB", sim_rows(main, "mean", {"cqi_error": 2.0})),
-              ("reports r = 0.8", sim_rows(main, "mean", {"corr": 0.8})),
-              ("25% of slots lost", first_rows(I, ("s21_lag_mean_more.txt",), "mean",
-                                               {"preempt": 0.25})),
-              ("T = 16 slots", first_rows(I, ("s21_lag_t16.txt",), "mean", {"slots": 16})),
-              ("CLIC images", first_rows(I, ("s22_clic.txt",), "mean",
-                                         {"cqi_error": 0.0, "corr": 1.0}))]
-    groups = [(n, g) for n, g in groups if g]
-    fig, ax = plt.subplots(figsize=(COL2, 2.3))
-    bars(ax, groups, MEAN_KEYS, "mean PSNR gain over PF (dB)")
-    fig_legend(fig, [ax], 4)
-    return fig
-
-
-def fig09(I, plt):
-    """A 30 dB target on the main frames (C4, C7): the share of users at 30 dB, every policy's
-    gain over PADC, fresh and under each impairment (the indices calibration-aware)."""
-    soft = parse_sim(I.path("s24_main_soft.txt"))
-    tv = "vs_padc"
-    groups = [("fresh reports", sim_rows(soft, "target", {"cqi_error": 0.0, "corr": 1.0}, tv)),
-              ("CQI error 2 dB", sim_rows(soft, "target", {"cqi_error": 2.0}, tv)),
-              ("reports r = 0.8", first_rows(I, ("s24_main_soft_r80.txt",), "target",
-                                             {"corr": 0.8}, tv)),
-              ("25% of slots lost", first_rows(I, ("s26_tgt_lost.txt", "s21_lag_tgt_more.txt"),
-                                               "target", {"preempt": 0.25}, tv)),
-              ("T = 16 slots", first_rows(I, ("s26_tgt_t16.txt", "s21_lag_t16.txt"), "target",
-                                          {"slots": 16}, tv)),
-              ("CLIC images", first_rows(I, ("s26_tgt_clic.txt", "s22_clic.txt"), "target",
-                                         {"cqi_error": 0.0, "corr": 1.0}, tv))]
-    groups = [(n, {k: v for k, v in g.items() if k != "padc"}) for n, g in groups if g]
-    fig, ax = plt.subplots(figsize=(COL2, 2.4))
-    bars(ax, groups, TGT_KEYS, "users at 30 dB: gain over PADC (points)")
-    fig_legend(fig, [ax], 6)
-    return fig
-
-
-def fig10(I, plt):
-    """A 30 dB target, decoded by the codec (C4, C13): (a) the gain in users at 30 dB over
-    PADC, paired by frame; (b) the users the model put at 30 dB that decoded below it. 60
-    frames of each policy's schedules; the indices calibration-aware."""
-    gains, missed = [], []
-    for n, fn in (("Kodak", "s24_dec_auto.json"), ("Kodak, r = 0.8", "s24_dec_r80.json"),
-                  ("CLIC", "s24_dec_clic.json")):
+    """What the proposed scheduler does to the users, decoded by the codec (C3, C4): the share
+    of users whose decoded PSNR is at or above x, under the baseline it replaces and under the
+    Lagrangian index, (a) scheduling for mean PSNR (against PF), (b) for a 30 dB target
+    (against PADC; the index calibration-aware). Kodak, K 8, T 24, fresh reports; 60 frames of
+    8 users of each policy's schedules. The numbers per condition are in table03."""
+    todo = []
+    for fn, base, target in (("s22_dec_mean.json", "pf", None),
+                             ("s24_dec_auto.json", "padc", 30.0)):
         d = I.json(fn, required=False)
-        if d is not None:
-            tgt = d.get("target") or 30.0
-            gains.append((n, prefer(paired(d, "padc", target=tgt, scale=100.0))))
-            missed.append((n, prefer(missed_share(d, tgt))))
-    if not any(g for _, g in gains):
-        raise Missing("s24_dec_auto.json")
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL2, 2.5))
-    bars(a1, [g for g in gains if g[1]], TGT_KEYS, "gain over PADC (points)")
-    panel(a1, "a", "users at 30 dB, decoded")
-    bars(a2, missed, ["padc"] + TGT_KEYS, "share of users (%)")
-    a2.set_ylim(bottom=0)
-    panel(a2, "b", "predicted at 30 dB, decoded below it")
-    fig_legend(fig, [a2, a1], 5)
-    return fig
-
-
-def fig11(I, plt):
-    """Mean PSNR, decoded by the codec (C3); perceptual metrics follow PSNR: every policy's
-    gain over PF in PSNR, MS-SSIM and LPIPS, paired by frame."""
-    data = []
-    for n, fn in (("Kodak", "s22_dec_mean.json"), ("Kodak, r = 0.8", "s22_dec_r80_mean.json"),
-                  ("CLIC", "s22_clic_dec_mean.json")):
-        d = I.json(fn, required=False)
-        if d is not None:
-            data.append((n, d))
-    if not data:
+        if d is None:
+            continue
+        tgt = None if target is None else float(d.get("target") or target)
+        raw, ent = proposed_in(d, tgt)
+        if raw is not None and any(e.get("policy") == base for e in d["entries"]):
+            todo.append((d, base, tgt, raw, ent))
+    if not todo:
         raise Missing("s22_dec_mean.json")
-    fig, axes = plt.subplots(1, 3, figsize=(COL2, 2.3))
-    for ax, (m, title), letter in zip(axes, (("psnr", "PSNR (dB)"), ("msssim", "MS-SSIM"),
-                                             ("lpips", "LPIPS (lower is better)")), "abc"):
-        groups = [(n, paired(d, "pf", metric=m)) for n, d in data]
-        groups = [g for g in groups if g[1]]
-        if groups:
-            bars(ax, groups, MEAN_KEYS, "")
-        panel(ax, letter, title)
-    axes[0].set_ylabel("decoded, minus PF")
-    fig_legend(fig, axes, 4)
+    fig, axes = plt.subplots(1, len(todo), figsize=(COL2 if len(todo) > 1 else COL1, 2.5),
+                             squeeze=False)
+    for ax, (d, base, tgt, raw, ent), letter in zip(axes[0], todo, "ab"):
+        (vb, sb), (vp, sp) = user_psnr(d, base), user_psnr(d, raw)
+        share_curve(ax, vb, style(base))
+        share_curve(ax, vp, style(ent, PROPOSED if ent == "lagrange" else None))
+        got = np.concatenate([vb[sb], vp[sp]])         # users sent nothing sit left of the axis
+        ax.set_xlim(np.floor(np.percentile(got, 1)), np.ceil(np.percentile(got, 99.5)))
+        ax.set_ylim(0, 103)
+        none = [100.0 * float(np.mean(~s)) for s in (sp, sb)]
+        sent = (f"sent nothing: {none[0]:.1f}% ({ENT[base][0]}: {none[1]:.1f}%)"
+                if max(none) > 0 else None)
+        who = f"{ENT[ent][0]} $-$ {ENT[base][0]}:"
+        if tgt is None:
+            g = paired(d, base).get(ent)
+            note = [who, f"mean {g[0]:+.2f} dB [{g[1][0]:.2f}, {g[1][1]:.2f}]" if g else None,
+                    f"5th percentile {np.percentile(vp, 5) - np.percentile(vb, 5):+.2f} dB", sent]
+            panel(ax, letter, "scheduled for mean PSNR")
+        else:
+            ax.axvline(tgt, color=AXIS, lw=0.8, ls="--", zorder=1)
+            at = sorted(100.0 * float(np.mean(v >= tgt)) for v in (vb, vp))
+            for s, hi in zip(at, (False, True)):      # the upper label right of the line, the
+                ax.text(tgt + 0.15 if hi else tgt - 0.15, s, f"{s:.1f}%",   # lower one left
+                        ha="left" if hi else "right", va="bottom" if hi else "top", color=INK2)
+            g = paired(d, base, target=tgt, scale=100.0).get(ent)
+            below = [float(np.mean(v[v < tgt])) if np.any(v < tgt) else np.nan for v in (vp, vb)]
+            note = [who, f"{g[0]:+.1f} points at {tgt:g} dB [{g[1][0]:.1f}, {g[1][1]:.1f}]"
+                    if g else None, f"users below {tgt:g} dB: mean {below[0]:.1f} dB",
+                    f"({ENT[base][0]}: {below[1]:.1f} dB)", sent]
+            panel(ax, letter, f"scheduled for a {tgt:g} dB target")
+        ax.text(0.03, 0.04, "\n".join(x for x in note if x), transform=ax.transAxes, ha="left",
+                va="bottom", color=INK2)
+        ax.set_xlabel("decoded PSNR (dB)")
+        ax.set_ylabel("users at or above it (%)")
+    baselines_first(fig, axes)
     return fig
 
 
 def fig12(I, plt):
-    """The latency budget (C14): quality against the frame length, K 8; the arrow: how many
-    slots the baseline needs for the Lagrangian index's quality at T 24."""
+    """Latency (C14), the proposed scheduler against the baseline it replaces, K 8: (a) mean
+    PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline
+    needs for the index's quality at T 24 (dashed: more than the longest frame run); (c) users
+    at 30 dB by each slot of a 24-slot frame (the index calibration-aware at the target)."""
     a = I.json("s21_latency_mean.json", required=False)
     b = I.first(("s26_latency_tgt.json", "s21_latency_tgt.json"))
-    if a is None and b is None:
+    p = I.path("s24_main_soft.txt", required=False)
+    c = next((x for x in parse_sim(p) if x["delay"]), None) if p else None
+    todo = [(k, d) for k, d in (("mean", a), ("target", b), ("delay", c)) if d is not None]
+    if not todo:
         raise Missing("s21_latency_mean.json")
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.4), squeeze=False)
-    for ax, d, letter, ylab, keys, sc, ref, names in (
-            (axes[0, 0], a, "a", "mean PSNR (dB)", ("pf", "slope_adv", "whittle", "lagrange"),
-             1.0, "pf", PLANNER),
-            (axes[0, 1], b, "b", "users at 30 dB (%)", ("padc", "online", "whittle",
-                                                        "whittle_hard", "lagrange",
-                                                        "lagrange_hard"), 100.0, "padc", TARGET)):
-        if d is None:
-            ax.set_visible(False)
+    fig, axes = plt.subplots(1, len(todo), figsize=(COL2 if len(todo) > 1 else COL1, 2.4),
+                             squeeze=False)
+
+    def lab(k):
+        return PROPOSED if k == "lagrange" else None
+
+    for ax, (what, d), letter in zip(axes[0], todo, "abc"):
+        if what == "delay":
+            delay = prefer({TARGET.get(q, q): v for q, v in d["delay"].items()})
+            for k in ("padc", "lagrange", "lagrange_hard"):
+                if k in delay:
+                    ax.plot([0] + d["cuts"], [0.0] + delay[k], **style(k, lab(k)))
+            ax.set_xticks([0] + d["cuts"])
+            ax.set_xlim(0, d["cuts"][-1] + 0.5)
+            ax.set_ylim(bottom=0)
+            ax.set_xlabel(f"slot of a {d['set']['slots']}-slot frame")
+            ax.set_ylabel("users at 30 dB so far (%)")
+            panel(ax, letter, "within the frame")
             continue
+        mean = what == "mean"
+        sc, ref = (1.0, "pf") if mean else (100.0, "padc")
+        curves = {(PLANNER if mean else TARGET).get(q, q): v for q, v in d["curves"].items()}
+        curves = curves if mean else prefer(curves)
         Ts = d["slots"]
-        curves = {names.get(p, p): v for p, v in d["curves"].items()}
-        curves = prefer(curves) if names is TARGET else curves
-        for k in keys:
+        for k in (ref, "lagrange", "lagrange_hard"):
             if k in curves:
-                ax.plot(Ts, sc * np.asarray(curves[k], dtype=np.float64), **style(k))
+                ax.plot(Ts, sc * np.asarray(curves[k], dtype=np.float64), **style(k, lab(k)))
         m = d.get("match", {}).get("24")
         r = (m or {}).get("rows", {}).get(ref)
-        if r and not r.get("flag"):
+        if r and r.get("flag") in ("", ">"):
             lv = sc * m["level"]                  # every curve is below it left of T = 24
-            ax.annotate("", xy=(r["needed"], lv), xytext=(24, lv),
+            end = r["needed"] if not r["flag"] else Ts[-1]
+            ax.annotate("", xy=(end, lv), xytext=(24, lv),
                         arrowprops=dict(arrowstyle="->", color=INK2, lw=0.8, shrinkA=0,
-                                        shrinkB=0))
-            ax.text(23.5, lv, f"{ENT[ref][0]} needs +{r['needed'] - 24:.1f} slots",
-                    ha="right", va="bottom", color=INK2)
+                                        shrinkB=0, ls="-" if not r["flag"] else "--"))
+            more = f"+{r['needed'] - 24:.1f}" if not r["flag"] else f"more than +{Ts[-1] - 24}"
+            ax.text(0.97, 0.04, f"{ENT[ref][0]} needs {more} slots\nto match the index at "
+                    "T = 24", transform=ax.transAxes, ha="right", va="bottom", color=INK2)
         ax.set_xticks(Ts)
         ax.set_xlabel("frame length T (slots)")
-        ax.set_ylabel(ylab)
-        panel(ax, letter, "mean PSNR" if letter == "a" else "a 30 dB target")
-    fig_legend(fig, axes, 6)
-    return fig
-
-
-def fig13(I, plt):
-    """Time to the target (C14): the share of all users at 30 dB by each slot of the frame
-    (fresh reports, K 8, T 24; the indices calibration-aware)."""
-    b = next((x for x in parse_sim(I.path("s24_main_soft.txt")) if x["delay"]), None)
-    if b is None:
-        raise Missing("s24_main_soft.txt (its --delay table)")
-    delay = prefer({TARGET.get(p, p): v for p, v in b["delay"].items()})
-    fig, ax = plt.subplots(figsize=(COL1, 2.6))
-    for k in ("padc", "online", "planner", "whittle", "whittle_hard", "lagrange",
-              "lagrange_hard"):
-        if k in delay:
-            ax.plot([0] + b["cuts"], [0.0] + delay[k], **style(k))
-    ax.set_xticks([0] + b["cuts"])
-    ax.set_xlim(0, b["cuts"][-1] + 0.5)
-    ax.set_ylim(bottom=0)
-    ax.set_xlabel(f"slot of the frame (T = {b['set']['slots']})")
-    ax.set_ylabel("users at 30 dB so far (%)")
-    fig_legend(fig, [ax], 2)
+        ax.set_ylabel("mean PSNR (dB)" if mean else "users at 30 dB (%)")
+        panel(ax, letter, "mean PSNR" if mean else "users at 30 dB")
+    baselines_first(fig, axes)
     return fig
 
 
@@ -1180,10 +1141,7 @@ def table02(I):
         return "-" if x is None else f"{x:.3f}"
 
     def g(x, tex=False):
-        if x is None:
-            return "-"
-        v, (lo, hi) = x
-        return (f"${v:+.2f}$ [{lo:.2f}, {hi:.2f}]" if tex else f"{v:+.2f} [{lo:.2f}, {hi:.2f}]")
+        return _cell(x, 2, tex)
 
     tex = ["% tools/paper_figs.py table02: results/s24_dec_*.json", r"\begin{table*}[t]",
            r"\centering",
@@ -1212,6 +1170,233 @@ def table02(I):
     return "\n".join(tex) + "\n", _text_table(head, text_rows)
 
 
+def _cell(x, nd, tex=False, ci=True, mark=""):
+    """'+0.52 [0.48, 0.56]' of (value, (lo, hi)); tex: math mode, the interval in \\scriptsize;
+    '-' ('--' in LaTeX) where there is none. mark: a footnote sign after the value."""
+    if x is None:
+        return "--" if tex else "-"
+    v, (lo, hi) = x
+    if tex:
+        m = rf"^{{{mark}}}" if mark else ""
+        s = f"${v:+.{nd}f}{m}$"
+        return s + (rf" {{\scriptsize $[{lo:.{nd}f}, {hi:.{nd}f}]$}}" if ci else "")
+    return f"{v:+.{nd}f}{'*' if mark else ''}" + (f" [{lo:.{nd}f}, {hi:.{nd}f}]" if ci else "")
+
+
+def _sim_gains(I, c, kind):
+    """{entity: (gain, (lo, hi))} of one condition's simulated main-frame run: mean PSNR over
+    PF (dB), or users at 30 dB over PADC (points; the indices calibration-aware where run)."""
+    if kind == "mean":
+        return first_rows(I, c["mean"], "mean", c["want"]) or {}
+    return first_rows(I, c["tgt"], "target", c["want"], "vs_padc") or {}
+
+
+def _decoded(I, fn, kind, metric="psnr"):
+    """{entity: (gain, (lo, hi))} of a decoded replay, paired by frame: over PF in `metric`
+    (mean), or users at the replay's target over PADC in points; {} without the file."""
+    d = I.json(fn, required=False) if fn else None
+    if d is None:
+        return {}
+    if kind == "mean":
+        return paired(d, "pf", metric=metric)
+    return prefer(paired(d, "padc", target=float(d.get("target") or 30.0), scale=100.0))
+
+
+def _proposed_of(g):
+    """The calibration-aware index's entry of a target result, else the hard one's (flagged)."""
+    if "lagrange" in g:
+        return g["lagrange"], False
+    return g.get("lagrange_hard"), "lagrange_hard" in g
+
+
+def table03(I):
+    """Main results (C3, C4): the proposed scheduler against the baselines it replaces, on the
+    main frames under each condition, simulated and decoded (replaces four bar figures)."""
+    rows = []
+    for c in CONDITIONS:
+        ms = _sim_gains(I, c, "mean").get("lagrange")
+        dm = {m: _decoded(I, c["dec_mean"], "mean", m).get("lagrange")
+              for m in ("psnr", "msssim", "lpips")}
+        ts, ths = _proposed_of(_sim_gains(I, c, "target"))
+        td, thd = _proposed_of(_decoded(I, c["dec_tgt"], "target"))
+        if any(x is not None for x in (ms, ts, td, *dm.values())):
+            rows.append((c, ms, dm, ts, ths, td, thd))
+    if not rows:
+        raise Missing("s22_main_mean.txt")
+    hard = any(r[4] or r[6] for r in rows)
+    tex = ["% tools/paper_figs.py table03: results/s22_main_mean.txt, s24_main_soft*.txt, "
+           "s26_tgt_*.txt, s21_lag_*.txt, s22_clic.txt, s22_*dec_*mean.json, s24_dec_*.json",
+           r"\begin{table*}[t]", r"\centering",
+           r"\caption{The proposed scheduler against the baselines it replaces, on the main "
+           r"frames ($K = 8$ users, $T = 24$ slots unless noted). Mean PSNR: the Lagrangian index "
+           r"minus PF, in PSNR, MS-SSIM and LPIPS (lower is better); 30~dB target: the "
+           r"calibration-aware Lagrangian index minus PADC, in users at 30~dB. Simulated: 500 "
+           r"frames on the transmitter's calibrated curves; decoded: 60 frames of the schedules "
+           r"decoded by the codec. Paired by frame; 95\% bootstrap intervals; --: not run. "
+           r"$r$: the correlation between the reported and the served channel (the transmitter "
+           r"aware of it; the simulated target run stops with a 0.5~dB margin)."
+           + (r" $^\dagger$Hard target: no calibration-aware run." if hard else "") + "}",
+           r"\label{tab:main}", r"\begin{tabular}{lcccccc}", r"\hline",
+           r" & \multicolumn{4}{c}{Mean PSNR: index $-$ PF} & "
+           r"\multicolumn{2}{c}{30~dB target: index $-$ PADC} \\",
+           r"Condition & simulated (dB) & decoded (dB) & MS-SSIM & LPIPS & simulated (points) & "
+           r"decoded (points) \\", r"\hline"]
+    text = []
+    for c, ms, dm, ts, ths, td, thd in rows:
+        dag = r"\dagger"
+        tex.append(" & ".join([c["tex"], _cell(ms, 2, True), _cell(dm["psnr"], 2, True),
+                               _cell(dm["msssim"], 4, True, False),
+                               _cell(dm["lpips"], 3, True, False),
+                               _cell(ts, 1, True, mark=dag if ths else ""),
+                               _cell(td, 1, True, mark=dag if thd else "")]) + r" \\")
+        text.append([c["name"], _cell(ms, 2), _cell(dm["psnr"], 2), _cell(dm["msssim"], 4,
+                     ci=False), _cell(dm["lpips"], 3, ci=False), _cell(ts, 1, mark=ths),
+                     _cell(td, 1, mark=thd)])
+    tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
+    head = ["condition", "mean: sim (dB)", "decoded (dB)", "MS-SSIM", "LPIPS",
+            "30 dB: sim (points)", "decoded (points)"]
+    note = ("the proposed scheduler minus the baseline: mean PSNR (Lagrangian index - PF), 30 dB "
+            "(calibration-aware index - PADC); [95% CI]" + ("; * hard target" if hard else ""))
+    return "\n".join(tex) + "\n", note + "\n" + _text_table(head, text)
+
+
+SCHEDULERS = (("mean", "pi", "PI ratio index"),
+              ("mean", "slope_adv", "closed form (advantage index)"),
+              ("mean", "whittle", "Whittle index"), ("mean", "lagrange", PROPOSED),
+              ("target", "online", "closed form (online rule)"), ("target", "planner", "planner"),
+              ("target", "whittle", "Whittle index"), ("target", "lagrange", PROPOSED))
+
+
+def table04(I):
+    """The schedulers built on the abstraction compared with each other (C7; appendix): each
+    one's gain over the baseline under every condition, simulated and decoded. Which policy
+    wins is a fact about the policies, not a contribution: one table instead of figures."""
+    cols = [("sim", c) for c in CONDITIONS] + [("dec", c) for c in CONDITIONS if c["dec"]]
+    val = {}
+    for src, c in cols:
+        for kind in ("mean", "target"):
+            val[(src, c["name"], kind)] = (
+                _sim_gains(I, c, kind) if src == "sim" else
+                _decoded(I, c["dec_mean"] if kind == "mean" else c["dec_tgt"], kind))
+    cols = [(s, c) for s, c in cols if val[(s, c["name"], "mean")] or val[(s, c["name"], "target")]]
+    rows = [(kind, key, lab) for kind, key, lab in SCHEDULERS
+            if any(key in val[(s, c["name"], kind)] for s, c in cols)]
+    if not rows or not cols:
+        raise Missing("s22_main_mean.txt")
+    nd = {"mean": 2, "target": 1}
+
+    def shown(kind, key, s, c):
+        g = val[(s, c["name"], kind)].get(key)
+        return None if g is None else round(g[0], nd[kind])
+
+    best = {(kind, s, c["name"]): max([v for k2, key, _ in rows if k2 == kind
+                                       for v in [shown(kind, key, s, c)] if v is not None],
+                                      default=None)
+            for kind in ("mean", "target") for s, c in cols}
+    nsim = sum(s == "sim" for s, _ in cols)
+    tex = ["% tools/paper_figs.py table04: the main-frame runs and decoded replays of table03",
+           r"\begin{table*}[t]", r"\centering",
+           r"\caption{The schedulers built on the abstraction, compared: the gain over PF in mean "
+           r"PSNR (dB) and over PADC in users at 30~dB (points), on the main frames ($K = 8$, "
+           r"$T = 24$ unless noted); at the target the indices use the calibration-aware reward. "
+           r"Simulated: 500 frames; decoded: 60 frames decoded by the codec. Bold: the best per "
+           r"column; --: not run.}",
+           r"\label{tab:schedulers}", r"\begin{tabular}{l" + "c" * len(cols) + "}", r"\hline",
+           " & " + " & ".join(x for x in (
+               rf"\multicolumn{{{nsim}}}{{c}}{{Simulated}}" if nsim else "",
+               rf"\multicolumn{{{len(cols) - nsim}}}{{c}}{{Decoded}}" if len(cols) > nsim
+               else "") if x) + r" \\",
+           "Scheduler & " + " & ".join(c["short_tex"] if s == "sim" else
+                                       ("Kodak" if c["dec"] == "Kodak" else c["short_tex"])
+                                       for s, c in cols) + r" \\"]
+    text, head = [], ["scheduler"] + [(c["short"] if s == "sim" else "dec " + c["dec"])
+                                       for s, c in cols]
+    for kind, title, tex_title in (("mean", "mean PSNR over PF (dB)",
+                                    r"Mean PSNR over PF (dB)"),
+                                   ("target", "users at 30 dB over PADC (points)",
+                                    r"Users at 30~dB over PADC (points)")):
+        block = [r for r in rows if r[0] == kind]
+        if not block:
+            continue
+        tex += [r"\hline", rf"\multicolumn{{{len(cols) + 1}}}{{l}}{{\emph{{{tex_title}}}}} \\"]
+        text.append([title] + [""] * len(cols))
+        for _, key, lab in block:
+            cells, tcells = [], []
+            for s, c in cols:
+                v = shown(kind, key, s, c)
+                if v is None:
+                    cells.append("--")
+                    tcells.append("-")
+                    continue
+                top = v == best[(kind, s, c["name"])]
+                cells.append((rf"$\mathbf{{{v:+.{nd[kind]}f}}}$" if top
+                              else f"${v:+.{nd[kind]}f}$"))
+                tcells.append(f"{v:+.{nd[kind]}f}" + ("*" if top else ""))
+            tex.append(lab + " & " + " & ".join(cells) + r" \\")
+            text.append(["  " + lab] + tcells)
+    tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
+    return "\n".join(tex) + "\n", "* the best per column\n" + _text_table(head, text)
+
+
+VARIANTS = (("hard target, as first run", "s22_gap_ties.json", "lagrange"),
+            ("the relaxation's tie rule", "s22_gap_ties.json", "lagrange_relax"),
+            ("supply-scaled kink prices", "s22_gap_prices.json", "lagrange"),
+            ("LP update every 6 slots", "s22_gap_lpu.json", "lagrange_lpu"),
+            ("finer program grids", "s22_gap_grid.json", "lagrange"),
+            ("margin 0.25 dB", "s23_gap_m25.json", "lagrange"),
+            ("margin 0.5 dB", "s23_gap_m50.json", "lagrange"),
+            ("calibration-aware reward (proposed)", "s24_soft_auto.json", "lagrange_soft"),
+            ("hard target, true curves (oracle)", "s23_gap_truth.json", "lagrange"))
+
+
+def table05(I):
+    """What was tried on the 30 dB gap (C13; appendix): the Lagrangian index's gap to the bound
+    per user in every variant, at K = 8, 32, 128 (replaces a figure)."""
+    found = []
+    for label, fn, p in VARIANTS:
+        d = I.json(fn, required=False)
+        if d is not None:
+            rows, sc = rmab(d)
+            if any(f"{p}_gap" in r for r in rows.values()):
+                found.append((label, rows, sc, p))
+    if len(found) < 2:
+        raise Missing("s22_gap_ties.json and the other gap runs")
+    allK = sorted({k for _, rows, _, _ in found for k in rows})
+    Ks = [k for k in (8, 32, 128) if k in allK] or allK[:3]
+
+    def gap(rows, sc, p, k):
+        r = rows.get(k, {})
+        if f"{p}_gap" not in r:
+            return None
+        lo, hi = r[f"{p}_gap_ci"]
+        return sc * r[f"{p}_gap"], (sc * lo, sc * hi)
+
+    def cell(x, tex):
+        if x is None:
+            return "--" if tex else "-"
+        v, (lo, hi) = x
+        return (rf"${v:.2f}$ {{\scriptsize $[{lo:.2f}, {hi:.2f}]$}}" if tex
+                else f"{v:.2f} [{lo:.2f}, {hi:.2f}]")
+
+    tex = ["% tools/paper_figs.py table05: results/s22_gap_*.json, s23_gap_*.json, "
+           "s24_soft_auto.json", r"\begin{table*}[t]", r"\centering",
+           r"\caption{Everything tried on the gap at a 30~dB target: the Lagrangian index's gap "
+           r"to the Lagrangian bound per user (points of users at 30~dB), $K$ users and "
+           r"$B = K/8$ resource units per slot, 95\% intervals over frames. Every variant decides "
+           r"on the transmitter's calibrated curves except the oracle, which is given the true "
+           r"ones.}",
+           r"\label{tab:variants}", r"\begin{tabular}{l" + "c" * len(Ks) + "}", r"\hline",
+           "Variant & " + " & ".join(f"$K = {k}$" for k in Ks) + r" \\", r"\hline"]
+    text = []
+    for label, rows, sc, p in found:
+        tex.append(label.replace("%", r"\%") + " & "
+                   + " & ".join(cell(gap(rows, sc, p, k), True) for k in Ks) + r" \\")
+        text.append([label] + [cell(gap(rows, sc, p, k), False) for k in Ks])
+    tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
+    return ("\n".join(tex) + "\n", "gap to the bound per user (points at 30 dB) [95% CI]\n"
+            + _text_table(["variant"] + [f"K = {k}" for k in Ks], text))
+
+
 FIGS = (
     ("fig02_codes", fig02, "the two trainings: how much each phase's slot matters; the cost of "
      "piecewise training at constant SNR", "p2_full_snrc4.json [p2_full_s1.json]"),
@@ -1223,22 +1408,13 @@ FIGS = (
     ("fig05_ablation_calibration", fig05, "ablation: hard target vs calibration-aware vs true "
      "curves against K; the assumed sigma", "s24_soft_auto.json [s23_gap_truth.json "
      "s24_soft_s05/s10/s20.json s24_soft_auto.txt]"),
-    ("fig07_target_variants", fig07, "30 dB: every variant tried on the gap, K 8 / 32 / 128",
-     "two or more of s22_gap_ties/prices/lpu/grid.json s23_gap_m25/m50/truth.json "
-     "s24_soft_auto.json"),
-    ("fig08_main_mean", fig08, "main frames: mean PSNR gain over PF per impairment",
-     "s22_main_mean.txt [s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt]"),
-    ("fig09_main_target", fig09, "main frames: gain in users at 30 dB over PADC per impairment",
-     "s24_main_soft.txt [s24_main_soft_r80.txt s26_tgt_lost/t16/clic.txt (else "
-     "s21_lag_tgt_more.txt s21_lag_t16.txt s22_clic.txt)]"),
-    ("fig10_decoded_target", fig10, "30 dB, decoded: gain over PADC; users predicted at 30 dB "
-     "that decoded below", "s24_dec_auto.json [s24_dec_r80.json s24_dec_clic.json]"),
-    ("fig11_decoded_mean", fig11, "mean, decoded: gains over PF in PSNR, MS-SSIM and LPIPS",
-     "s22_dec_mean.json [s22_dec_r80_mean.json s22_clic_dec_mean.json]"),
-    ("fig12_latency", fig12, "quality vs frame length: the latency budget",
-     "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json)"),
-    ("fig13_time_to_target", fig13, "share of users at 30 dB by each slot",
-     "s24_main_soft.txt"),
+    ("fig08_users", fig08, "decoded: the share of users at or above each PSNR, the baseline "
+     "against the proposed scheduler (mean PSNR: PF; 30 dB: PADC)",
+     "s22_dec_mean.json and/or s24_dec_auto.json"),
+    ("fig12_latency", fig12, "latency, the baseline against the proposed scheduler: quality vs "
+     "frame length; users at 30 dB by each slot",
+     "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json) and/or "
+     "s24_main_soft.txt (its --delay table)"),
     ("fig14_digital", fig14, "JSCC vs digital with IR-HARQ, CQI errors and outdated reports",
      "s23_c5_single.txt s20_harq_mean.txt [s20_harq_tgt*.txt s18_stale_jscc.txt "
      "s13_cqi_jscc.txt]"),
@@ -1252,15 +1428,50 @@ TABLES = (
      "s13_abstractions.txt [s22_clic.txt]"),
     ("table02_calibration", table02, "ablation, decoded: hard target vs calibration-aware",
      "s24_dec_auto.json [s24_dec_s15.json s24_dec_clic.json s24_dec_r80.json]"),
+    ("table03_main", table03, "main results: the proposed scheduler minus the baseline under "
+     "each condition, simulated and decoded",
+     "any of s22_main_mean.txt s24_main_soft.txt [s24_main_soft_r80.txt s26_tgt_lost/t16/"
+     "clic.txt s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt s22_dec_mean.json "
+     "s22_dec_r80_mean.json s22_clic_dec_mean.json s24_dec_auto/r80/clic.json]"),
+    ("table04_schedulers", table04, "appendix: every scheduler on the abstraction, gain over "
+     "the baseline per condition", "the inputs of table03"),
+    ("table05_variants", table05, "appendix: every variant tried on the 30 dB gap, K 8 / 32 / "
+     "128", "two or more of s22_gap_ties/prices/lpu/grid.json s23_gap_m25/m50/truth.json "
+     "s24_soft_auto.json"),
 )
+OUTPUT = re.compile(r"^(fig|table)\d\d_[\w-]+\.(pdf|png|svg|eps|tex)$")    # what a run writes
 
+
+def clear(out, names=None):
+    """Delete what earlier runs left in `out`: every fig*/table* output, of figures that no
+    longer exist too (names: only these stems'). Returns the removed file names."""
+    gone = []
+    for fn in sorted(os.listdir(out)):
+        if OUTPUT.match(fn) and (names is None or fn.rsplit(".", 1)[0] in names):
+            os.remove(os.path.join(out, fn))
+            gone.append(fn)
+    return gone
+
+
+def _commit():
+    """The checkout's commit (short), or None."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                           text=True, cwd=os.path.dirname(os.path.abspath(__file__)), timeout=10)
+        return (r.stdout.strip() or None) if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--results", default="results", help="the folder the COMMANDS runs wrote")
-    ap.add_argument("--out", default="figures")
+    ap.add_argument("--out", default=None,
+                    help="where to write (default figures/, figures_selftest/ with --self-test); "
+                         "the fig*/table* files an earlier run left there are deleted first")
     ap.add_argument("--only", nargs="+", default=None,
-                    help="figure / table names or prefixes (fig05 table01 ...)")
+                    help="figure / table names or prefixes (fig05 table01 ...); only their old "
+                         "files are deleted")
     ap.add_argument("--formats", nargs="+", default=["pdf", "png"])
     ap.add_argument("--dpi", type=int, default=300, help="PNG (and rasterised scatter) resolution")
     ap.add_argument("--list", action="store_true", help="list the figures, tables and inputs")
@@ -1272,6 +1483,7 @@ def main():
         for name, _, what, files in FIGS + TABLES:
             print(f"{name:28s} {what}\n{'':28s} reads {files}")
         return
+    a.out = a.out or ("figures_selftest" if a.self_test else "figures")
     tmp = None
     if a.self_test:
         import tempfile
@@ -1280,12 +1492,15 @@ def main():
         a.results = build(tmp.name)
         print(f"synthetic inputs built in {a.results} (removed at the end)")
     plt = setup()
-    os.makedirs(a.out, exist_ok=True)
-    done, skipped = [], []
 
     def wanted(name):
         return not a.only or any(name.startswith(o) for o in a.only)
 
+    os.makedirs(a.out, exist_ok=True)
+    gone = clear(a.out, None if not a.only else {n for n, *_ in FIGS + TABLES if wanted(n)})
+    print(f"removed {len(gone)} files an earlier run left in {a.out}/"
+          + (f" ({', '.join(gone)})" if 0 < len(gone) <= 6 else ""))
+    done, skipped = [], []
     for name, fn, what, _ in FIGS:
         if not wanted(name):
             continue
@@ -1293,7 +1508,7 @@ def main():
         try:
             fig = fn(I, plt)
         except Missing as e:
-            skipped.append(name)
+            skipped.append((name, str(e)))
             print(f"  skip  {name}: needs {e}")
             continue
         fig.tight_layout(pad=0.3)
@@ -1311,7 +1526,7 @@ def main():
             fig.savefig(os.path.join(a.out, f"{name}.{fmt}"), dpi=a.dpi, bbox_inches="tight",
                         pad_inches=0.02)
         plt.close(fig)
-        done.append(name)
+        done.append((name, what))
         print(f"  wrote {name}: {what} (from {', '.join(dict.fromkeys(I.used))})")
     for name, fn, what, _ in TABLES:
         if not wanted(name):
@@ -1320,21 +1535,33 @@ def main():
         try:
             tex, text = fn(I)
         except Missing as e:
-            skipped.append(name)
+            skipped.append((name, str(e)))
             print(f"  skip  {name}: needs {e}")
             continue
         with open(os.path.join(a.out, f"{name}.tex"), "w") as f:
             f.write(tex)
-        done.append(name)
+        done.append((name, what))
         print(f"  wrote {name}.tex: {what} (from {', '.join(dict.fromkeys(I.used))})")
         print("    " + text.replace("\n", "\n    "))
+    if not a.only:                            # what is in the folder now, and when it was drawn
+        import time
+        commit = _commit()
+        lines = [f"drawn {time.strftime('%Y-%m-%d %H:%M')} by tools/paper_figs.py"
+                 + (f" (commit {commit})" if commit else "") + f" from {a.results}/"
+                 + (" -- SYNTHETIC SELF-TEST DATA" if a.self_test else ""), ""]
+        lines += [f"{n:28s} {w}" for n, w in done]
+        if skipped:
+            lines += ["", "skipped (an input is missing):"]
+            lines += [f"  {n}: needs {why}" for n, why in skipped]
+        with open(os.path.join(a.out, "INDEX.txt"), "w") as f:
+            f.write("\n".join(lines) + "\n")
     print(f"{len(done)} figures and tables in {a.out}/"
-          + (f", {len(skipped)} skipped" if skipped else ""))
+          + (f", {len(skipped)} skipped" if skipped else "")
+          + ("" if a.only else f"; the list: {a.out}/INDEX.txt"))
     if tmp is not None:
         tmp.cleanup()
         if skipped:
             raise SystemExit("self-test: a figure or table was skipped")
-
 
 if __name__ == "__main__":
     main()
