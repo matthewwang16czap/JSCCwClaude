@@ -772,6 +772,16 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
    as fig12(c). The gaps in the old decoded bars were runs that decoded different policy sets
    (r = 0.8: PADC, plan_adv and the two Lagrangian indices; CLIC: no Whittle index) and 0.0%
    bars of zero height. Each run of the script now deletes the outputs of the previous one.
+10. Open (2026-10-27): can the calibration-aware reward cover CSI errors too? With CSI errors
+   the planner beats the index at the target (2 dB CQI error: +8.3 vs +6.1 points over PADC;
+   r = 0.8: +9.7 vs +7.1 simulated, +10.4 vs +4.4 decoded), plausibly for the reason the hard
+   target lost to the curve errors: the programs stop users at the predicted threshold, and with
+   CSI errors the prediction is off by tenths of a dB or more while the reward hedges 0.03-0.05
+   dB. A first test needs no code: `schedule_sim.py --soft-sigma 0.25 / 0.5 / 1.0` under
+   `--cqi-error 2` and under `--cqi-corr 0.8 --cqi-aware` (500 frames; padc, plan_adv,
+   lagrange_soft). If one spread reaches the planner, the principled version measures the
+   CSI-induced spread per prefix length (as `--soft-sigma auto` does for the curves), and C7
+   becomes one policy; if none does, C7 keeps its two cases.
 
 ## 8. Experiment index
 
