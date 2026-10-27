@@ -6,11 +6,14 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 28 only (CPU, ~1 min, no GPU): pull and redraw the figures and tables
-(figures only for the contributions; the comparison of our schedulers and the variants on the
-30 dB gap as appendix tables; each run now deletes the previous run's figures first). Sections
-0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md); after it, the next figures
-to review are fig12-fig16.
+WHAT TO RUN: section 28 (CPU, ~1 min, no GPU) if not done yet: pull and redraw the figures and
+tables (figures only for the contributions; the comparison of our schedulers and the variants
+on the 30 dB gap as appendix tables; each run now deletes the previous run's figures first).
+Sections 0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md); after it, the next
+figures to review are fig12-fig16. Section 29 is new and optional (CPU, seconds): it reruns the
+checks behind a full code review that found no bug (docs/CORRECTNESS_REVIEW.md) — nothing needs
+retraining or rerunning from it, this is only to let you see the same "all checks passed" and
+the new bootstrap-coverage numbers yourself.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -60,8 +63,10 @@ to review are fig12-fig16.
      calibration-aware index with lost slots,
      at T 16, on CLIC, and its latency budget
   27 redraw (fig02, fig12)                     done 2026-10-27 (second review: figures 7-11)
-  28 redraw: figures for the contributions,    TO RUN NOW
+  28 redraw: figures for the contributions,    TO RUN NOW (if not already done)
      the policy comparison as tables
+  29 a full code review (optional,              done (docs/CORRECTNESS_REVIEW.md): no bug
+     informational; CPU, seconds)               found; a new smoke test added
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2995,3 +3000,29 @@ ls figures/
 # table04_schedulers and table05_variants (printed in results/s28_figs.txt; LaTeX in
 # figures/table0*.tex). fig07, fig09-fig11 and fig13 no longer exist (docs/FIGURES.md lists
 # where each went). After these, the next figures to review are fig12-fig16.
+
+================================================================================
+ 29. optional -- reproduce the code review's checks yourself (CPU, seconds; no GPU)
+================================================================================
+# Why: you asked for a full code review and refactor, to check the results are not coming
+# from a bug. docs/CORRECTNESS_REVIEW.md is the answer: no correctness bug was found anywhere
+# this looked, including the link abstraction's fit (held-out profiles never touch the fit),
+# the restless-bandit DP and bound (re-derived by hand, and already checked against brute-force
+# expectimax in tools/smoke.py), common random numbers (every policy / every file really does
+# see the same frames), and train/valid/test separation. Nothing needed fixing, so nothing in
+# alloc/ or tools/ changed; the one thing this review found had never been checked -- whether
+# the bootstrap confidence interval (behind every number with a "[lo, hi]" in the paper) is
+# itself statistically valid -- is now a permanent smoke test (tools/smoke.py:
+# check_bootstrap_coverage). This section just lets you see it pass yourself; it is not asking
+# you to run or retrain anything.
+
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc   # silent = clean
+python tools/smoke.py 2>&1 | tee results/s29_smoke.txt | tail -20         # ends "all checks passed"
+grep -A 4 "\[bootstrap CI\]" results/s29_smoke.txt                        # the new coverage numbers
+
+# Reading: send back the last ~20 lines it prints (should end "all checks passed") and the
+# "[bootstrap CI]" block. docs/CORRECTNESS_REVIEW.md has the full writeup; nothing here needs a
+# reply unless something fails, which would itself be worth knowing about.
