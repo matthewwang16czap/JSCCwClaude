@@ -491,7 +491,8 @@ def build(d=None):
     clic = [f"clic{i:03d}" for i in range(60)]
     allL = list(range(1, P + 1))
     mixed_run(J("p2_full_snrc4.json"), code(24, 1), allL, kodak, 1)
-    mixed_run(J("p2_full_s1.json"), code(24, 1, kind="constant"), allL, kodak, 2)
+    mixed_run(J("p2_full_s1.json"), code(24, 1, gain_db=[0.3] * P, kind="constant"), allL, kodak,
+              2)
     hd = code(24, 1, gain_db=[0.0, 0.05, 0.10, 0.15, 0.20, 0.25])
     pc = code(24, 1, gain_db=[0.15, 0.25, 0.30, 0.35, 0.38, 0.40])
     for L, tag in zip(allL, ("48", "24", "16", "12", "5-48", "8")):

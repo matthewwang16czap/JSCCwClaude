@@ -6,10 +6,9 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 26 only (CPU, no GPU): redraw the revised figures and tables now (~1 min),
-and four background runs (~1.5-2 h) that put the calibration-aware index, now the proposed
-target scheduler, into the three conditions it had not been run in and into the latency budget.
-Sections 0-25 are done (docs/NOTES.md 6d-6f; the figures: docs/FIGURES.md).
+WHAT TO RUN: section 27 only (CPU, ~1 min, no GPU): pull and redraw the figures (fig02 fitted to
+its column, fig12's arrow when PADC never catches up). Sections 0-26 are done (docs/NOTES.md
+6d-6g; the figures: docs/FIGURES.md); the next figures to review are fig07-fig11.
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -55,9 +54,10 @@ Sections 0-25 are done (docs/NOTES.md 6d-6f; the figures: docs/FIGURES.md).
      cost they recover
   25 the paper's figures (tools/paper_figs.py, done 2026-10-26 (first review: figures 1-5)
      docs/FIGURES.md)
-  26 the revised figures and tables; the       TO RUN NOW
+  26 the revised figures and tables; the       done (docs/NOTES.md 6g)
      calibration-aware index with lost slots,
      at T 16, on CLIC, and its latency budget
+  27 redraw (fig02, fig12)                     TO RUN NOW
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2869,7 +2869,7 @@ ls figures/
 cat results/s25_figs.txt
 
 ================================================================================
- 26. TO RUN NOW -- the revised figures and tables; the calibration-aware index (the proposed
+ 26. DONE -- the revised figures and tables; the calibration-aware index (the proposed
      target scheduler) in every condition (CPU: ~1 min now, then four background chains of
      ~1.5-2 h; no GPU)
 ================================================================================
@@ -2940,3 +2940,19 @@ cat results/s26_tgt_lost.txt results/s26_tgt_t16.txt results/s26_tgt_clic.txt re
 # part of fig05). 26.2 decides whether the calibration-aware index is the best target policy
 # with lost slots, at T = 16 and on CLIC as it is with fresh reports (C7: the planner stays the
 # choice under CQI errors and stale reports, where the errors are dB, not hundredths).
+
+================================================================================
+ 27. TO RUN NOW -- redraw the figures (CPU, ~1 min; no GPU)
+================================================================================
+# Why: section 26 is recorded (docs/NOTES.md 6g: the calibration-aware index is best or tied
+# with exact reports in every condition; +2.1 / +2.3 / +0.7 points over the hard index with lost
+# slots / T 16 / CLIC; 24% fewer slots than online at T 16). Two drawing fixes: fig02 came out
+# 7.36 in wide (its panel (b) title was too long; (b) is now one line: the cost of piecewise
+# training against SNR at CBR 1/8), and fig12(b) now shows an arrow when PADC never reaches the
+# index's share within the frame lengths run. fig09 and fig12 draw from the section 26 runs.
+
+# 27.1 -- pull and redraw (send back what it prints; then the next five figures: fig07-fig11)
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s27_figs.txt

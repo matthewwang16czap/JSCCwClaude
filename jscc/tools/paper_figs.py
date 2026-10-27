@@ -548,10 +548,10 @@ def _k(p):
 
 # ------------------------------------------------------------------------------ figures -------
 def fig02(I, plt):
-    """The two trainings compared (C1, C12): (a) how much each phase's slot moves the PSNR (its
-    SNR from the lowest to the highest grid value, the other phases at the base SNR; the
-    decoder weighs its phases, which is why the abstraction weights slots and why the
-    scheduler protects the first ones); (b) what piecewise training costs at constant SNR."""
+    """The two trainings compared (C1, C12), at CBR 1/8: (a) how much each phase's slot moves
+    the PSNR (its SNR from the lowest to the highest grid value, the other phases at the base
+    SNR): the decoder weighs its phases, which is why the abstraction weights slots and why the
+    scheduler protects the first ones; (b) what piecewise training costs at constant SNR."""
     a = I.json("p2_full_snrc4.json")
     b = I.json("p2_full_s1.json", required=False)
     codes = [("code", a)] + ([("code_s1", b)] if b is not None else [])
@@ -568,27 +568,21 @@ def fig02(I, plt):
         a1.bar(xs, swing, width=w * 0.92, zorder=2, **bar_style(k))
     a1.set_xticks(range(1, len(a["summary"][cbr]["oat"]) + 1))
     a1.tick_params(axis="x", length=0)
-    a1.set_xlabel(f"phase whose slot's SNR is varied (the others at {a['base_snr']:g} dB)")
-    a1.set_ylabel(f"PSNR gain, its SNR {lo:g} to {hi:g} dB (dB)")
-    panel(a1, "a", f"how much each phase's slot matters (CBR {cbr})")
+    a1.set_xlabel(f"phase (the other phases at {a['base_snr']:g} dB)")
+    a1.set_ylabel(f"PSNR gain, its slot {lo:g} to {hi:g} dB (dB)")
+    panel(a1, "a", f"each phase's weight, CBR {cbr}")
     if b is not None:
         a2 = axes[0, 1]
-        ca, cb = constant_curves(a), constant_curves(b)
-        Ls = sorted(set(ca) & set(cb))
-        mean, el, eh = [], [], []
-        for L in Ls:
-            dd = [ca[L][s] - cb[L][s] for s in ca[L] if s in cb[L]]
-            mean.append(float(np.mean(dd)))
-            el.append(mean[-1] - float(np.min(dd)))
-            eh.append(float(np.max(dd)) - mean[-1])
-        a2.bar(Ls, mean, width=0.6, zorder=2, facecolor=GREEN, edgecolor=WHITE, linewidth=0.4,
-               label="_cost")
-        a2.errorbar(Ls, mean, yerr=[el, eh], ls="none", ecolor=INK2, elinewidth=0.7, zorder=3)
+        L = max(set(constant_curves(a)) & set(constant_curves(b)))
+        ca, cb = constant_curves(a)[L], constant_curves(b)[L]
+        snrs = sorted(set(ca) & set(cb))
         zero(a2)
-        cbr_axis(a2)
-        a2.tick_params(axis="x", length=0)
-        a2.set_ylabel("PSNR difference (dB)")
-        panel(a2, "b", f"piecewise- minus constant-SNR-trained, constant SNR {lo:g}-{hi:g} dB")
+        a2.plot(snrs, [ca[x] - cb[x] for x in snrs], color=GREEN, marker="o", ms=4.2, lw=1.2,
+                zorder=3, label="_cost")
+        a2.set_xticks(snrs)
+        a2.set_xlabel("SNR of every slot (dB)")
+        a2.set_ylabel("PSNR, piecewise minus\nconstant-SNR-trained (dB)")
+        panel(a2, "b", f"the cost of piecewise training, CBR {CBRS[L - 1]}")
     fig_legend(fig, axes, 2)
     return fig
 
@@ -923,13 +917,15 @@ def fig12(I, plt):
                 ax.plot(Ts, sc * np.asarray(curves[k], dtype=np.float64), **style(k))
         m = d.get("match", {}).get("24")
         r = (m or {}).get("rows", {}).get(ref)
-        if r and not r.get("flag"):
+        if r and r.get("flag") in ("", ">"):
             lv = sc * m["level"]                  # every curve is below it left of T = 24
-            ax.annotate("", xy=(r["needed"], lv), xytext=(24, lv),
+            end = r["needed"] if not r["flag"] else Ts[-1]
+            ax.annotate("", xy=(end, lv), xytext=(24, lv),
                         arrowprops=dict(arrowstyle="->", color=INK2, lw=0.8, shrinkA=0,
-                                        shrinkB=0))
-            ax.text(23.5, lv, f"{ENT[ref][0]} needs +{r['needed'] - 24:.1f} slots",
-                    ha="right", va="bottom", color=INK2)
+                                        shrinkB=0, ls="-" if not r["flag"] else "--"))
+            more = f"+{r['needed'] - 24:.1f}" if not r["flag"] else f"more than +{Ts[-1] - 24}"
+            ax.text(23.5, lv, f"{ENT[ref][0]} needs {more} slots", ha="right", va="bottom",
+                    color=INK2)
         ax.set_xticks(Ts)
         ax.set_xlabel("frame length T (slots)")
         ax.set_ylabel(ylab)

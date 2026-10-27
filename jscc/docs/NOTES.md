@@ -629,6 +629,54 @@ objective gives up a little more on the users who miss.
 * The price, as in the simulation: lower mean PSNR (30.27 vs 30.52 dB decoded) and worse LPIPS
   (+0.013 against the hard index, +0.025 against PADC) for the users who miss.
 
+## 6g. The calibration-aware index in every condition (COMMANDS 26, run 2026-10-27)
+
+After the first figure review the calibration-aware Lagrangian index is the proposed target
+scheduler (docs/PAPER.md). 26.2 ran it where only the hard index had run: the main frames
+with 25% of slots lost, at T 16 and on CLIC (500 frames, the frames of 21.2 and 22.3: PADC,
+online and the planner reproduce exactly), and the latency budget (300 frames per length, as
+21.3). Share at 30 dB, gain over PADC (points; 95% CIs within about +-1):
+
+| setting | lagrange, hard (6d) | **lagrange_soft** | whittle, hard | whittle_soft | planner | online |
+|---|---|---|---|---|---|---|
+| fresh (24.2) | +11.1 | **+12.7** | +8.2 | +9.8 | +8.8 | +8.0 |
+| 25% of slots lost | +9.1 | **+11.2** [9.8, 12.5] | +10.7 | **+11.6** [10.7, 12.5] | +9.5 (replan_adv) | +6.3 |
+| T 16 | +9.2 | **+11.5** [10.3, 12.6] | +10.8 | **+11.6** [10.7, 12.5] | +9.6 | +8.6 |
+| CLIC | +8.8 | **+9.5** [8.7, 10.5] | | +7.4 | +8.0 | +6.8 |
+| 2 dB CQI error (24.2) | +1.6 | +6.1 | +1.2 | +5.1 | **+8.3** | +1.7 |
+| r = 0.8 aware, 0.5 dB margin (24.2) | +6.1 | +7.1 | +5.4 | +6.3 | **+9.7** | |
+
+* The calibration-aware reward raises the Lagrangian index by +2.1, +2.3 and +0.7 points with
+  lost slots, at T 16 and on CLIC (the Whittle index by +0.9 and +0.8): never lower, in every
+  condition run (6f, 6g).
+* With exact reports the calibration-aware Lagrangian index is now best or tied-best
+  everywhere: alone with fresh reports and on CLIC, within 0.4 points of the calibration-aware
+  Whittle index with lost slots and at T 16, both ~2 points above the planner. The hard index's
+  shortfall there (6d: the Whittle index led) was the curve errors' cost too. With CSI errors
+  (CQI errors, stale reports) the planner stays best: C7 has two cases.
+* The price for the users who miss stays: with lost slots mean PSNR 28.25 dB (the index)
+  against PADC 29.05 and online 29.42.
+* Time to 30 dB at T 16: the Whittle index earliest (-1.91 slots against PADC over all users,
+  -1.89 on the same users); the Lagrangian index -0.54 over all users but +0.38 [0.17, 0.57] on
+  the same users: in a short frame it waits for good slots and finishes near the deadline.
+
+**Latency at 30 dB (26.2; % of users at 30 dB by frame length):**
+
+| T | 12 | 16 | 20 | 24 | 28 | 32 |
+|---|---|---|---|---|---|---|
+| lagrange_soft | 62.0 | 70.5 | 74.1 | **77.7** | 78.5 | 79.4 |
+| whittle_soft | 62.9 | 70.4 | 72.3 | 74.8 | 76.2 | 76.6 |
+| online | 59.8 | 67.2 | 69.7 | 72.8 | 74.7 | 76.0 |
+| padc | 51.9 | 58.2 | 61.8 | 64.8 | 67.9 | 68.0 |
+
+* For the index's 70.5% at T 16 online needs 21.1 slots [18.7, 23.9] (the index 24.2% fewer
+  [14.6, 32.9]), the Whittle index 16.3 (a tie), PADC more than 32.
+* For its 77.7% at T 24 no other policy gets there within 32 slots (the index needs at least
+  25% fewer; the hard index's 76% took online 32).
+* 70% of users at 30 dB: 15.8 slots (both calibration-aware indices) against 17.8 for the hard
+  Lagrangian index (21.3), 20.4 for online and more than 32 for PADC: the reward alone saves
+  2 slots (11%).
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -713,8 +761,8 @@ objective gives up a little more on the users who miss.
    figure compares the two trainings directly; the predicted-vs-decoded scatter became the
    error along the PSNR; the mean and 30 dB scaling figures merged (gap per user only); and the
    calibration-aware index became the proposed target scheduler, the hard-target index an
-   ablation (fig05, Table II). COMMANDS 26 runs it with lost slots, at T 16, on CLIC and in the
-   latency budget, the conditions only the hard index had run in.
+   ablation (fig05, Table II). COMMANDS 26 ran it with lost slots, at T 16, on CLIC and in the
+   latency budget (section 6g); the figures draw from those runs.
 
 ## 8. Experiment index
 
@@ -734,3 +782,8 @@ objective gives up a little more on the users who miss.
 | RMAB re-examined | 18 | 10-19 | stale reports: JSCC over digital +0.3 -> +2.5 dB / +19 points at r 0.8; the opportunistic part and the lift fade; aware + plan_adv for the target; with many units the indices reach the bound (0.005 dB at K 128), our closed form plateaus at 0.15 |
 | Delay | 19 | 10-19 | latency budget 9-19% (mean, vs PF) and 39% (30 dB, vs PADC) shorter; the Whittle index reaches 30 dB first (2.9 slots before PADC, same users) at online's share; traffic: online +25 points over PADC, the Whittle index with half its delay |
 | HARQ, decoded stale, Lagrangian delay, margins | 20 | 10-20 | C5 with HARQ: +1.3 dB at 2 dB CQI error, +1.7 dB / +15.5 points at r 0.8 (HARQ took 0.3 / 0.75 dB off); stale-report schedules decoded as simulated; the Lagrangian index has the best share at 30 dB, the Whittle index the earliest; margins of 0.5-1 dB on stale reports |
+| Before writing | 21, 22 | 10-23 to 10-25 | the Lagrangian index best for the mean everywhere and at 30 dB with fresh reports; the PI index loses to PF; CLIC, MS-SSIM and LPIPS hold; the 30 dB gap survives the tie rule, prices, LP update, grids |
+| The 30 dB gap; C5 with one decoder | 23 | 10-25 | the gap is the curve errors' cost (true curves meet the bound), margins worse; the single decoder leads digital by +1.1 / +1.5 dB at 2 dB CQI error / r 0.8 |
+| Calibration-aware programs | 24 | 10-26 | 99-100% of the curve errors' cost recovered at every K, any assumed sigma 0.03-0.2 dB; decoded +1.7 points, 0.0% missed |
+| Figures | 25 | 10-26 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation |
+| Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
