@@ -122,6 +122,12 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
     and Frazier; Gast, Gaujal and Yan.
   - Lagrangian priority (Hao, Xu and Tong), PI indices (Ayesta et al.), imperfect-CSI
     relaxations (Ouyang et al.).
+  - Learning restless bandits (a different problem: unknown reward and transition kernel, learned
+    online) -- Grunewalder and Khaleghi; Gornet and Sinopoli; Zamir and Hou's Deep Index Policy
+    (MOBIHOC '24), a multi-resource partial index learned by policy gradient, needing ~1000-2000
+    steps to converge to a known-kernel baseline. Ours is the planning kind (docs/SURVEY.md F5):
+    the channel law and the calibrated curves are known, so the per-user program is solved
+    exactly, not learned.
   - We import this machinery and say so. Our contributions are the arm it applies to and the
     evidence on a decoded reward.
 - **E. JSCC versus digital under imperfect CSI.**

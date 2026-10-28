@@ -6,13 +6,21 @@ numbers it draws on (all from docs/PAPER.md and docs/NOTES.md; nothing here is a
 prose itself is next turn. Paragraph numbers match the supervisor's six; two open decisions are
 flagged where the template asks for something this project has not settled yet.
 
-A freshness check today (two targeted searches; not a full new survey pass) found nothing that
-changes the gap statement below: no paper combines an effective-SNR-style link abstraction with
-multi-user restless-bandit scheduling for a learned code. One adjacent, newer citation worth adding
-to Related Work later: "Deep Index Policy for Multi-Resource Restless Matching Bandit" (arXiv
-2408.07205) — a *learning* restless bandit (indices learned by RL, no known transition model),
-which is the family docs/SURVEY.md's section F5 already contrasts this paper's *planning* bandit
-against; it is a concrete example to cite there, not a threat to any claim.
+A freshness check (two targeted searches) found nothing that changes the gap statement below: no
+paper combines an effective-SNR-style link abstraction with multi-user restless-bandit scheduling
+for a learned code. One adjacent paper it surfaced was read in full on 2026-10-28: Zamir and Hou,
+"Deep Index Policy for Multi-Resource Restless Matching Bandit" (MOBIHOC '24, arXiv 2408.07205;
+full entry in docs/SURVEY.md section F5). It is a *learning* restless bandit — it learns a
+multi-resource partial index by policy gradient because the reward mean and transition kernel are
+assumed unknown, needing ~1000-2000 steps of online interaction to converge to a known-kernel
+oracle's performance — the family docs/SURVEY.md's section F5 already contrasts this paper's
+*planning* bandit against (our channel law is textbook Rayleigh and our quality model is
+calibrated offline to 0.03-0.09 dB, so the per-user program is solved exactly, not learned). Not a
+threat to any claim, and not something to adopt as our scheduler (it solves a different problem:
+unknown dynamics, infinite-horizon discounted, not our finite-horizon known-dynamics one); it is
+now the concrete example in docs/PAPER.md's "why not learn the scheduler" reviewer-objection
+answer, and its multi-resource "max-weight index matching" is noted there as a plausible
+frequency-selective / multi-carrier extension, not evaluated here.
 
 ## Two open decisions (my recommendation, your call)
 
