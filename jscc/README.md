@@ -120,6 +120,11 @@ docs/PAPER_OUTLINE.md   title, abstract and section summaries (IEEE TWC), with t
 docs/FIGURES.md         the paper's figures and tables: what each shows, its claim, the files it reads
 docs/CORRECTNESS_REVIEW.md  a full code review (2026-10-27): what was checked, the one gap found
                         and closed (a bootstrap-coverage test), and why nothing else was changed
+docs/INTRO_OUTLINE.md   the paper's Introduction, paragraph by paragraph, against the
+                        supervisor's writing template: what each paragraph argues, the numbers
+                        it draws on, the Figure 1 plan, and two open naming/structure decisions
+docs/MANUSCRIPT.md      the actual paper prose, section by section, as it gets written; Section I
+                        (Introduction) drafted, with its working reference list and open items
 docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
                         setup, the rules, one frame played slot by slot, the measured results
 ```
