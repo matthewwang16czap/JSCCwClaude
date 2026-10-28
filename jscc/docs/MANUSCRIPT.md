@@ -19,6 +19,13 @@ IEEE renders "Fig." and section numbers as given; I use "--" for em dashes throu
 
 ## I. Introduction
 
+**STALE (2026-10-29): paragraph 2's classification, paragraph 3's opening sentence, and
+paragraph 5's contrast clause below do not match the revised outline in docs/INTRO_OUTLINE.md
+and need rewriting (they still split prior work into "single-link JSCC" vs. "scheduling theory,"
+which the outline revision replaced). Paragraphs 1, 4 and 6, and the organisation paragraph, are
+unaffected and still good. Left as-is pending review of the revised outline, per the
+paragraph-by-paragraph process -- do not treat paragraph 2 below as final.**
+
 Deep joint source-channel coding (JSCC) is a strong candidate for image and video delivery in 6G
 semantic communication: mapping source symbols directly to channel symbols lets a learned code
 match or exceed the rate-distortion performance of a separate source and channel code at low

@@ -66,39 +66,60 @@ No numbers needed here — this paragraph is motivation, not evidence.
 
 ## Paragraph 2 — classification of existing approaches, with Figure 1
 
-Role (template): split prior work into the categories that motivate ours by contrast; land on
-Figure 1 (abstract, low-contrast for others, bright + bold for ours).
+**Revised 2026-10-29, after review: the earlier version was wrong in kind, not just in wording.**
+Splitting prior work into "single-link JSCC" and "scheduling theory," with ours as the thing that
+merges them, makes the paper sound like it combines two fields that happen not to overlap — a weak,
+arbitrary-sounding move. It also skipped something real: multi-user work on learned JSCC already
+exists. The fix is to stop classifying by *field* and classify by *how far each line of work gets
+toward the actual problem Paragraph 1 just set up* — many users, sharing a channel that fades slot
+by slot, each delivery under a deadline. Framed that way, prior work splits cleanly into two
+categories that are both *about* that problem, each missing a different half of what it needs
+(checked against docs/SURVEY.md section F, "Multi-user bandwidth allocation with learned JSCC," and
+section F2's McDowell et al. entry):
 
-Two categories (not three — the related-work section's five subsections are for Section II; the
-introduction only needs the minimal split that motivates the gap):
+* **(a) Existing multi-user work on learned JSCC gets the users but not the channel.** Bandwidth,
+  power and pairing allocation across several users already exists for learned JSCC — an oracle
+  network predicts each user's quality, then an optimiser splits the budget (e.g. the
+  constrained-Bayesian-optimisation allocator of docs/SURVEY.md's section F; MU-MIMO/MAC pairing and
+  power allocation). But every one of them is a **one-shot decision over a few discrete rates for a
+  single, given channel condition per user**: nothing accumulates across a sequence of fading
+  slots, and nothing has a deadline. The one piece of work that *does* schedule a learned code
+  slot by slot over time, as a restless bandit (McDowell et al.), comes closer, but sends a fresh,
+  self-contained codeword in *every* slot — nothing a prefix code's accumulating pieces would do —
+  and has to *learn* each slot's value by reinforcement learning, because it has no model of what a
+  slot is worth to a code that spans several of them.
+* **(b) Scheduling theory already has the channel and the deadline, but not a learned code.**
+  Deadline scheduling, restless bandits and Lagrangian index policies with proven, vanishing
+  optimality gaps as the number of users grows (RaDiO; Hosseini and Panwar's layered-video bandit;
+  Hao-Xu-Tong's Lagrangian priority policy; Brown-Smith; Zhang-Frazier; Gast-Gaujal-Yan) are built
+  for exactly the "many users, many fading slots, one deadline" structure our problem has — but
+  every instance of it assumes the source's per-slot value is *already known*: a digital layer that
+  decodes or does not, or a curve read off an effective-SNR abstraction (EESM, MIESM) built for
+  conventional modulation and coding, never tested on a learned code.
 
-* **(a) Single-link learned JSCC.** DeepJSCC and its rate/SNR-adaptive successors (PADC,
-  SwinJSCC, DeepJSCC-MIMO, JSCCformer-f, DeepJSCC-l, DRJSCC, NTSCC...) — all evaluated at a
-  *given* SNR, sampled or fixed; no scheduler, no competing users, nothing says what happens if
-  the symbols of one codeword cross slots at *different* SNRs.
-* **(b) Scheduling theory for content with a known value.** Deadline scheduling, restless
-  bandits and Lagrangian index policies with proven, vanishing optimality gaps (RaDiO; Hosseini
-  and Panwar's layered-video bandit; Hao-Xu-Tong's Lagrangian priority policy; Brown-Smith;
-  Zhang-Frazier; Gast-Gaujal-Yan) — mature, but built around sources whose slot-by-slot worth is
-  already known: digital layers that decode or do not, or an effective-SNR abstraction (EESM,
-  MIESM) built for conventional modulation and coding, never tested on a learned code.
-* **(c) Ours**, the bridge: show a learned code can be TRAINED so it has a simple value per slot,
-  then apply (b)'s machinery to it exactly.
+So the two halves of the problem exist separately: (a) reaches real multi-user learned JSCC but
+not a fading, accumulating, deadline-constrained channel; (b) reaches exactly that channel
+structure but not a learned code. **(c) Ours** supplies the one thing missing from both: training
+gives a learned code the per-slot value (b)'s machinery needs, which lets it reach the real
+multi-user problem (a) has so far only partly addressed.
 
-**Figure 1 plan** (teaser/classification figure, abstract, to draw once the outline is settled —
-left-right for TWC's two-column layout):
-- (a) one encoder → one channel at one given SNR → one decoder. No scheduler, one user. Grey/low
+**Figure 1 plan** (revised to match — left-right for TWC's two-column layout):
+- (a) K users, each with ONE arrow to a single given channel condition (no time axis): a
+  snapshot allocation, not a schedule. A small inset or second arrow-set can mark McDowell et
+  al.'s case (a time axis, but a fresh codeword redrawn every slot — no accumulation). Grey/low
   contrast.
-- (b) K users with a *known* value curve (a step function for digital layers, or a textbook
-  effective-SNR curve) feeding a scheduler/index-policy box. Grey/low contrast.
-- (c) K users, each a **learned prefix code**; training gives it a link abstraction (highlighted,
-  bright colour) that turns accumulated phases into a two-number state; the *same* scheduler box
-  from (b) now sits on top of it, in bright colour, with a short highlighted arrow showing the new
-  piece (the abstraction) is what makes (c) possible. One or two words in red on the single element
-  that is new (the abstraction arrow), nothing else red.
-- Caption, point by point: "(a) learned codes are evaluated on one link at a known SNR; (b) mature
-  scheduling theory needs a known per-slot value, which no model gives a learned code; (c) we show
-  training gives a learned code that value, so (b)'s theory applies to it for the first time."
+- (b) a time axis of slots, K users, each with a *known* value curve (a step function for digital
+  layers, or a textbook effective-SNR curve) feeding a scheduler/index-policy box. Grey/low
+  contrast. Same scheduler-box shape as (c), to make the reuse visually obvious.
+- (c) a time axis of slots, K users, each a **learned prefix code** whose pieces accumulate; training
+  gives it a link abstraction (highlighted, bright colour) that turns the accumulated state into a
+  value; the *same* scheduler box from (b), in bright colour, now sits on top of it. One or two
+  words in red on the single new element (the abstraction), nothing else red.
+- Caption, point by point: "(a) existing multi-user work on learned JSCC allocates a single given
+  channel condition per user, or (McDowell et al.) schedules one but with no codeword that
+  accumulates across slots; (b) scheduling theory handles many fading slots and a deadline, but
+  needs a known per-slot value no learned code has; (c) we show training gives a learned code that
+  value, letting (b)'s theory reach the real multi-user problem for the first time."
 
 ## Paragraph 3 — shortcomings / the gap, as a question
 
@@ -106,12 +127,12 @@ Role (template): this is a new-category method, so the simplest form applies —
 end on a question — but still name 2-3 concrete sub-problems a reviewer can track, since they map
 directly onto the three contributions in Paragraph 6.
 
-Opening move (per the template's note on pilot-experiment papers: introduce with a question):
-"JSCC papers assume the channel is simply given; scheduling papers assume the source's value is
-already known. Neither asks what a slot is worth to a *learned* code — a trained network with no
-declared rule for composing what it has already received with what a new slot adds. Naturally, we
-ask: does a learned code even have a predictable, composable value per use of the channel, the way
-a digital code does?"
+**Revised opening, matching Paragraph 2's new framing** (per the template's note on
+pilot-experiment papers: introduce with a question): "Existing multi-user work on learned JSCC does
+not model a fading channel accumulated over a deadline; scheduling theory does, but assumes a
+per-slot value no learned code is known to have. Neither line of work asks the question that
+separates them: does a learned code even have a predictable, composable value per use of the
+channel, the way a digital code does?"
 
 Then the three sub-problems (maps 1:1 onto Paragraph 6's three bullets and onto docs/PAPER.md's
 C12/C1/C2, C13, C5):
@@ -154,11 +175,14 @@ designs against the two hardest sub-problems from Paragraph 3, close on performa
 
 - "To address this, we propose [the MMSE link abstraction and a calibration-aware restless-bandit
   scheduler built on it]." One sentence naming what it is.
-- Contrast: "Unlike digital system-level modelling, which reuses EESM/MIESM derived for
-  conventional coding and has never been tested on a learned code, and unlike the one existing
-  learned-code scheduler (McDowell et al. 2026), which sends a fresh, self-contained codeword every
-  slot and has to learn slot values by reinforcement learning for lack of an abstraction, our
-  per-user state accumulates across slots and is solved exactly."
+- **Contrast, revised to match Paragraph 2:** lead with category (a), the direct prior art for
+  "multi-user learned JSCC," not with digital system-level modelling (that contrast belongs to the
+  abstraction specifically, and already appears in Paragraph 4's pilot finding). "Unlike existing
+  multi-user work on learned JSCC, which allocates a single given channel condition per user with no
+  notion of a fading sequence of slots or a deadline, and unlike the one scheduler that does handle
+  slots over time (McDowell et al.), which sends a fresh, self-contained codeword every slot and has
+  to learn slot values by reinforcement learning for lack of an abstraction, our per-user state
+  accumulates across slots and is solved exactly."
 - Specifically: "we show training under slot-varying SNR gives the code a two-number state (phases
   held, accumulated weighted noise) that a finite-horizon restless bandit can use directly — a
   per-user dynamic program, a Lagrangian bound on every causal scheduler, and a Lagrangian index
