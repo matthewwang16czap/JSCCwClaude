@@ -45,56 +45,8 @@ restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, ima
 
 ## I. Introduction (~1.5 pages)
 
-- **Motivation.** Deep JSCC is a candidate for 6G semantic and image services. It matches or beats
-  separate coding at low SNR and degrades gracefully. But every evaluation we know of is one
-  link with a known or sampled SNR. In a real downlink:
-  - a scheduler splits a frame of slots among K users;
-  - each slot fades independently;
-  - the base station knows only the current slot's SNR, often with errors or delay;
-  - each image must be delivered by a deadline.
-- **The gap.** Mature theory exists for deadline scheduling of progressive content:
-  rate-distortion-optimised packet scheduling, restless bandits for layered video, and
-  Lagrangian index policies with vanishing optimality gaps. It needs one thing a learned code
-  does not provide: what a slot at SNR s is worth to user k, given what k already received.
-  Digital OFDM met the same problem with effective-SNR link abstraction (EESM, MIESM).
-- **Thesis.** A learned code needs a link abstraction of its own. It has one when trained for
-  slot-varying SNR, and with it the existing scheduling theory applies to learned codes. That
-  has measurable consequences for scheduling, for training, and for JSCC versus digital.
-- **Contributions** (the bulleted list TWC expects):
-  1. *Link abstraction for learned codes* (C12, C1, C2).
-     - A prefix code trained under piecewise SNR composes slots as a sensitivity-weighted sum
-       of per-slot MMSE terms.
-     - Held-out error is 0.055 dB, against 0.49 for MIESM and 0.19 for EESM. To our knowledge
-       this is the first test of effective-SNR mappings on a learned code.
-     - A transmitter calibrates it from 12 decodes per image. It predicts scheduled, decoded
-       quality within 0.05-0.09 dB. All of it repeats on CLIC (MMSE 0.083 dB, MIESM 0.44).
-     - A constant-SNR-trained code obeys no such rule.
-  2. *Deadline scheduling as a restless bandit with a two-number state* (C13, C3, C4, C14).
-     - The abstraction turns each user into a small Markov decision process: phases that
-       accumulate across slots, each graded by its slot's SNR, toward a terminal quality.
-     - The Lagrangian bound and index apply exactly and run on a CPU.
-     - The Lagrangian index's gap to the bound vanishes as the cell grows, for both
-       objectives (mean: 0.005 dB per user at 128 users; 30 dB target: within ±0.3 points
-       from 16 users on). A closed-form certainty-equivalent rule captures most of the mean
-       gain at small scale.
-     - A hard target makes the abstraction's calibration error first-order: a scheduler that
-       trusts its calibrated curves loses ~1.6 points per user at every K (a uniform margin
-       makes it worse; the mean is immune). Programs that reward the probability of success
-       under the error's measured spread recover all of it, and their schedules decode
-       exactly as predicted.
-     - For a quality target, admission by smallest remaining need plus online stopping beats
-       per-image rate selection. The gains also read as 9-39% shorter frames.
-  3. *System verdict under realistic CSI* (C5, C6).
-     - With CQI errors and outdated reports, scheduled JSCC beats HEVC-intra with CQI-table
-       link adaptation and IR-HARQ (+1.1 dB at 2 dB CQI error, +1.5 dB at r = 0.8); with exact
-       CSI they are on par.
-     - One encoder and one multi-rate decoder suffice when the number of slots is decided
-       after encoding. Per-length decoders add ~0.2 dB at six times the decoder memory.
-  4. *The scheduler makes the code's channel* (C8-C10).
-     - Opportunistic selection lifts the SNR of the first phases by ~5 dB.
-     - Training on that channel gains 0.28 dB, and codes adapt to their scheduler.
-     - The effect is small and fades with outdated CSI.
-- **Organisation** paragraph.
+Planned sentence by sentence in `docs/INTRO_OUTLINE.md`: the supervisor's seven-paragraph
+template, Figure 1, the references and the source of every number.
 
 ## II. Related Work (~1 page)
 
