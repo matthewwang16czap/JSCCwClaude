@@ -772,6 +772,16 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
    as fig12(c). The gaps in the old decoded bars were runs that decoded different policy sets
    (r = 0.8: PADC, plan_adv and the two Lagrangian indices; CLIC: no Whittle index) and 0.0%
    bars of zero height. Each run of the script now deletes the outputs of the previous one.
+10. Open (2026-10-27): can the calibration-aware reward cover CSI errors too? With CSI errors
+   the planner beats the index at the target (2 dB CQI error: +8.3 vs +6.1 points over PADC;
+   r = 0.8: +9.7 vs +7.1 simulated, +10.4 vs +4.4 decoded), plausibly for the reason the hard
+   target lost to the curve errors: the programs stop users at the predicted threshold, and with
+   CSI errors the prediction is off by tenths of a dB or more while the reward hedges 0.03-0.05
+   dB. A first test needs no code: `schedule_sim.py --soft-sigma 0.25 / 0.5 / 1.0` under
+   `--cqi-error 2` and under `--cqi-corr 0.8 --cqi-aware` (500 frames; padc, plan_adv,
+   lagrange_soft). If one spread reaches the planner, the principled version measures the
+   CSI-induced spread per prefix length (as `--soft-sigma auto` does for the curves), and C7
+   becomes one policy; if none does, C7 keeps its two cases.
 
 ## 8. Experiment index
 
@@ -796,3 +806,4 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
 | Calibration-aware programs | 24 | 10-26 | 99-100% of the curve errors' cost recovered at every K, any assumed sigma 0.03-0.2 dB; decoded +1.7 points, 0.0% missed |
 | Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
 | Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
+| A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |

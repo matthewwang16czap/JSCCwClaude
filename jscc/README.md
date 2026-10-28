@@ -118,6 +118,8 @@ docs/PROBLEM.md         the target problem: system, why this codec, scheduler, b
 docs/PAPER.md           the paper plan: story, contributions and evidence, outline, what is owed
 docs/PAPER_OUTLINE.md   title, abstract and section summaries (IEEE TWC), with the measured numbers
 docs/FIGURES.md         the paper's figures and tables: what each shows, its claim, the files it reads
+docs/CORRECTNESS_REVIEW.md  a full code review (2026-10-27): what was checked, the one gap found
+                        and closed (a bootstrap-coverage test), and why nothing else was changed
 docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
                         setup, the rules, one frame played slot by slot, the measured results
 ```

@@ -1771,6 +1771,41 @@ def check_freeze(x):
                f"{len(tc)}/{len(tk)} {other} tensors moved")
 
 
+def check_bootstrap_coverage():
+    """tools/schedule_sim.bootstrap is every confidence interval in the paper: a structural
+    check (a constant array gives a zero-width interval at its own value; the interval
+    narrows as the sample grows) and an empirical coverage check (over repeated synthetic
+    trials, the 95% interval contains the true mean about 95% of the time), on a normal and
+    a right-skewed distribution -- the second because paired "gain" distributions are rarely
+    symmetric. CPU, a few seconds; every seed fixed, so the result is deterministic."""
+    import numpy as np
+
+    from tools.schedule_sim import bootstrap
+
+    print("[bootstrap CI]")
+    lo, hi = bootstrap(np.full(50, 3.7))
+    ok(abs(lo - 3.7) < 1e-9 and abs(hi - 3.7) < 1e-9,
+       "a constant array: a zero-width interval at its own value")
+    rng = np.random.default_rng(0)
+    small = bootstrap(rng.normal(0, 1, 60))
+    big = bootstrap(rng.normal(0, 1, 4000))
+    ok(small[1] - small[0] > big[1] - big[0] > 0,
+       f"the interval narrows as the sample grows (n 60: {small[1] - small[0]:.3f}, "
+       f"n 4000: {big[1] - big[0]:.3f})")
+    trials, n_small, true_mean = 400, 60, 0.3
+    for name, draw in (("normal", lambda r: r.normal(true_mean, 1.0, n_small)),
+                       ("right-skewed", lambda r: r.exponential(1.0, n_small) - 1.0 + true_mean)):
+        rng = np.random.default_rng(1)
+        hits = sum(lo <= true_mean <= hi
+                   for lo, hi in (bootstrap(draw(rng), seed=t) for t in range(trials)))
+        cov = hits / trials
+        # +-3 se of a 95% nominal rate at this trial count (~0.033): a real implementation bug
+        # (wrong percentiles, too few resamples, mean/median mixed up) misses this by a mile
+        ok(0.95 - 3 * 0.011 < cov < 1.0,
+           f"empirical coverage of the 95% interval on {trials} {name} trials, n = {n_small}: "
+           f"{cov:.3f} (nominal 0.95)")
+
+
 def check_figures():
     """tools/paper_figs.py reads the tools' outputs back: its parsers round-trip the tables
     tools/schedule_sim.py prints (its own report functions) and tools/utility_fit.py's
@@ -1905,6 +1940,7 @@ def main():
     check_allocation(x)
     check_frontier()
     check_freeze(x)
+    check_bootstrap_coverage()
     check_figures()
     print("all checks passed")
 

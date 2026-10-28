@@ -1384,7 +1384,10 @@ def table05(I):
            r"to the Lagrangian bound per user (points of users at 30~dB), $K$ users and "
            r"$B = K/8$ resource units per slot, 95\% intervals over frames. Every variant decides "
            r"on the transmitter's calibrated curves except the oracle, which is given the true "
-           r"ones.}",
+           r"ones. The bound is computed on the programs' grid, 0.15--0.17 points below its "
+           r"limit: values just below zero are within that and the sampling error. Finer grids "
+           r"raise the bound by that much and leave the hard-target index 0.3--1.4 points worse "
+           r"in absolute terms: a sharper threshold stops more users exactly at 30~dB.}",
            r"\label{tab:variants}", r"\begin{tabular}{l" + "c" * len(Ks) + "}", r"\hline",
            "Variant & " + " & ".join(f"$K = {k}$" for k in Ks) + r" \\", r"\hline"]
     text = []
@@ -1393,7 +1396,8 @@ def table05(I):
                    + " & ".join(cell(gap(rows, sc, p, k), True) for k in Ks) + r" \\")
         text.append([label] + [cell(gap(rows, sc, p, k), False) for k in Ks])
     tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
-    return ("\n".join(tex) + "\n", "gap to the bound per user (points at 30 dB) [95% CI]\n"
+    return ("\n".join(tex) + "\n", "gap to the bound per user (points at 30 dB) [95% CI]; the "
+            "bound on the programs' grid is 0.15-0.17 points low (below zero: within that)\n"
             + _text_table(["variant"] + [f"K = {k}" for k in Ks], text))
 
 
