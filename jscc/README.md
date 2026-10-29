@@ -123,6 +123,8 @@ docs/CORRECTNESS_REVIEW.md  a full code review (2026-10-27): what was checked, t
 docs/INTRO_OUTLINE.md   the paper's Introduction, paragraph by paragraph, in the supervisor's
                         template: each sentence's claim, its citations and numbers, the Figure 1
                         plan, the reference list, and the source of every number
+docs/INTRO_NUMBERS.md   every number in the Introduction traced to its result file, the COMMANDS
+                        round that wrote it and the line to look for; simulated or decoded
 docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
                         setup, the rules, one frame played slot by slot, the measured results
 ```
