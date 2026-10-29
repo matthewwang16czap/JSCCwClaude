@@ -1,214 +1,340 @@
-# Introduction: paragraph-by-paragraph outline (drafted 2026-10-28)
+# Section I (Introduction): paragraph-by-paragraph outline
 
-Maps the supervisor's structure (`/root/.claude/uploads/.../paper_instruction.txt`, section 1) onto
-this paper's content. This is the OUTLINE only — what each paragraph argues and which already-measured
-numbers it draws on (all from docs/PAPER.md and docs/NOTES.md; nothing here is a new claim). The
-prose itself is next turn. Paragraph numbers match the supervisor's six; two open decisions are
-flagged where the template asks for something this project has not settled yet.
+Seven paragraphs, in the order of the supervisor's template. Each numbered item is one sentence
+(or two short ones) of the prose. [Keys] point to the reference list at the end. The last table
+gives the source of every number.
 
-A freshness check (two targeted searches) found nothing that changes the gap statement below: no
-paper combines an effective-SNR-style link abstraction with multi-user restless-bandit scheduling
-for a learned code. One adjacent paper it surfaced was read in full on 2026-10-28: Zamir and Hou,
-"Deep Index Policy for Multi-Resource Restless Matching Bandit" (MOBIHOC '24, arXiv 2408.07205;
-full entry in docs/SURVEY.md section F5). It is a *learning* restless bandit — it learns a
-multi-resource partial index by policy gradient because the reward mean and transition kernel are
-assumed unknown, needing ~1000-2000 steps of online interaction to converge to a known-kernel
-oracle's performance — the family docs/SURVEY.md's section F5 already contrasts this paper's
-*planning* bandit against (our channel law is textbook Rayleigh and our quality model is
-calibrated offline to 0.03-0.09 dB, so the per-user program is solved exactly, not learned). Not a
-threat to any claim, and not something to adopt as our scheduler (it solves a different problem:
-unknown dynamics, infinite-horizon discounted, not our finite-horizon known-dynamics one); it is
-now the concrete example in docs/PAPER.md's "why not learn the scheduler" reviewer-objection
-answer, and its multi-resource "max-weight index matching" is noted there as a plausible
-frequency-selective / multi-carrier extension, not evaluated here.
+**Terms used throughout.** *Learned code*: a deep JSCC encoder-decoder pair. *Progressive code*: a
+learned code whose symbols are sent in phases and that decodes from whatever prefix of phases has
+arrived. *Slot*, *frame*, *deadline*: the base station has a frame of T slots and serves K users;
+every image must be delivered by the end of the frame. *Link abstraction*: a rule that maps the
+SNRs a codeword's symbols met to its decoded quality. *Physical link design* and *the JSCC way*:
+the two existing categories (paragraph 2). *CLASP*: our method (paragraph 5).
 
-## Two open decisions (my recommendation, your call)
+## Paragraph 1. Why the problem matters
 
-1. **A name for the method.** The supervisor's template wants an acronym ("use an acronym... try to
-   form it into a common word... can reflect the method's distinctive features"). Nothing in
-   docs/PAPER.md or docs/PAPER_OUTLINE.md has coined one — everything is referred to descriptively
-   ("the Lagrangian index," "the MMSE link abstraction," "the calibration-aware reward"). My
-   recommendation: **don't force one.** This is IEEE TWC, a register where a CV-style catchy acronym
-   ("octopus") would read as out of place against the paper's theoretical content, and nothing I
-   tried (LASER, MARS, CALMS) earned its letters without straining. I'd instead fix two short,
-   plain handles and use them consistently from the introduction on: **"the MMSE link abstraction"**
-   for the model, and **"the calibration-aware Lagrangian scheduler"** (or just "our scheduler")
-   for the policy. If you or your supervisor want an acronym anyway, say so and I'll propose a
-   shortlist next turn before we commit to it everywhere.
-2. **Four pillars, three contributions.** The template's sixth paragraph wants exactly three bullets.
-   docs/PAPER.md's story has four (the abstraction; scheduling on it; the system verdict against
-   digital; the scheduler-aware training "reverse interface"). I'd fold the fourth (scheduler-aware
-   training, C8-C11 — real but the smallest and most hedged result: "small... a low-mobility effect")
-   into the performance clause of bullet 3 rather than giving it its own bullet. It stays a full
-   contribution in the body (Section VI of the method) and in the abstract; it just is not one of
-   the introduction's headline three. Flagging this because it is a compression choice, not a cut.
+1. Deep JSCC maps an image straight to channel symbols with one learned encoder and decoder, with
+   no separate source and channel codes [Bourtsoulatze19]. It matches or beats separation-based
+   digital transmission at low SNR and degrades gracefully as the channel worsens, instead of
+   failing once the SNR drops below what a digital code was designed for [Bourtsoulatze19,
+   Gunduz23]. That makes it a strong candidate for image delivery in 6G [Gunduz23].
+2. But a learned code is designed and evaluated as a single link at a given SNR: one transmitter,
+   one receiver, the channel condition handed to it [Bourtsoulatze19, Xu22, Yang25].
+3. A cellular downlink is different:
+   - a base station splits a frame of slots among many users through a scheduler;
+   - each user's slots fade independently;
+   - the base station knows only an estimate of the current slot, a channel-quality report
+     [TS36213] that is often late or wrong;
+   - each delivery, one image, has a deadline.
+4. So the gain a point-to-point study reports is not automatically the gain a cell delivers. That
+   depends on the scheduler, and no existing scheduler knows what a slot is worth to a learned
+   code.
+5. To schedule, the base station needs the value of "give user k this slot now". For a digital
+   code that value follows from the rate the slot carries and the codec's rate-distortion curve.
+   For a trained, nonlinear code no such value exists.
 
-## Paragraph 1 — why this matters
+## Paragraph 2. Existing approaches: physical link design and the JSCC way (Fig. 1)
 
-Role (template): establish the task's importance before naming any gap.
+Order: physical link design and its limitations first; then "In contrast," the JSCC way, the
+category ours belongs to.
 
-- Deep JSCC (image symbols mapped straight to channel symbols, no separate source/channel code)
-  is a serious 6G candidate: matches or beats separation at low SNR, degrades gracefully instead
-  of falling off a cliff.
-- But it is designed and evaluated **as a single link at a given SNR** (one sender, one receiver,
-  the channel condition handed to it). A cellular/WLAN downlink is not that: a base station splits
-  a frame of slots among many users through a scheduler, each user's slot fades on its own, the
-  base station knows only an estimate of the *current* slot (often late or wrong), and each
-  delivery has a deadline (one frame, one request).
-- So the gain the point-to-point papers report is not automatically the gain a cell gets: that
-  depends on a scheduler, and no existing scheduler knows what a slot is worth to a learned code.
-  That is the importance claim driving the whole paper.
-- Close with the two things that make the problem hard and set up Paragraph 2: the scheduler needs
-  a *value* for "give user k this slot now," and that value does not exist for a trained,
-  nonlinear codec the way it exists for a known rate-distortion curve.
+1. Existing approaches to serving images to many users over a fading downlink fall into two
+   categories (Fig. 1):
+   - physical link design, which keeps the image codec separate and engineers the link that
+     carries its bits;
+   - the JSCC way, which lets a learned code take on the channel itself.
+2. Physical link design is how cellular systems deliver images today:
+   - a standard codec compresses the image into bits once (HEVC intra, as in HEIC
+     [Sullivan12]);
+   - for each slot, the physical layer picks the modulation and coding rate from the user's
+     channel-quality report [Goldsmith97, TS36213];
+   - failed blocks are retransmitted with incremental-redundancy HARQ [Caire01];
+   - a channel-aware scheduler, such as proportional fair, picks the user each slot serves
+     [Viswanath02].
+3. It has mature tools for many users and for codewords that span many resources:
+   - effective-SNR link abstractions (EESM, MIESM) predict a coded block's error rate from the
+     SNRs of all the resources it occupies, so link adaptation and system-level evaluation can
+     value a set of resources without decoding [Ericsson03, EMD09, Lagen20];
+   - media-aware schedulers weigh each user's next packet by the distortion it removes before
+     its deadline [Chou06, Pahalawatta07, Fu10, Hosseini16].
+4. Limitation 1: every one of these tools rests on a binary outcome per block, decoded or lost.
+   - A user's quality is therefore a step function of its channel: a slot below the block's
+     design SNR delivers nothing, and SNR above it is wasted.
+   - This is the cliff effect [Bourtsoulatze19, Gunduz23].
+5. Limitation 2: the rate is committed before the slot is seen, from a report that may be late or
+   wrong.
+   - An optimistic report costs a retransmission; a pessimistic one leaves capacity unused.
+   - Link adaptation and HARQ protect the bits only by spending extra slots.
+   - In our evaluation, going from fresh reports to aged ones (correlation 0.8) costs the digital
+     chain 1.9 dB, against 0.5 dB for the learned code (Section VII).
+6. In contrast, the JSCC way replaces the two codes with one learned code that maps the image
+   straight to channel symbols [Bourtsoulatze19].
+   - Its quality degrades smoothly with the SNR its symbols meet, so no block is lost outright
+     and no coding rate has to be matched to an uncertain report.
+   - The same symbols serve receivers of different SNRs, each at a quality matched to its
+     channel, as linear analog codes showed for multicast video [Jakubczak11].
+7. One line of work makes a single link adapt to the channel and the budget:
+   - one model for all SNRs [Xu22];
+   - one model for many bandwidths and rates [Kurka21, Dai22, Zhang23, Yang25];
+   - feedback that stops the transmission once a target quality is reached [Kurka20, Wu24f];
+   - MIMO channels [Wu24m];
+   - a predictor of each image's quality that picks its rate [Zhang23].
+8. To serve many users, the JSCC way splits the shared channel by each user's predicted quality
+   at its SNR:
+   - channel assignment and symbol counts from a semantic spectral efficiency [Yan22];
+   - user association and bandwidth [Xia24];
+   - compression ratios and resources by Bayesian optimisation over a learned quality oracle
+     [BO26].
 
-No numbers needed here — this paragraph is motivation, not evidence.
+   Other work builds the sharing into the code, letting users transmit non-orthogonally
+   [Yilmaz23]. Where the allocation must change over time, a scheduler is learned by deep
+   reinforcement learning [Wang22, Zhang23t]. The most recent such work is a restless bandit
+   over fading slots whose slot values are learned [McDowell26].
+9. Our method belongs to the JSCC way: it schedules a learned code to many users across fading
+   slots.
 
-## Paragraph 2 — classification of existing approaches, with Figure 1
+### Figure 1
 
-Role (template): split prior work into the categories that motivate ours by contrast; land on
-Figure 1 (abstract, low-contrast for others, bright + bold for ours).
+The figure is one column wide, with three panels stacked top to bottom: (a), (b) and (c).
 
-Two categories (not three — the related-work section's five subsections are for Section II; the
-introduction only needs the minimal split that motivates the gap):
+- **Style.** All text is bold. Panels (a) and (b) use grey, low-contrast tones; panel (c) uses
+  saturated colour. Red appears only on the words "link abstraction" in (c). There are no
+  equations and no axes beyond the insets.
+- **(a) Physical link design.**
+  - The chain: image → "codec" → bits → "AMC + HARQ" → a row of slots.
+  - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost).
+  - A "scheduler (CQI)" box above the row picks the user for each slot.
+  - Inset: quality against SNR as a step (the cliff).
+- **(b) The JSCC way.**
+  - The chain: image → "learned JSCC" → one codeword per user.
+  - Each codeword has a single arrow to its own channel, labelled with one SNR.
+  - An "allocator q(SNR)" box sets every user's share once.
+  - A dashed "RL scheduler" box carries a "?" for the value of a slot.
+  - Inset: quality against SNR as a smooth curve.
+- **(c) CLASP.**
+  - The chain: image → "progressive JSCC" → phases spread over slots of different SNRs (slot
+    colour = SNR) → "link abstraction" → each user's two-number state → "restless-bandit
+    scheduler".
+  - The scheduler serves users slot by slot up to a "deadline" marker.
+  - Inset: predicted against decoded quality, on the diagonal.
 
-* **(a) Single-link learned JSCC.** DeepJSCC and its rate/SNR-adaptive successors (PADC,
-  SwinJSCC, DeepJSCC-MIMO, JSCCformer-f, DeepJSCC-l, DRJSCC, NTSCC...) — all evaluated at a
-  *given* SNR, sampled or fixed; no scheduler, no competing users, nothing says what happens if
-  the symbols of one codeword cross slots at *different* SNRs.
-* **(b) Scheduling theory for content with a known value.** Deadline scheduling, restless
-  bandits and Lagrangian index policies with proven, vanishing optimality gaps (RaDiO; Hosseini
-  and Panwar's layered-video bandit; Hao-Xu-Tong's Lagrangian priority policy; Brown-Smith;
-  Zhang-Frazier; Gast-Gaujal-Yan) — mature, but built around sources whose slot-by-slot worth is
-  already known: digital layers that decode or do not, or an effective-SNR abstraction (EESM,
-  MIESM) built for conventional modulation and coding, never tested on a learned code.
-* **(c) Ours**, the bridge: show a learned code can be TRAINED so it has a simple value per slot,
-  then apply (b)'s machinery to it exactly.
+**Caption.** "Fig. 1. Approaches to serving images to many users over a fading downlink.
+(a) Physical link design: a separate codec over adaptive modulation and coding, HARQ and a
+channel-aware scheduler; each block is decoded or lost. (b) The JSCC way: a learned code degrades
+gracefully, but each user is valued at a single SNR and allocated once, or scheduled by a policy
+learned by trial and error. (c) CLASP: a progressive learned code trained under slot-varying SNR
+obeys a link abstraction that values every slot, and a restless-bandit scheduler built on it
+serves every user slot by slot up to the deadline."
 
-**Figure 1 plan** (teaser/classification figure, abstract, to draw once the outline is settled —
-left-right for TWC's two-column layout):
-- (a) one encoder → one channel at one given SNR → one decoder. No scheduler, one user. Grey/low
-  contrast.
-- (b) K users with a *known* value curve (a step function for digital layers, or a textbook
-  effective-SNR curve) feeding a scheduler/index-policy box. Grey/low contrast.
-- (c) K users, each a **learned prefix code**; training gives it a link abstraction (highlighted,
-  bright colour) that turns accumulated phases into a two-number state; the *same* scheduler box
-  from (b) now sits on top of it, in bright colour, with a short highlighted arrow showing the new
-  piece (the abstraction) is what makes (c) possible. One or two words in red on the single element
-  that is new (the abstraction arrow), nothing else red.
-- Caption, point by point: "(a) learned codes are evaluated on one link at a known SNR; (b) mature
-  scheduling theory needs a known per-slot value, which no model gives a learned code; (c) we show
-  training gives a learned code that value, so (b)'s theory applies to it for the first time."
+## Paragraph 3. Challenges of the JSCC way, and the question they raise
 
-## Paragraph 3 — shortcomings / the gap, as a question
+1. Although existing JSCC methods are effective, they still face the following challenges when a
+   base station schedules a learned code to many users over fading slots.
+2. **(1) No link abstraction.**
+   - They value a user's transmission at a single SNR, with a fitted quality-SNR curve or a
+     learned quality predictor [Yan22, Zhang23, BO26].
+   - A scheduled image, however, is spread over slots of different SNRs. For a nonlinear learned
+     code, no rule is known for how these SNRs combine into decoded quality.
+   - The EESM and MIESM mappings of physical link design predict a digital block's error rate,
+     not a learned code's distortion. To our knowledge, they have not been validated on a learned
+     code.
+3. **(2) No tractable, certifiable scheduler.**
+   - Deciding which user each slot serves, before a deadline and without knowing future slots,
+     is a stochastic dynamic program. Its state grows exponentially with the number of users.
+   - Existing methods take one of two routes, and neither plans over the frame with a guarantee:
+     - some decide each transmission on its own, at its current SNR, without planning over the
+       slots left before the deadline [Yan22, Xia24, BO26];
+     - others learn slot values by reinforcement learning, which needs many interactions to
+       train and gives no certificate of how far the learned policy is from optimal [Wang22,
+       Zhang23t, McDowell26].
+4. **(3) Imperfect information.**
+   - The scheduler's quality model and its channel reports are both estimates, yet existing
+     schedulers take them at face value.
+     - PADC picks a rate from a predicted quality as if the prediction were exact [Zhang23].
+     - The learned schedulers assume perfect channel knowledge [McDowell26].
+   - So a user predicted just above a quality target can decode just below it.
+   - The JSCC way's advantage over physical link design was measured on single links with an
+     idealised digital side: exact channel knowledge and capacity-achieving codes [Kurka20].
+     Whether that advantage survives the reports a real base station has is open.
+5. Behind all three challenges lies one question: does a learned code have a link abstraction at
+   all? That is, is there a rule that, like EESM for a digital block, turns the SNRs its symbols
+   met into its decoded quality? And if there is, what decides whether a code obeys it?
 
-Role (template): this is a new-category method, so the simplest form applies — motivate briefly,
-end on a question — but still name 2-3 concrete sub-problems a reviewer can track, since they map
-directly onto the three contributions in Paragraph 6.
+## Paragraph 4. Pilot findings
 
-Opening move (per the template's note on pilot-experiment papers: introduce with a question):
-"JSCC papers assume the channel is simply given; scheduling papers assume the source's value is
-already known. Neither asks what a slot is worth to a *learned* code — a trained network with no
-declared rule for composing what it has already received with what a new slot adds. Naturally, we
-ask: does a learned code even have a predictable, composable value per use of the channel, the way
-a digital code does?"
+1. To answer it, we trained a progressive code under slot-varying SNR, with the chunks of each
+   codeword at independent SNRs. We then decoded it on held-out histories of mixed slot SNRs and
+   tested candidate rules (Section IV).
+   - The code has six phases, any prefix of which decodes.
+   - It is a vision transformer whose encoder and decoder never see the SNR.
 
-Then the three sub-problems (maps 1:1 onto Paragraph 6's three bullets and onto docs/PAPER.md's
-C12/C1/C2, C13, C5):
+   We found the following.
+2. **(1) Its distortion adds up over slots.** The source distortion plus a sensitivity-weighted
+   sum of per-slot MMSE terms, D = Dsrc + C Σ_j ρ_j φ(n_j), predicts held-out decodes far better
+   than the digital mappings (mean absolute error):
 
-1. No link abstraction exists for learned codes, so none of (b)'s machinery — built around a known
-   per-slot value — can reach them at all.
-2. Even granted an estimated value, a scheduler aiming at a hard quality target has to trust that
-   estimate exactly; an imperfect, calibrated curve makes a hard threshold brittle (a user judged
-   just above the target by the model can land just below it when decoded).
-3. It is not established whether a *scheduled* learned code still beats a well-engineered digital
-   chain once the channel information the scheduler actually gets (CQI error, aged reports) is
-   realistic, rather than the exact CSI single-link comparisons assume.
+   | test set | MMSE rule | MIESM | EESM |
+   |---|---|---|---|
+   | Kodak | 0.055 dB | 0.49 dB | 0.19 dB |
+   | CLIC | 0.083 dB | 0.44 dB | 0.16 dB |
 
-## Paragraph 4 — the pilot finding (template: optional, required here because we have one)
+   The form is the one linear analog codes obey by construction [Jakubczak11]. Here a nonlinear
+   learned code acquires it.
+3. **(2) Training decides it.**
+   - The same architecture trained at one constant SNR per image obeys no such rule: the MMSE
+     rule errs by 0.22 dB, and no rule does better than 0.15 dB.
+   - The reason is that such a code codes its later phases against the base reconstruction it
+     expects at one SNR. DeepJSCC-l observed the same mismatch for layers [Kurka21].
+4. **(3) It is cheap and accurate, and its small error still matters.**
+   - Twelve decodes per image calibrate it.
+   - It predicts the decoded quality of complete scheduled deliveries with a mean absolute error
+     of 0.05-0.09 dB and no bias.
+   - But its calibration error (0.03-0.05 dB) is first-order at a hard quality target. A
+     scheduler that trusts it loses 1.7-2.0 points of the share of users reaching 30 dB, at
+     every cell size from 16 to 128 users.
+5. In short, a learned code can be given a link abstraction through training. With it, each
+   user's state reduces to two numbers: the phases received, and their accumulated weighted noise.
+   Scheduling then becomes a planning problem, provided the abstraction's residual error is part
+   of the objective.
 
-Role: state the empirical discovery that makes the rest of the paper possible, as findings, not
-method. General → specific → general.
+## Paragraph 5. The method: CLASP
 
-"To find out, we trained [the prefix code] under slot-varying SNR and decoded it on mixed-SNR
-histories. We found:"
+1. To address the aforementioned challenges, we propose CLASP (Calibration-aware,
+   Link-Abstraction-based Scheduling of Progressive codes), a scheduler for learned progressive
+   codes in a multi-user fading downlink.
+2. Existing JSCC methods value each user at one SNR and allocate once, or learn slot values by
+   reinforcement learning. Unlike them, CLASP values every slot for every user through the code's
+   link abstraction, and plans each user's delivery to the deadline exactly.
+3. Specifically, CLASP has one design for each challenge:
+   - **Challenge (1), the link abstraction.** We train the progressive code under slot-varying
+     SNR and calibrate its MMSE link abstraction per image from 12 decodes. Each user then becomes
+     a two-number state.
+   - **Challenge (2), the scheduler.** On this state the frame becomes a finite-horizon restless
+     bandit [Whittle88]:
+     - a Lagrangian relaxation splits it into one small dynamic program per user under per-slot
+       prices, solved exactly on a CPU;
+     - the relaxation's value is an upper bound on every causal scheduler;
+     - users are served in the order of the Lagrangian index those programs define [Hao22,
+       Brown20].
+   - **Challenge (3), imperfect information.**
+     - Each program rewards the probability of reaching the quality target under the
+       abstraction's measured calibration error, rather than a hard threshold.
+     - Each program decides on the posterior of the channel given an aged report, not on the
+       report itself.
+4. Results, all decoded by the codec itself:
+   - CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair.
+   - It brings 8-15 points more users to 30 dB than per-image rate selection [Zhang23].
+   - For mean PSNR, its gap to the bound shrinks to 0.005 dB per user at 128 users.
+   - Under CQI errors and aged reports, it beats a digital chain with CQI-table link adaptation
+     and incremental-redundancy HARQ by 1.1-1.5 dB; with error-free reports the two are on par.
+   - Training the code on the channel its own scheduler creates adds 0.28 dB.
 
-1. A prefix code trained with its phases at *different* slot SNRs has distortion that composes
-   almost exactly additively across slots — a sensitivity-weighted sum of per-slot MMSE terms —
-   held-out error 0.055 dB on Kodak (0.083 dB on CLIC), against 0.49 dB / 0.19 dB for the standard
-   MIESM / EESM mappings tested on the same code (docs/PAPER.md C12).
-2. A code trained the ordinary way, at one constant SNR per image, obeys **no** such rule (held-out
-   error 0.22 dB) — the composable value is a property of *training*, not of the architecture.
-3. The rule is cheap to calibrate (12 extra decodes per image) and predicts the *decoded* quality
-   of a fully scheduled, multi-slot delivery to within 0.05-0.09 dB, including the schedules our
-   own scheduler later produces (docs/PAPER.md C1/C2).
+## Paragraph 6. Contributions (Discovery-Method-Performance)
 
-Close with one sentence turning the finding into the paper's thesis: training, not architecture,
-is what gives a learned code a link abstraction — and once it has one, deadline scheduling of it
-becomes an exactly solvable restless bandit.
+Overall, our main contributions are as follows.
 
-## Paragraph 5 — method summary
+1. **Discovery.**
+   - We find that a learned progressive code trained under slot-varying SNR obeys an additive
+     MMSE link abstraction. It is accurate to 0.055-0.083 dB on two test sets, against 0.44-0.49
+     dB for MIESM and 0.16-0.19 dB for EESM.
+   - A code trained at constant SNR obeys none.
+   - A transmitter can calibrate the abstraction from 12 decodes per image.
+   - To our knowledge, effective-SNR mappings had not been tested on a learned code before.
+2. **Method.** We propose CLASP.
+   - It turns multi-user deadline scheduling of learned codes into a finite-horizon restless
+     bandit with a two-number user state.
+   - It solves that bandit with exact per-user dynamic programs, a Lagrangian bound on every
+     causal scheduler, and an index policy.
+   - A calibration-aware reward and report-aware programs make it robust to the abstraction's
+     error and to aged channel reports.
+3. **Performance.** All results are decoded by the codec.
+   - CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB over
+     per-image rate selection.
+   - Its gap to the bound vanishes as the cell grows:
+     - for mean PSNR, from 0.21 to 0.005 dB per user between 8 and 128 users;
+     - for the target, within ±0.3 points from 16 users on.
+   - Under CQI errors and aged reports, it outperforms a digital chain with link adaptation and
+     HARQ by 1.1-1.5 dB and 10.7-13.5 points.
+   - Training the code on its scheduler's channel adds 0.28 dB.
 
-Role: name it (see open decision 1), contrast with the closest alternative, state the two main
-designs against the two hardest sub-problems from Paragraph 3, close on performance.
+**How paragraphs 3, 5 and 6 line up:**
 
-- "To address this, we propose [the MMSE link abstraction and a calibration-aware restless-bandit
-  scheduler built on it]." One sentence naming what it is.
-- Contrast: "Unlike digital system-level modelling, which reuses EESM/MIESM derived for
-  conventional coding and has never been tested on a learned code, and unlike the one existing
-  learned-code scheduler (McDowell et al. 2026), which sends a fresh, self-contained codeword every
-  slot and has to learn slot values by reinforcement learning for lack of an abstraction, our
-  per-user state accumulates across slots and is solved exactly."
-- Specifically: "we show training under slot-varying SNR gives the code a two-number state (phases
-  held, accumulated weighted noise) that a finite-horizon restless bandit can use directly — a
-  per-user dynamic program, a Lagrangian bound on every causal scheduler, and a Lagrangian index
-  policy, all exact and CPU-cheap — addressing [sub-problem 1]; and we reward the index's programs
-  with the *probability* of reaching the quality target under the abstraction's own measured
-  calibration error, rather than a hard threshold, addressing [sub-problem 2]."
-- Performance clause (covers sub-problem 3 + the folded-in fourth pillar): "Decoded over real
-  schedules, it gains 0.5-0.6 dB over proportional fair and brings 8-15 points more users to a
-  30 dB target than per-image rate selection; its gap to the bound vanishes as the cell grows; and
-  under CQI errors and aged reports it beats a digital chain with CQI-table link adaptation and
-  incremental-redundancy HARQ by 1.1-1.5 dB, a lead that grows further when the code is trained on
-  the very channel its own scheduler creates."
+| challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
+|---|---|---|
+| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against MIESM 0.44-0.49 and EESM 0.16-0.19; decoded schedules 0.05-0.09 dB |
+| (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB (8 → 128 users); +0.5-0.6 dB over PF |
+| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2%; +1.1-1.5 dB over digital under CQI errors and aged reports |
 
-## Paragraph 6 — three contributions
+## Paragraph 7. Organisation
 
-Role: exactly three, one of the template's three formats. Recommended format: **Discovery-Method-
-Performance** (the finding in Paragraph 4 genuinely is the thing that makes the rest possible, so
-leading with it as a discovery is the honest and the most memorable framing).
+The rest of the paper is organised as follows:
 
-1. **We show** that a learned prefix code trained under slot-varying SNR acquires a simple, additive
-   MMSE link abstraction — held-out error 0.055-0.083 dB against 0.19-0.49 dB for the EESM/MIESM
-   mappings digital systems use — and that a code trained the ordinary way has none; to our
-   knowledge the first test of effective-SNR link abstraction on a learned code.
-2. **We turn this into an exact scheduler**: each user becomes a two-number state for a
-   finite-horizon restless bandit, giving a per-user dynamic program, a Lagrangian bound on every
-   causal scheduler and a Lagrangian index policy, whose gap to the bound vanishes as the cell
-   grows (0.21 to 0.005 dB per user, 8 to 128 users) once its programs reward the probability of
-   success under the abstraction's own calibration error rather than a hard threshold.
-3. **We show it delivers**: decoded, 0.5-0.6 dB over proportional fair and 8-15 points more users
-   at a quality target than per-image rate selection; and, under the CQI errors and aged reports a
-   real base station has, the scheduled code beats a digital chain with link adaptation and HARQ by
-   1.1-1.5 dB — training the code on the channel its own scheduler creates adds a further 0.28 dB.
+- Section II reviews related work in three subsections: physical link design for multi-user media
+  delivery, the JSCC way (adaptive and multi-user learned codes), and restless bandits with index
+  policies.
+- Section III states the system model.
+- Section IV reports the pilot experiments and derives the MMSE link abstraction.
+- Section V develops CLASP.
+- Section VI studies the channel the scheduler creates, and trains the code on it.
+- Section VII evaluates CLASP against proportional fair, per-image rate selection, the Lagrangian
+  bound and the digital chain.
+- Section VIII concludes and states the limitations.
 
-(Alternative, if you'd rather keep the fourth pillar visible as its own bullet and compress
-differently: General-Specific-Performance — (1) propose the abstraction+scheduler to solve "what is
-a slot worth to a learned code"; (2) two mechanisms: the calibration-aware reward, and
-scheduler-aware training (the code learns the channel its scheduler makes); (3) performance. Happy
-to switch to this if you'd rather both the calibration-aware reward and the reverse-interface
-result get their own line.)
+## References cited in Section I
 
-## What Paragraph 6 leaves for the rest of the paper
+| key | reference |
+|---|---|
+| Bourtsoulatze19 | E. Bourtsoulatze, D. B. Kurka, D. Gündüz, "Deep joint source-channel coding for wireless image transmission," IEEE Trans. Cogn. Commun. Netw., vol. 5, no. 3, pp. 567-579, 2019 |
+| Gunduz23 | D. Gündüz, Z. Qin, I. E. Aguerri, H. S. Dhillon, Z. Yang, A. Yener, K. K. Wong, C.-B. Chae, "Beyond transmitting bits: Context, semantics, and task-oriented communications," IEEE J. Sel. Areas Commun., vol. 41, no. 1, pp. 5-41, 2023 |
+| Xu22 | J. Xu, B. Ai, W. Chen, A. Yang, P. Sun, M. Rodrigues, "Wireless image transmission using deep source channel coding with attention modules," IEEE Trans. Circuits Syst. Video Technol., vol. 32, no. 4, pp. 2315-2328, 2022 |
+| Yang25 | K. Yang, S. Wang, J. Dai, X. Qin, K. Niu, P. Zhang, "SwinJSCC: Taming Swin transformer for deep joint source-channel coding," IEEE Trans. Cogn. Commun. Netw., vol. 11, no. 1, pp. 90-104, 2025 |
+| TS36213 | 3GPP TS 36.213, "Evolved Universal Terrestrial Radio Access (E-UTRA); Physical layer procedures" (CQI table 7.2.3-1) |
+| Sullivan12 | G. J. Sullivan, J.-R. Ohm, W.-J. Han, T. Wiegand, "Overview of the High Efficiency Video Coding (HEVC) standard," IEEE Trans. Circuits Syst. Video Technol., vol. 22, no. 12, pp. 1649-1668, 2012 |
+| Goldsmith97 | A. J. Goldsmith, S.-G. Chua, "Variable-rate variable-power MQAM for fading channels," IEEE Trans. Commun., vol. 45, no. 10, pp. 1218-1230, 1997 |
+| Caire01 | G. Caire, D. Tuninetti, "The throughput of hybrid-ARQ protocols for the Gaussian collision channel," IEEE Trans. Inf. Theory, vol. 47, no. 5, pp. 1971-1988, 2001 |
+| Viswanath02 | P. Viswanath, D. N. C. Tse, R. Laroia, "Opportunistic beamforming using dumb antennas," IEEE Trans. Inf. Theory, vol. 48, no. 6, pp. 1277-1294, 2002 |
+| Ericsson03 | Ericsson, "System-level evaluation of OFDM: further considerations," 3GPP TSG-RAN WG1 #35, R1-031303, Nov. 2003 |
+| EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009 |
+| Lagen20 | S. Lagen et al., "New radio physical layer abstraction for system-level simulations of 5G networks," Proc. IEEE ICC, 2020 |
+| Chou06 | P. A. Chou, Z. Miao, "Rate-distortion optimized streaming of packetized media," IEEE Trans. Multimedia, vol. 8, no. 2, pp. 390-404, 2006 |
+| Pahalawatta07 | P. Pahalawatta, R. Berry, T. Pappas, A. Katsaggelos, "Content-aware resource allocation and packet scheduling for video transmission over wireless networks," IEEE J. Sel. Areas Commun., vol. 25, no. 4, pp. 749-759, 2007 |
+| Fu10 | F. Fu, M. van der Schaar, "A systematic framework for dynamically optimizing multi-user wireless video transmission," IEEE J. Sel. Areas Commun., vol. 28, no. 3, pp. 308-320, 2010 |
+| Hosseini16 | S. A. Hosseini, S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," arXiv:1612.03985, 2016 |
+| Jakubczak11 | S. Jakubczak, D. Katabi, "A cross-layer design for scalable mobile video," Proc. ACM MobiCom, 2011 |
+| Kurka20 | D. B. Kurka, D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178-193, 2020 |
+| Kurka21 | D. B. Kurka, D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., 2021, DOI 10.1109/TWC.2021.3090048 |
+| Dai22 | J. Dai, S. Wang, K. Tan, Z. Si, X. Qin, K. Niu, P. Zhang, "Nonlinear transform source-channel coding for semantic communications," IEEE J. Sel. Areas Commun., 2022 (arXiv:2112.10961) |
+| Zhang23 | W. Zhang et al., "Predictive and adaptive deep coding for wireless image transmission in semantic communication" (PADC), IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486-5501, 2023 |
+| Wu24f | H. Wu, Y. Shao, E. Ozfatura, K. Mikolajczyk, D. Gündüz, "Transformer-aided wireless image transmission with channel feedback" (JSCCformer-f), IEEE Trans. Wireless Commun., vol. 23, no. 9, pp. 11904-11919, 2024 |
+| Wu24m | H. Wu, Y. Shao, C. Bian, K. Mikolajczyk, D. Gündüz, "Deep joint source-channel coding for adaptive image transmission over MIMO channels," IEEE Trans. Wireless Commun., vol. 23, no. 10, 2024, DOI 10.1109/TWC.2024.3422794 |
+| Yan22 | L. Yan, Z. Qin, R. Zhang, Y. Li, G. Y. Li, "Resource allocation for text semantic communications," IEEE Wireless Commun. Lett., vol. 11, no. 7, pp. 1394-1398, 2022 |
+| Xia24 | L. Xia, Y. Sun, D. Niyato, X. Li, M. A. Imran, "Joint user association and bandwidth allocation in semantic communication networks," IEEE Trans. Veh. Technol., vol. 73, no. 2, pp. 2699-2711, 2024 |
+| BO26 | "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," arXiv:2604.10931, 2026 |
+| Yilmaz23 | S. F. Yilmaz, C. Karamanlı, D. Gündüz, "Distributed deep joint source-channel coding over a multiple access channel," Proc. IEEE ICC, 2023 |
+| Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598-2613, 2022 |
+| Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, pp. 3992-4004, 2023 |
+| McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, 2026 |
+| Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25A, pp. 287-298, 1988 |
+| Hao22 | L. Hao, Y. Xu, L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236-250, 2022 |
+| Brown20 | D. B. Brown, J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, 2020 |
 
-Everything compressed above stays a full result: C3/C4 (the closed-form certainty-equivalent
-policy; admission+stopping for the quality target), C6 (encode once vs. a decoder per length), C7
-(which policy when, under CSI errors), C8-C11 (the reverse interface) all keep their place in
-Sections IV-V; the introduction's three bullets are a map of the paper, not the whole paper.
+## Numbers used, and where they come from
 
-## Organisation paragraph (closing the introduction)
+All results are on Kodak unless CLIC is named. "Decoded" means the schedules were decoded by the
+codec itself.
 
-One short paragraph, standard form: Section II related work; III system model; IV the link
-abstraction; V scheduling on it (the bandit, the bound, the index, the calibration-aware reward);
-VI the scheduler-made channel; VII evaluation; VIII conclusion and limits. (Matches
-docs/PAPER.md's existing outline — no change needed, just restate briefly in prose.)
+| number | paragraph | source |
+|---|---|---|
+| MMSE rule 0.055 dB (Kodak), 0.083 dB (CLIC); MIESM 0.49 / 0.44 dB; EESM 0.19 / 0.16 dB | 4, 6 | NOTES 2, 6d (C12) |
+| constant-SNR code: MMSE rule 0.22 dB, best rule 0.15 dB | 4 | NOTES 2 |
+| 12 decodes per image; scheduled deliveries decoded within 0.05-0.09 dB, no bias | 4, 5, 6 | NOTES 2, 6d (C2) |
+| calibration error 0.03-0.05 dB; trusting it at a hard target costs 1.7-2.0 points from K 16 to 128 (calibration-aware minus hard, paired; 0.75 at K 8) | 4 | NOTES 6f |
+| +0.5-0.6 dB over PF, decoded (Kodak +0.53, CLIC +0.63) | 5, 6 | NOTES 6d (C13) |
+| +8-15 points at 30 dB over PADC's rule, decoded (CLIC +8.1, Kodak +14.8) | 5, 6 | NOTES 6f (C4) |
+| per-user gap to the bound 0.21 → 0.005 dB, K 8 → 128, B = K/8 | 5, 6 | NOTES 6d (C13) |
+| target: within ±0.3 points of the bound from K 16 on | 6 | NOTES 6f (C13) |
+| calibration-aware vs hard target: +1.7 points decoded, users missed 0.0% vs 1.2% | 6 | NOTES 6f |
+| digital, error-free reports: on par (+0.13 dB, +0.3 points) | 5 | PAPER C5 |
+| digital: +1.12 dB / +10.7 points at 2 dB CQI error; +1.54 dB / +13.5 points at r = 0.8 | 5, 6 | PAPER C5 (NOTES 6e) |
+| fresh → aged reports (r = 0.8): digital -1.9 dB, learned code -0.5 dB | 2 | PAPER, story item 3 |
+| scheduler-aware training +0.28 dB | 5, 6 | PAPER C8 (NOTES 6) |
