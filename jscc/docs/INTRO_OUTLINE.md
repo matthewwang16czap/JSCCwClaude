@@ -190,10 +190,11 @@ serves every user slot by slot up to the deadline."
    - The reason is that such a code codes its later phases against the base reconstruction it
      expects at one SNR. DeepJSCC-l observed the same mismatch for layers [Kurka21].
 4. **(3) It is cheap and accurate, and its small error still matters.**
-   - Twelve decodes per image calibrate it.
-   - It predicts the decoded quality of complete scheduled deliveries with a mean absolute error
-     of 0.05-0.09 dB with fresh reports (up to 0.12 dB with aged ones), and a bias within
-     ±0.05 dB.
+   - Twelve decodes per image calibrate it. The calibrated curves predict held-out mixed-SNR
+     decodes with a mean absolute error of 0.03-0.06 dB per prefix length (0.05-0.09 dB on CLIC).
+   - Used by a scheduler, the model predicts the decoded quality of complete scheduled deliveries
+     with a mean absolute error of 0.05-0.09 dB with fresh reports (up to 0.12 dB with aged
+     ones), and a bias within ±0.05 dB.
    - But its calibration error (0.03-0.05 dB) is first-order at a hard quality target. A
      scheduler that trusts it loses 1.7-2.0 points of the share of users reaching 30 dB, at
      every cell size from 16 to 128 users.
