@@ -84,12 +84,16 @@ are equal weights / sensitivity weights.
 | Kodak, constant-SNR code: MMSE **0.222**; best rule (noise) **0.150** | block 2 (s1) | `MMSE, kappa 2.44 ... 0.222 / 0.674`; `noise variance ... 0.150 / 0.487` |
 | CLIC (60 images), snrc4: MMSE **0.083**; EESM 0.374 / **0.159**; MIESM **0.439** / 0.290 | `s22_clic.txt`, first abstraction block; COMMANDS 22.3 (2026-10-25) | `MMSE, kappa 1.93 ... 0.083 / 0.275`; `exponential (EESM)  0.374 / 1.152  0.159 / 0.533`; `capacity (MIESM-like)  0.439 / 1.546  0.290 / 0.842` |
 | CLIC, constant-SNR code: MMSE 0.203; best rule (noise) 0.147 | `s22_clic.txt`, second block | `MMSE, kappa 2.65 ... 0.203 / 0.609` |
-| **12 decodes** per image; calibration error 0.030-0.064 dB | `s8_calib.txt`, COMMANDS 8a (2026-10-11) | `... constant decodes at [1.0, 13.0] dB (12 decodes)`, then the "all unused" column: 0.037 0.051 0.064 0.047 0.042 0.030 |
-| calibration spread **0.03-0.05** dB | `s24_soft_auto.txt` header, COMMANDS 24.1 (2026-10-26) | `sigma 0.031 0.044 0.047 0.040 0.033 0.028 dB` |
+| **12 decodes** per image; the calibrated curves predict held-out mixed-SNR decodes within **0.03-0.06** dB (MAE per prefix length; these files print MAE / p95 only, no bias) | `s13_nested.txt`, COMMANDS 17.3c (2026-10-14): the nested curves every run since round 17 schedules on (`belief_snrc4_nested.json`) | the block after `transmitter belief: ... (12 decodes)` for the 24-image snrc4 fit, column "all unused": 0.037 0.050 0.063 0.047 0.042 0.033 |
+| the same on CLIC: **0.05-0.09** dB | `s22_clic.txt`, COMMANDS 22.3 (2026-10-25) | "all unused": 0.062 0.075 0.091 0.064 0.060 0.049 |
+| (superseded) the free-model curves of rounds 8-16: 0.030-0.064 dB | `s8_calib.txt`, COMMANDS 8a (2026-10-11), wrote `belief_snrc4.json` | "all unused": 0.037 0.051 0.064 0.047 0.042 0.030 |
+| calibration spread **0.03-0.05** dB (the calibrated curves against the fitted ones, per prefix length: the error the calibration-aware reward assumes; a different comparison from the two above) | `s24_soft_auto.txt` header, COMMANDS 24.1 (2026-10-26) | `sigma 0.031 0.044 0.047 0.040 0.033 0.028 dB, bias (truth - belief) +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB` |
 | trusting the curves at a hard target costs **1.7-2.0** points (K 16-128); simulated, 100 frames per K | `s24_soft_auto.txt`, per-K blocks | `lagrange_soft - lagrange: +2.000 pts [+1.375, +2.688]` (K 16); `+1.656` (K 32, 64, 128); `+0.750` (K 8) |
 
-**The model's error on scheduled deliveries, decoded.** Each `replay_report` block starts with a
-line of the form `N decoded histories: predicted - actual PSNR bias ..., MAE ...`.
+**The model's error on scheduled deliveries, decoded.** The outline's "0.05-0.09 dB, bias within
+±0.05 dB" comes from these replay files, not from the calibration files above. Each
+`replay_report` block starts with a line of the form `N decoded histories: predicted -
+actual PSNR bias ..., MAE ...`.
 
 | condition | files (round) | MAE (dB) | bias (dB) |
 |---|---|---|---|
@@ -149,7 +153,7 @@ All decoded on the same slots, under `slope_adv`'s schedules, over 150 frames.
 ```
 cd ~/projects/JSCCwClaude-main/jscc
 grep -n "MMSE, kappa\|exponential (EESM)\|capacity (MIESM-like)\|noise variance" results/s13_abstractions.txt results/s22_clic.txt
-grep -n "12 decodes" -A 8 results/s8_calib.txt
+grep -n "12 decodes" -A 8 results/s13_nested.txt results/s22_clic.txt
 grep -n "decoded histories" results/s13_replays.txt results/s20_replays.txt results/s21_replays.txt results/s22_replays.txt results/s24_replays.txt
 head -n 8 results/s22_replays.txt
 grep -n "lagrange_soft" results/s24_replays.txt; grep -n "missed" results/s24_dec_auto.txt
