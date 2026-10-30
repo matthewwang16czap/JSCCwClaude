@@ -985,7 +985,14 @@ def main():
     ap.add_argument("--dump", type=int, default=0, help="histories of the first N frames")
     ap.add_argument("--dump-out", default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--keep-frames", action="store_true",
+                    help="with --out: every policy's per-frame objective (frame mean PSNR, or "
+                         "share at the target) and the image names in the JSON, so that "
+                         "tools/paired_runs.py can pair runs on the same frames (e.g. a learned "
+                         "code against a digital codec)")
     a = ap.parse_args()
+    if a.keep_frames and not a.out:
+        ap.error("--keep-frames writes into --out: give --out")
     if a.policies is None:
         a.policies = list(TARGET_POLICIES if a.target is not None else MEAN_POLICIES)
     needs = sorted(set(a.policies) & set(NEEDS_TARGET))
@@ -1051,15 +1058,20 @@ def main():
                                          a.plan_offset, belief, a.fade_corr, a.plan,
                                          a.fixed_codes, a.preempt, a.preempt_quantile,
                                          sigma, backoff, corr, a.cqi_aware, delay=a.delay,
-                                         harq=harq, soft_sigma=a.soft_sigma)
+                                         keep_frames=a.keep_frames, harq=harq,
+                                         soft_sigma=a.soft_sigma)
         report(a, util, digital, summary, base, sigma, backoff, ref, corr)
         if a.delay:
             report_delay(a, util, summary, base)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:
-            json.dump({"args": vars(a), "summary": summary, "backoff": backoff,
-                       "cqi_corr": a.cqi_corr[0], "cqi_error": a.cqi_error[0]}, f, indent=1)
+            out = {"args": vars(a), "summary": summary, "backoff": backoff,
+                   "cqi_corr": a.cqi_corr[0], "cqi_error": a.cqi_error[0]}
+            if a.keep_frames:
+                out.update(names=list(util.names), kind="digital" if digital else "prefix",
+                           objective="mean" if a.target is None else "target")
+            json.dump(out, f, indent=1)
         print(f"wrote {a.out}")
     if a.dump:
         path = a.dump_out or os.path.splitext(a.out or "sched")[0] + "_histories.json"

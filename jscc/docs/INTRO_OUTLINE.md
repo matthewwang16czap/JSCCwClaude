@@ -1,8 +1,8 @@
 # Section I (Introduction): paragraph-by-paragraph outline
 
 Seven paragraphs, in the order of the supervisor's template. Each numbered item is one sentence
-(or two short ones) of the prose. [Keys] point to the reference list at the end. The last table
-gives the source of every number.
+(or two short ones) of the prose. [Keys] point to the reference list at the end. Every number,
+with the round and the result file it comes from, is in `docs/INTRO_NUMBERS.md`.
 
 **Terms used throughout.** *Learned code*: a deep JSCC encoder-decoder pair. *Progressive code*: a
 learned code whose symbols are sent in phases and that decodes from whatever prefix of phases has
@@ -65,7 +65,7 @@ category ours belongs to.
    wrong.
    - An optimistic report costs a retransmission; a pessimistic one leaves capacity unused.
    - Link adaptation and HARQ protect the bits only by spending extra slots.
-   - In our evaluation, going from fresh reports to aged ones (correlation 0.8) costs the digital
+   - In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the digital
      chain 1.9 dB, against 0.5 dB for the learned code (Section VII).
 6. In contrast, the JSCC way replaces the two codes with one learned code that maps the image
    straight to channel symbols [Bourtsoulatze19].
@@ -171,12 +171,16 @@ serves every user slot by slot up to the deadline."
    We found the following.
 2. **(1) Its distortion adds up over slots.** The source distortion plus a sensitivity-weighted
    sum of per-slot MMSE terms, D = Dsrc + C Σ_j ρ_j φ(n_j), predicts held-out decodes far better
-   than the digital mappings (mean absolute error):
+   than the digital mappings. Mean absolute error, every rule given the same per-phase
+   sensitivity weights (in brackets, the rule's standard equal-weight form):
 
-   | test set | MMSE rule | MIESM | EESM |
+   | test set | MMSE rule | EESM | MIESM |
    |---|---|---|---|
-   | Kodak | 0.055 dB | 0.49 dB | 0.19 dB |
-   | CLIC | 0.083 dB | 0.44 dB | 0.16 dB |
+   | Kodak | 0.055 dB (0.37) | 0.19 dB (0.37) | 0.34 dB (0.49) |
+   | CLIC | 0.083 dB (0.41) | 0.16 dB (0.37) | 0.29 dB (0.44) |
+
+   Both parts are needed: the MMSE form, and weights per phase, because the code is ordered and
+   which phase a slot carries matters.
 
    The form is the one linear analog codes obey by construction [Jakubczak11]. Here a nonlinear
    learned code acquires it.
@@ -188,7 +192,8 @@ serves every user slot by slot up to the deadline."
 4. **(3) It is cheap and accurate, and its small error still matters.**
    - Twelve decodes per image calibrate it.
    - It predicts the decoded quality of complete scheduled deliveries with a mean absolute error
-     of 0.05-0.09 dB and no bias.
+     of 0.05-0.09 dB with fresh reports (up to 0.12 dB with aged ones), and a bias within
+     ±0.05 dB.
    - But its calibration error (0.03-0.05 dB) is first-order at a hard quality target. A
      scheduler that trusts it loses 1.7-2.0 points of the share of users reaching 30 dB, at
      every cell size from 16 to 128 users.
@@ -221,13 +226,17 @@ serves every user slot by slot up to the deadline."
        abstraction's measured calibration error, rather than a hard threshold.
      - Each program decides on the posterior of the channel given an aged report, not on the
        report itself.
-4. Results, all decoded by the codec itself:
-   - CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair.
-   - It brings 8-15 points more users to 30 dB than per-image rate selection [Zhang23].
-   - For mean PSNR, its gap to the bound shrinks to 0.005 dB per user at 128 users.
-   - Under CQI errors and aged reports, it beats a digital chain with CQI-table link adaptation
-     and incremental-redundancy HARQ by 1.1-1.5 dB; with error-free reports the two are on par.
-   - Training the code on the channel its own scheduler creates adds 0.28 dB.
+4. Results:
+   - Decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair, and brings
+     8-15 points more users to 30 dB than per-image rate selection [Zhang23].
+   - Simulated against the bound, its gap shrinks to 0.005 dB per user at 128 users for mean
+     PSNR, and stays within ±0.3 points from 16 users on for the target.
+   - Simulated under CQI errors and aged reports, the learned code scheduled on its abstraction
+     beats a digital chain with CQI-table link adaptation and incremental-redundancy HARQ by
+     1.1-1.5 dB of mean PSNR. With error-free reports the two are on par.
+   - Decoded on the same slots, training the code on the channel its scheduler creates adds
+     0.28 dB under the closed-form version of the index. Of that, 0.08-0.12 dB is beyond training
+     for the one prefix length that scheduler gives.
 
 ## Paragraph 6. Contributions (Discovery-Method-Performance)
 
@@ -235,8 +244,9 @@ Overall, our main contributions are as follows.
 
 1. **Discovery.**
    - We find that a learned progressive code trained under slot-varying SNR obeys an additive
-     MMSE link abstraction. It is accurate to 0.055-0.083 dB on two test sets, against 0.44-0.49
-     dB for MIESM and 0.16-0.19 dB for EESM.
+     MMSE link abstraction. It is accurate to 0.055-0.083 dB on two test sets. Given the same
+     per-phase weights, EESM errs by 0.16-0.19 dB and MIESM by 0.29-0.34 dB; in their standard
+     form, by 0.37 dB and 0.44-0.49 dB.
    - A code trained at constant SNR obeys none.
    - A transmitter can calibrate the abstraction from 12 decodes per image.
    - To our knowledge, effective-SNR mappings had not been tested on a learned code before.
@@ -247,23 +257,25 @@ Overall, our main contributions are as follows.
      causal scheduler, and an index policy.
    - A calibration-aware reward and report-aware programs make it robust to the abstraction's
      error and to aged channel reports.
-3. **Performance.** All results are decoded by the codec.
-   - CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB over
-     per-image rate selection.
-   - Its gap to the bound vanishes as the cell grows:
+3. **Performance.**
+   - Decoded, CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB
+     over per-image rate selection.
+   - Simulated, its gap to the bound vanishes as the cell grows:
      - for mean PSNR, from 0.21 to 0.005 dB per user between 8 and 128 users;
      - for the target, within ±0.3 points from 16 users on.
-   - Under CQI errors and aged reports, it outperforms a digital chain with link adaptation and
-     HARQ by 1.1-1.5 dB and 10.7-13.5 points.
-   - Training the code on its scheduler's channel adds 0.28 dB.
+   - Simulated under CQI errors and aged reports, the learned code scheduled on the abstraction
+     outperforms a digital chain with link adaptation and HARQ by 1.1-1.5 dB and 10.7-13.5
+     points. This uses the best JSCC policy at each point: the closed form for the mean, a
+     planner for the target.
+   - Decoded, training the code on its scheduler's channel adds 0.28 dB.
 
 **How paragraphs 3, 5 and 6 line up:**
 
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
-| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against MIESM 0.44-0.49 and EESM 0.16-0.19; decoded schedules 0.05-0.09 dB |
-| (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB (8 → 128 users); +0.5-0.6 dB over PF |
-| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2%; +1.1-1.5 dB over digital under CQI errors and aged reports |
+| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.05-0.09 dB with fresh reports |
+| (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
+| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +1.1-1.5 dB over digital under CQI errors and aged reports (simulated, closed-form policy) |
 
 ## Paragraph 7. Organisation
 
@@ -318,23 +330,7 @@ The rest of the paper is organised as follows:
 | Hao22 | L. Hao, Y. Xu, L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236-250, 2022 |
 | Brown20 | D. B. Brown, J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, 2020 |
 
-## Numbers used, and where they come from
+## Numbers used
 
-All results are on Kodak unless CLIC is named. "Decoded" means the schedules were decoded by the
-codec itself.
-
-| number | paragraph | source |
-|---|---|---|
-| MMSE rule 0.055 dB (Kodak), 0.083 dB (CLIC); MIESM 0.49 / 0.44 dB; EESM 0.19 / 0.16 dB | 4, 6 | NOTES 2, 6d (C12) |
-| constant-SNR code: MMSE rule 0.22 dB, best rule 0.15 dB | 4 | NOTES 2 |
-| 12 decodes per image; scheduled deliveries decoded within 0.05-0.09 dB, no bias | 4, 5, 6 | NOTES 2, 6d (C2) |
-| calibration error 0.03-0.05 dB; trusting it at a hard target costs 1.7-2.0 points from K 16 to 128 (calibration-aware minus hard, paired; 0.75 at K 8) | 4 | NOTES 6f |
-| +0.5-0.6 dB over PF, decoded (Kodak +0.53, CLIC +0.63) | 5, 6 | NOTES 6d (C13) |
-| +8-15 points at 30 dB over PADC's rule, decoded (CLIC +8.1, Kodak +14.8) | 5, 6 | NOTES 6f (C4) |
-| per-user gap to the bound 0.21 → 0.005 dB, K 8 → 128, B = K/8 | 5, 6 | NOTES 6d (C13) |
-| target: within ±0.3 points of the bound from K 16 on | 6 | NOTES 6f (C13) |
-| calibration-aware vs hard target: +1.7 points decoded, users missed 0.0% vs 1.2% | 6 | NOTES 6f |
-| digital, error-free reports: on par (+0.13 dB, +0.3 points) | 5 | PAPER C5 |
-| digital: +1.12 dB / +10.7 points at 2 dB CQI error; +1.54 dB / +13.5 points at r = 0.8 | 5, 6 | PAPER C5 (NOTES 6e) |
-| fresh → aged reports (r = 0.8): digital -1.9 dB, learned code -0.5 dB | 2 | PAPER, story item 3 |
-| scheduler-aware training +0.28 dB | 5, 6 | PAPER C8 (NOTES 6) |
+Each number above, with the result file, the COMMANDS round that wrote it, the line to look
+for and whether it is simulated or decoded: `docs/INTRO_NUMBERS.md`.

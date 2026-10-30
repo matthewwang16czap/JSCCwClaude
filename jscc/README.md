@@ -97,6 +97,9 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
                         digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
                         replay_report.py (decoded replays paired by frame, also across codecs)
+                        paired_runs.py (two schedule_sim runs on the same frames, e.g. a
+                        learned code against the digital chain, paired by frame; needs
+                        schedule_sim.py --keep-frames --out)
                         headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
                         codesign.py (the channel a scheduler makes, as a bank of SNR histories
                         that main.py --snr-profiles trains on; bank statistics and convergence)
@@ -123,6 +126,8 @@ docs/CORRECTNESS_REVIEW.md  a full code review (2026-10-27): what was checked, t
 docs/INTRO_OUTLINE.md   the paper's Introduction, paragraph by paragraph, in the supervisor's
                         template: each sentence's claim, its citations and numbers, the Figure 1
                         plan, the reference list, and the source of every number
+docs/INTRO_NUMBERS.md   every number in the Introduction traced to its result file, the COMMANDS
+                        round that wrote it and the line to look for; simulated or decoded
 docs/explainer.html     an interactive walkthrough to present the problem (open in a browser): the
                         setup, the rules, one frame played slot by slot, the measured results
 ```

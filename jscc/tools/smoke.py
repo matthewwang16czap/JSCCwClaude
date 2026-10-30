@@ -1806,6 +1806,84 @@ def check_bootstrap_coverage():
            f"{cov:.3f} (nominal 0.95)")
 
 
+def check_paired_runs():
+    """tools/paired_runs.py and schedule_sim.py --keep-frames: runs of a learned code and of a
+    digital codec with the same seed see the same frames (draw_frames), the per-frame values
+    written by --keep-frames average to the run's reported means, and the paired difference
+    and its best-of selection are computed on them; runs on other frames are refused."""
+    import json
+    import subprocess
+
+    import numpy as np
+
+    from alloc.digital import DigitalUtility
+    from alloc.utility import Utility, nested_rho
+    from tools.paired_runs import compare
+    from tools.schedule_sim import draw_frames
+
+    print("[paired runs]")
+    rng = np.random.default_rng(5)
+    N, P = 6, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    names = [f"im{i}.png" for i in range(N)]
+    u = Utility(1.8, [nested_rho(master, L) for L in range(1, P + 1)], dsrc,
+                dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P), names,
+                meta={"nested": master.tolist()})
+    d = DigitalUtility([[[0.05, 24.0], [0.2, 29.0], [0.4, 32.0]]] * N, names, 1.0 / 16, "cqi", P=6)
+    clip = (-2.0, 22.0)
+    fu = list(draw_frames(u, 4, 12, 6, (0.0, 15.0), "rayleigh", clip, seed=3))
+    fd = list(draw_frames(d, 4, 12, 6, (0.0, 15.0), "rayleigh", clip, seed=3))
+    fs = list(draw_frames(u, 4, 12, 6, (0.0, 15.0), "rayleigh", clip, seed=3, cqi_corr=0.8))
+    ok(all(np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
+           and np.array_equal(a[2], c[2]) for a, b, c in zip(fu, fd, fs)),
+       "the same seed gives a learned code and a digital codec the same images, mean SNRs and "
+       "true slot SNRs, and stale reports leave the true slots unchanged")
+    sim = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedule_sim.py")
+    with tempfile.TemporaryDirectory() as tmp:
+        up, dp = os.path.join(tmp, "u.json"), os.path.join(tmp, "d.json")
+        u.save(up)
+        with open(dp, "w") as f:
+            json.dump(d.to_dict(), f)
+        common = ["--users", "4", "--slots", "12", "--frames", "30", "--keep-frames"]
+
+        def run(*args):
+            return subprocess.run([sys.executable, sim, *args], capture_output=True, text=True)
+
+        ra = run("--utility", up, *common, "--policies", "pf", "slope_adv", "--out",
+                 os.path.join(tmp, "a.json"))
+        rb = run("--utility", dp, *common, "--policies", "pf", "greedy", "--out",
+                 os.path.join(tmp, "b.json"))
+        rc = run("--utility", dp, *common, "--policies", "pf", "greedy", "--seed", "7", "--out",
+                 os.path.join(tmp, "c.json"))
+        bad = run("--utility", up, "--frames", "5", "--keep-frames")
+        ok(ra.returncode == rb.returncode == rc.returncode == 0 and bad.returncode != 0,
+           "--keep-frames runs on both utility kinds, and is refused without --out")
+        with open(os.path.join(tmp, "a.json")) as f:
+            ja = json.load(f)
+        with open(os.path.join(tmp, "b.json")) as f:
+            jb = json.load(f)
+        fa = np.array(ja["summary"]["slope_adv"]["frames"])
+        fb = {p: np.array(jb["summary"][p]["frames"]) for p in ("pf", "greedy")}
+        r = compare([os.path.join(tmp, "a.json") + ":slope_adv"],
+                    [os.path.join(tmp, "b.json") + ":pf,greedy"])
+        pick = max(fb, key=lambda p: fb[p].mean())
+        ok(len(fa) == 30 and ja["names"] == jb["names"] == names
+           and abs(fa.mean() - ja["summary"]["slope_adv"]["mean_psnr"]) < 1e-9
+           and r["b"]["policy"] == pick and abs(r["diff"] - (fa - fb[pick]).mean()) < 1e-12
+           and r["ci"][0] <= r["diff"] <= r["ci"][1],
+           f"per-frame values average to the reported means; the digital side takes its best "
+           f"policy ({pick}); the paired difference {r['diff']:+.3f} dB lies in its interval")
+        try:
+            compare([os.path.join(tmp, "a.json") + ":slope_adv"],
+                    [os.path.join(tmp, "c.json") + ":greedy"])
+            refused = False
+        except ValueError:
+            refused = True
+        ok(refused, "a run on other frames (another seed) is refused")
+
+
 def check_figures():
     """tools/paper_figs.py reads the tools' outputs back: its parsers round-trip the tables
     tools/schedule_sim.py prints (its own report functions) and tools/utility_fit.py's
@@ -1940,6 +2018,7 @@ def main():
     check_allocation(x)
     check_frontier()
     check_freeze(x)
+    check_paired_runs()
     check_bootstrap_coverage()
     check_figures()
     print("all checks passed")

@@ -1,19 +1,21 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-27. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-30. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 28 (CPU, ~1 min, no GPU) if not done yet: pull and redraw the figures and
-tables (figures only for the contributions; the comparison of our schedulers and the variants
-on the 30 dB gap as appendix tables; each run now deletes the previous run's figures first).
-Sections 0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md); after it, the next
-figures to review are fig12-fig16. Section 29 is new and optional (CPU, seconds): it reruns the
-checks behind a full code review that found no bug (docs/CORRECTNESS_REVIEW.md) — nothing needs
-retraining or rerunning from it, this is only to let you see the same "all checks passed" and
-the new bootstrap-coverage numbers yourself.
+WHAT TO RUN: section 30. It measures the Introduction's numbers for CLASP itself, where the
+trace (docs/INTRO_NUMBERS.md) found them resting on another scheduler's runs: CLASP against the
+digital chain, scheduler-aware training under CLASP's index, and CLASP's decoded gains with
+their own intervals.
+- CPU: 12 background chains, about 3.5 h.
+- GPUs 1-4: about 6.5 h, mostly three trainings.
+- It ends with section 28's figure redraw, so 28 needs no separate run.
+
+Sections 0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md). Section 29 is
+optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -63,10 +65,14 @@ the new bootstrap-coverage numbers yourself.
      calibration-aware index with lost slots,
      at T 16, on CLIC, and its latency budget
   27 redraw (fig02, fig12)                     done 2026-10-27 (second review: figures 7-11)
-  28 redraw: figures for the contributions,    TO RUN NOW (if not already done)
+  28 redraw: figures for the contributions,    folded into 30.5 (its last command)
      the policy comparison as tables
   29 a full code review (optional,              done (docs/CORRECTNESS_REVIEW.md): no bug
      informational; CPU, seconds)               found; a new smoke test added
+  30 the Introduction's numbers for CLASP:      TO RUN NOW
+     against digital, scheduler-aware
+     training under its index, decoded gains
+     with their own intervals
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -2967,8 +2973,8 @@ cd jscc
 python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s27_figs.txt
 
 ================================================================================
- 28. TO RUN NOW -- redraw: figures for the contributions, the policy comparison as tables
-     (CPU, ~1 min; no GPU)
+ 28. FOLDED INTO 30.5 -- redraw: figures for the contributions, the policy comparison as tables
+     (CPU, ~1 min; no GPU; its one command is the last line of 30.5)
 ================================================================================
 # Why: the second review (figures 7-11). A figure now shows a contribution, not which of our
 # schedulers wins; the proposed scheduler is compared with the baseline it replaces (PF for
@@ -3026,3 +3032,227 @@ grep -A 4 "\[bootstrap CI\]" results/s29_smoke.txt                        # the 
 # Reading: send back the last ~20 lines it prints (should end "all checks passed") and the
 # "[bootstrap CI]" block. docs/CORRECTNESS_REVIEW.md has the full writeup; nothing here needs a
 # reply unless something fails, which would itself be worth knowing about.
+
+================================================================================
+ 30. TO RUN NOW -- the Introduction's numbers, measured for CLASP itself
+     (CPU: 12 background chains, ~3.5 h; GPUs 1-4: ~6.5 h, mostly three trainings)
+================================================================================
+# Why: docs/INTRO_NUMBERS.md traced every number in the Introduction to its run. Three of them
+# rest on runs of a different scheduler, or on arithmetic between two printouts:
+#   1. JSCC against digital (C5) took the best JSCC policy at each point: the closed form for
+#      mean PSNR, the planner (plan_adv) for the 30 dB share. That is not CLASP, and under CSI
+#      errors the planner beat CLASP's calibration-aware index (24.2).
+#   2. Scheduler-aware training (+0.28 dB, section 14) trained on the closed form's channel and
+#      was scored under the closed form, not CLASP's index.
+#   3. The decoded gains over PF (+0.52 dB Kodak, +0.63 dB CLIC) are differences of two decoded
+#      means, without an interval of their own.
+# This round measures each one for CLASP:
+#   - mean PSNR: the Lagrangian index (lagrange);
+#   - the 30 dB share: the calibration-aware Lagrangian index (lagrange_soft);
+#   - stale reports: the aware transmitter (CLASP decides on the channel's posterior).
+# Everything runs on the frames of the earlier rounds, so their numbers reproduce exactly from
+# the same files. 30.5 prints them as a check.
+# New in the code:
+#   - tools/schedule_sim.py --keep-frames: every policy's per-frame objective in the --out JSON;
+#   - tools/paired_runs.py: pairs two runs on the same frames (CLASP against the digital chain),
+#     with a 95% bootstrap interval over frames; on a side with several policies or transmitters
+#     it takes the best, as the C5 tables do;
+#   - smoke: [paired runs].
+#
+#   30.1  CPU, seconds: CLASP's decoded gains over the baseline, with their own intervals
+#   30.2  CPU, ten chains (~2.5-3.5 h): CLASP and the digital chain, 2000 frames, per condition
+#   30.3  CPU (~10 min), then GPU 1 (~40 min): CLASP's schedules at 2 dB CQI error, decoded
+#   30.4  CPU (~2 h, two chains), then GPUs 2-4 (~6.5 h): scheduler-aware training under
+#         CLASP's index, with section 14's controls
+#   30.5  reading, then the figure redraw (section 28's one command, if not run yet)
+
+# 30.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: [paired runs])
+mkdir -p results logs_s30
+nvidia-smi -i 1,2,3,4
+cat > logs_s30/env.sh <<'ENV'
+. logs_s24/env.sh
+J="$NUB --frames 2000 --keep-frames"
+D="$DH6 --harq ir --keep-frames"
+JM="--policies pf slope_adv lagrange"
+JT="--target 30 --policies padc online plan_adv replan_adv lagrange_soft"
+DM="--policies pf greedy"
+DT="--target 30 --policies padc stop online_pf"
+FT="--trainset DIV2K --validset DIV2K --testset Kodak --img-size 256 --batch-size 16 --channel-type awgn --snrs 1 4 7 10 13 --snr-range -2 22 --amp --training --max-epoch 400 --valid-freq 40 --lr 5e-5 --warmup-steps 200 --backbone vit --pretrained $SNRC4"
+CK_HF=${VT}_snrc4_f1/models/last.pt
+CK_SA=${VT}_prof-sa/models/last.pt
+CK_LAG=${VT}_prof-lag/models/last.pt
+CK_LAG2=${VT}_prof-lag_s2/models/last.pt
+CK_LAGB=${VT}_prof-lagblind/models/last.pt
+ENV
+. logs_s30/env.sh
+#   inputs that must exist (send me any line saying "No such file"):
+ls logs_s24/env.sh results/utility_snrc4_nested.json results/belief_snrc4_nested.json results/rd_heic.json results/bank_sa.json results/s22_dec_mean.json results/s22_clic_dec_mean.json results/s22_dec_r80_mean.json results/s24_dec_auto.json results/s24_dec_clic.json $SNRC4 $CK_HF $CK_SA > /dev/null
+
+# 30.1 -- CPU, seconds: CLASP's decoded gains straight over the baseline it replaces, with their
+#   own paired 95% intervals. These are the decoded files of 22.1 and 24.3; nothing new is decoded.
+. logs_s30/env.sh
+{ python tools/replay_report.py results/s22_dec_mean.json --base pf ;
+  python tools/replay_report.py results/s22_clic_dec_mean.json --base pf ;
+  python tools/replay_report.py results/s22_dec_r80_mean.json --base pf ;
+  python tools/replay_report.py results/s24_dec_auto.json --base padc ;
+  python tools/replay_report.py results/s24_dec_clic.json --base padc ; } 2>&1 | tee results/s30_direct.txt
+
+# 30.2 -- CPU, background, ten chains (~2.5-3.5 h; one process each): CLASP and the digital chain
+#   on the same 2000 frames, one file per condition. The digital chain is section 20.2's: HEIC,
+#   the LTE CQI table, IR-HARQ, 6 slots. The conditions:
+#     f              fresh reports
+#     e1, e2, e3     CQI errors of 1 / 2 / 3 dB
+#     r95 ... r0     stale reports, r = 0.95 ... 0: CLASP aware; digital naive (n95 ... n0) and
+#                    aware (r95 ... r0), its best taken as in C5
+#     tgtm_r*        the 30 dB share on stale reports again with section 20's 0.5 dB margin
+#   The closed form, the planner and PADC run beside CLASP, so C5's old rows reproduce from the
+#   same files.
+cat > logs_s30/cpu.sh <<'CPU'
+. logs_s30/env.sh
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+cond() { case $1 in
+  f) ;;
+  e1|e2|e3) echo "--cqi-error ${1#e}" ;;
+  r95|r90|r80|r60|r40) echo "--cqi-corr 0.${1#r} --cqi-aware" ;;
+  r0) echo "--cqi-corr 0 --cqi-aware" ;;
+  n95|n90|n80|n60|n40) echo "--cqi-corr 0.${1#n}" ;;
+  n0) echo "--cqi-corr 0" ;;
+esac; }
+run() { n=$1; shift; [ -s results/$n.json ] || python tools/schedule_sim.py "$@" --out results/$n.json > results/$n.txt 2>&1; }
+ALLD="f e1 e2 e3 n95 n90 n80 n60 n40 n0 r95 r90 r80 r60 r40 r0"
+case $1 in
+  jm1) for c in f e1 e2 e3;  do run s30_j_mean_$c $J $JM $(cond $c); done ;;
+  jm2) for c in r95 r90 r80; do run s30_j_mean_$c $J $JM $(cond $c); done ;;
+  jm3) for c in r60 r40 r0;  do run s30_j_mean_$c $J $JM $(cond $c); done ;;
+  jt1) for c in f e1 e2 e3;  do run s30_j_tgt_$c $J $JT $(cond $c); done ;;
+  jt2) for c in r95 r90 r80; do run s30_j_tgt_$c $J $JT $(cond $c); done ;;
+  jt3) for c in r60 r40 r0;  do run s30_j_tgt_$c $J $JT $(cond $c); done ;;
+  jt4) for c in r95 r90 r80; do run s30_j_tgtm_$c $J $JT --margin 0.5 $(cond $c); done ;;
+  jt5) for c in r60 r40 r0;  do run s30_j_tgtm_$c $J $JT --margin 0.5 $(cond $c); done ;;
+  dm) for c in $ALLD; do run s30_d_mean_$c $D $DM $(cond $c); done ;;
+  dt) for c in $ALLD; do run s30_d_tgt_$c $D $DT $(cond $c); done ;;
+esac
+echo done > logs_s30/$1.done
+CPU
+for k in jm1 jm2 jm3 jt1 jt2 jt3 jt4 jt5 dm dt; do nohup bash logs_s30/cpu.sh $k > logs_s30/$k.log 2>&1 & done
+sleep 120; tail -n 2 results/s30_j_mean_f.txt results/s30_d_mean_f.txt
+
+# 30.3 and 30.4, CPU part -- two background chains, which write the files the GPUs wait for:
+#   prep:  the 2 dB CQI-error schedules to decode (60 frames, the frames of 22.1 and 24.3; ~10 min,
+#          then logs_s30/rep.done); the 150 frames every code is scored on (section 14's design,
+#          now under CLASP's index; ~5 min, then s0.done); CLASP's channel to train on (4000
+#          frames, seed 1000, not the frames scored; ~1.7 h, then bank.done)
+#   blind: the control bank: CLASP's lengths, each phase in a slot taken blindly (~1.7 h, then
+#          bankblind.done)
+cat > logs_s30/prep.sh <<'PREP'
+. logs_s30/env.sh
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+case $1 in
+  prep)
+    [ -s results/s30_rep_e2_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-error 2 --policies pf slope_adv lagrange --out results/s30_rep_e2_mean.json > results/s30_rep_e2.txt 2>&1
+    [ -s results/s30_rep_e2_tgt_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 --cqi-error 2 --target 30 --policies padc plan_adv lagrange_soft --out results/s30_rep_e2_tgt.json >> results/s30_rep_e2.txt 2>&1
+    echo done > logs_s30/rep.done
+    [ -s results/s30_s0_mean_histories.json ] || python tools/schedule_sim.py $NUB --frames 150 --dump 150 --policies pf slope_adv lagrange --out results/s30_s0_mean.json > results/s30_s0_mean.txt 2>&1
+    echo done > logs_s30/s0.done
+    [ -s results/bank_lag.json ] || python tools/codesign.py bank $NUB --policy lagrange --frames 4000 --out results/bank_lag.json > results/s30_bank_lag.txt 2>&1
+    echo done > logs_s30/bank.done ;;
+  blind)
+    [ -s results/bank_lagblind.json ] || python tools/codesign.py bank $NUB --policy lagrange --frames 4000 --blind --out results/bank_lagblind.json > results/s30_bank_lagblind.txt 2>&1
+    echo done > logs_s30/bankblind.done ;;
+esac
+PREP
+for k in prep blind; do nohup bash logs_s30/prep.sh $k > logs_s30/$k.log 2>&1 & done
+
+# 30.3 and 30.4, GPU part -- each card waits for its files (up to 12 h), then:
+#   GPU 1: decodes the 2 dB CQI-error schedules with snrc4 (with MS-SSIM and LPIPS; ~20 min each)
+#   GPU 2: trains on CLASP's channel (snrc4 + 400 epochs, section 14's recipe: ~4 h), then
+#          decodes the 150 scored frames
+#   GPU 3: the same with --seed 2 (the replicate, as section 16)
+#   GPU 4: decodes the 150 scored frames with snrc4, hf (the same-budget control) and sa (the
+#          closed form's channel); then trains on the blind control bank and decodes with it
+cat > logs_s30/gpu.sh <<'GPU'
+. logs_s30/env.sh
+G=$1
+waitfor() { for i in $(seq 1 720); do [ -e "$1" ] && return 0; sleep 60; done; return 1; }
+dec() { [ -s results/$2.json ] || CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $REPF $3 --pretrained $1 --profiles-json results/$4_histories.json --out results/$2.json > results/$2.txt 2>&1; }
+case $G in
+  1) waitfor logs_s30/rep.done && { dec $SNRC4 s30_dec_e2_mean "$PM" s30_rep_e2_mean ; dec $SNRC4 s30_dec_e2_tgt "$PM" s30_rep_e2_tgt ; } ;;
+  2) waitfor logs_s30/bank.done && { [ -s $CK_LAG ] || CUDA_VISIBLE_DEVICES=2 python main.py $FT --snr-profiles results/bank_lag.json > logs_s30/gpu2_lag.out 2>&1 ; } && waitfor logs_s30/s0.done && dec $CK_LAG s30_dec_s0_lag "" s30_s0_mean ;;
+  3) waitfor logs_s30/bank.done && { [ -s $CK_LAG2 ] || CUDA_VISIBLE_DEVICES=3 python main.py $FT --snr-profiles results/bank_lag.json --seed 2 > logs_s30/gpu3_lag_s2.out 2>&1 ; } && waitfor logs_s30/s0.done && dec $CK_LAG2 s30_dec_s0_lag2 "" s30_s0_mean ;;
+  4) waitfor logs_s30/s0.done && { dec $SNRC4 s30_dec_s0_snrc4 "" s30_s0_mean ; dec $CK_HF s30_dec_s0_hf "" s30_s0_mean ; dec $CK_SA s30_dec_s0_sa "" s30_s0_mean ; }
+     waitfor logs_s30/bankblind.done && { [ -s $CK_LAGB ] || CUDA_VISIBLE_DEVICES=4 python main.py $FT --snr-profiles results/bank_lagblind.json > logs_s30/gpu4_lagblind.out 2>&1 ; } && dec $CK_LAGB s30_dec_s0_lagblind "" s30_s0_mean ;;
+esac
+echo done > logs_s30/gpu$G.done
+GPU
+for g in 1 2 3 4; do nohup bash logs_s30/gpu.sh $g > logs_s30/gpu$g.log 2>&1 & done
+sleep 60; ls logs_s30/; tail -n 2 logs_s30/*.log
+#   each training log names its channel: "config ... snr_profiles": results/bank_lag.json (GPUs 2-3)
+#   or results/bank_lagblind.json (GPU 4)
+
+# 30.5 -- reading (send back everything it prints), when logs_s30/ holds the ten chain .done
+#   files (jm1 ... dt), rep / s0 / bank / bankblind.done and gpu1 ... gpu4.done --------------
+. logs_s30/env.sh
+ls logs_s30/*.done | wc -l                    # 18
+#   (1) CLASP's decoded gains over PF and PADC, with their own intervals (30.1)
+cat results/s30_direct.txt
+#   (2) the frames are the old ones. These must print the numbers of 23.2 and 20.2:
+#       slope_adv 31.424 / 31.274 / 30.902 (fresh / 2 dB / r 0.8 aware),
+#       greedy 31.291 / 30.146 / 29.359 (fresh / 2 dB / r 0.8 naive)
+grep -h "^slope_adv " results/s30_j_mean_f.txt results/s30_j_mean_e2.txt results/s30_j_mean_r80.txt
+grep -h "^greedy " results/s30_d_mean_f.txt results/s30_d_mean_e2.txt results/s30_d_mean_n80.txt
+#   (3) CLASP against the digital chain at every condition, and the best JSCC policy against it
+#       as C5 took it (results/s30_vs_digital.txt; one JSON line each in s30_vs_digital.jsonl)
+rm -f results/s30_vs_digital.jsonl
+for c in f e1 e2 e3 r95 r90 r80 r60 r40 r0; do
+  case $c in
+    f|e1|e2|e3) dm="results/s30_d_mean_$c.json:pf,greedy"; dt="results/s30_d_tgt_$c.json:padc,stop,online_pf"
+                jt="results/s30_j_tgt_$c.json:lagrange_soft"; jtb="results/s30_j_tgt_$c.json:padc,online,plan_adv,replan_adv,lagrange_soft" ;;
+    *) n=n${c#r}
+       dm="results/s30_d_mean_$n.json:pf,greedy results/s30_d_mean_$c.json:pf,greedy"
+       dt="results/s30_d_tgt_$n.json:padc,stop,online_pf results/s30_d_tgt_$c.json:padc,stop,online_pf"
+       jt="results/s30_j_tgt_$c.json:lagrange_soft results/s30_j_tgtm_$c.json:lagrange_soft"
+       jtb="results/s30_j_tgt_$c.json:padc,online,plan_adv,replan_adv,lagrange_soft results/s30_j_tgtm_$c.json:padc,online,plan_adv,replan_adv,lagrange_soft" ;;
+  esac
+  L="--log results/s30_vs_digital.jsonl"
+  python tools/paired_runs.py $L --label "[$c] mean PSNR: CLASP - digital" --a results/s30_j_mean_$c.json:lagrange --b $dm
+  python tools/paired_runs.py $L --label "[$c] mean PSNR: best JSCC - digital (as C5)" --a results/s30_j_mean_$c.json:pf,slope_adv,lagrange --b $dm
+  python tools/paired_runs.py $L --label "[$c] 30 dB: CLASP - digital" --a $jt --b $dt
+  python tools/paired_runs.py $L --label "[$c] 30 dB: best JSCC - digital (as C5)" --a $jtb --b $dt
+done 2>&1 | tee results/s30_vs_digital.txt
+#   (4) what aged reports (r = 0.8) cost each system: fresh minus stale, on the same frames
+{ python tools/paired_runs.py --label "CLASP, mean PSNR: fresh - r 0.8" --a results/s30_j_mean_f.json:lagrange --b results/s30_j_mean_r80.json:lagrange ;
+  python tools/paired_runs.py --label "digital, mean PSNR: fresh - r 0.8 (its best of naive / aware)" --a results/s30_d_mean_f.json:pf,greedy --b results/s30_d_mean_n80.json:pf,greedy results/s30_d_mean_r80.json:pf,greedy ; } 2>&1 | tee results/s30_loss.txt
+#   (5) CLASP's schedules at 2 dB CQI error, decoded by the codec (30.3)
+{ python tools/replay_report.py results/s30_dec_e2_mean.json --base pf ;
+  python tools/replay_report.py results/s30_dec_e2_tgt.json --base padc ; } 2>&1 | tee results/s30_dec_e2.txt
+#   (6) scheduler-aware training under CLASP's index (30.4): every code on the same 150 frames
+S0="results/s30_dec_s0_snrc4.json results/s30_dec_s0_hf.json results/s30_dec_s0_sa.json results/s30_dec_s0_lagblind.json results/s30_dec_s0_lag.json results/s30_dec_s0_lag2.json"
+{ python tools/replay_report.py $S0 --tags snrc4 hf sa lagblind lag lagb --base hf:lagrange ;
+  python tools/replay_report.py $S0 --tags snrc4 hf sa lagblind lag lagb --base lagblind:lagrange ; } 2>&1 | tee results/s30_codesign.txt
+python tools/codesign.py stats results/bank_lag.json results/bank_lagblind.json results/bank_sa.json 2>&1 | tee results/s30_banks.txt
+#   (7) section 28's redraw, if not run yet (CPU, ~1 min)
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s30_figs.txt
+
+# Reading:
+#   (1) the Introduction quotes CLASP's decoded gains over PF and PADC from here, with intervals
+#       (Kodak and CLIC; and r = 0.8 for the mean).
+#   (2) any number different from the ones listed means the frames are not the old ones: stop and
+#       send me the lines.
+#   (3) the rows "CLASP - digital" are the Introduction's comparison with the digital chain;
+#       "best JSCC - digital" reproduces C5 with an interval. Where CLASP's row is below the best
+#       JSCC row at the 30 dB share (CQI errors, stale reports), the planner is still ahead of
+#       it there, and the text will say so (C7).
+#   (4) the loss of each system from fresh to aged reports, now with intervals.
+#   (5) the model's error on decoded CQI-error schedules, and CLASP's decoded gains there.
+#   (6) lag:lagrange - hf:lagrange is training on CLASP's channel, scored under CLASP's schedules
+#       (section 14's sa - hf, for CLASP); lag - lagblind is what CLASP's slot SELECTION is worth
+#       to the code, beyond its lengths; lagb is the second seed; sa:lagrange asks whether a code
+#       trained on the closed form's channel serves CLASP as well.
