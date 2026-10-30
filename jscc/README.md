@@ -97,6 +97,9 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         utility_fit.py (fits alloc/utility.py)  schedule_sim.py (the scheduler)
                         digital_rd.py (codec R-D points for the digital baseline, alloc/digital.py)
                         replay_report.py (decoded replays paired by frame, also across codecs)
+                        paired_runs.py (two schedule_sim runs on the same frames, e.g. a
+                        learned code against the digital chain, paired by frame; needs
+                        schedule_sim.py --keep-frames --out)
                         headroom.py (rollout; the exact clairvoyant optimum with a certified bound)
                         codesign.py (the channel a scheduler makes, as a bank of SNR histories
                         that main.py --snr-profiles trains on; bank statistics and convergence)

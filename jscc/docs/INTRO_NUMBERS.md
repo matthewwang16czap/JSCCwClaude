@@ -45,6 +45,22 @@ corrected to match:
    With aged reports it is 0.076-0.095 dB for the single decoder and 0.082-0.121 dB for
    per-length decoders.
 
+## Round 30: the numbers it measures for CLASP
+
+COMMANDS section 30 measures directly the numbers that rested on another scheduler's runs or
+on arithmetic. When it is back, these replace the entries below:
+
+| number in the outline | now (trace above) | round 30 file | what changes |
+|---|---|---|---|
+| +0.5-0.6 dB over PF, decoded | 31.651 - 31.127 and 34.192 - 33.561 (two means) | `s30_direct.txt` (30.1) | the same gains, with their own paired intervals |
+| against digital: +1.1-1.5 dB, +10.7-13.5 points | best JSCC policy at each point (closed form; planner) | `s30_vs_digital.txt`, rows "CLASP - digital" (30.2) | CLASP's own lead, paired over 2000 frames, with intervals; the rows "best JSCC - digital" reproduce C5 |
+| fresh → r = 0.8: digital -1.9 dB, JSCC -0.5 dB | the closed form's means | `s30_loss.txt` (30.2) | CLASP's loss and digital's, with intervals |
+| the JSCC side holds decoded | checked at r = 0.8 only | `s30_dec_e2.txt` (30.3) | also at 2 dB CQI error, with CLASP's schedules |
+| scheduler-aware training +0.28 dB (+0.08-0.12 beyond the length) | the closed form's channel and schedules | `s30_codesign.txt` (30.4) | training on CLASP's channel, scored under CLASP's schedules; lag - lagblind is the part due to the slot selection |
+
+Check before using them: 30.5 (2) must print the old numbers, which means the frames are the
+same ones (slope_adv 31.424 / 31.274 / 30.902; greedy 31.291 / 30.146 / 29.359).
+
 ## A. The codec (paragraph 4)
 
 | fact | source |
