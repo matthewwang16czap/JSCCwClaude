@@ -20,23 +20,22 @@ Alternatives:
 ## Abstract (~250 words; TWC: one paragraph, at most 250 words, no citations)
 
 Deep joint source-channel coding (JSCC) is evaluated on single links, yet a cellular downlink
-delivers data slot by slot, through a scheduler, to many users before a deadline. Scheduling
-theory needs to know what a slot is worth to each user, which no model provides for learned
-codes. We show that a learned prefix code trained under slot-varying SNR obeys a simple link
-abstraction: its distortion is the source distortion plus a sensitivity-weighted sum of per-slot
-minimum mean-square-error terms. On two test sets it predicts quality within 0.06-0.08 dB,
-against 0.44-0.49 dB for the mutual-information mapping of digital system simulation; calibrated
-from 12 decodes per image, it holds only when the code is trained for slot-varying SNR. With it,
-each user is a two-number state and deadline scheduling becomes a finite-horizon restless
-bandit, so per-user dynamic programs, a Lagrangian bound on every causal scheduler and
-Lagrangian index policies apply exactly. The index's gap to the bound vanishes as the cell
-grows, for mean PSNR and for a quality target, once the programs reward the probability of
-success under the abstraction's 0.04 dB calibration error, which, ignored, costs 1.6 points of
-satisfied users. Decoded, the index gains 0.5-0.6 dB over proportional fair and brings 8-15
-points more users to 30 dB than per-image rate selection. Under CQI errors and outdated reports,
-scheduled JSCC outperforms a digital chain with CQI-table link adaptation and
-incremental-redundancy HARQ by 1.1-1.5 dB, and training the code on the channel its scheduler
-creates adds 0.28 dB.
+serves many users slot by slot, through a scheduler, before a deadline. Scheduling theory needs
+the value of a slot to each user, which no model provides for learned codes. We show that a
+learned prefix code trained under slot-varying SNR obeys a simple link abstraction: its
+distortion is the source distortion plus a sensitivity-weighted sum of per-slot minimum
+mean-square-error terms. On two test sets it predicts quality within 0.06-0.08 dB, against
+0.44-0.49 dB for the mutual-information mapping of digital system simulation; calibrated from 12
+decodes per image, it holds only when the code is trained for slot-varying SNR. With it, each
+user is a two-number state and deadline scheduling becomes a finite-horizon restless bandit, so
+per-user dynamic programs, a Lagrangian bound on every causal scheduler and index policies apply
+exactly. The index's gap to the bound vanishes as the cell grows, for mean PSNR and for a
+quality target, once the programs reward the probability of success under the abstraction's 0.04
+dB calibration error, which, ignored, costs 1.6 points of satisfied users. Decoded, the index
+gains 0.5-0.6 dB over proportional fair and, with fresh reports or 2 dB CQI errors, 8-15 points
+of users at 30 dB over per-image rate selection. Under CQI errors and outdated reports,
+scheduled JSCC outperforms a digital chain with CQI-table link adaptation and HARQ by 1.2-1.6 dB
+and 8-12 points; training the code on its scheduler's channel adds 0.21 dB.
 
 **Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
 restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, image transmission.
@@ -227,17 +226,24 @@ template, Figure 1, the references and the source of every number.
     than PF at T 16 / 24. At 30 dB it needs 24% [15, 33] fewer than online at T 16, and at T 24
     no other policy reaches its share within 32 slots; 70% of users at 30 dB take it 15.8
     slots, online 20.4, PADC more than 32 (the hard-target index 17.8: F).
-- **D. Imperfect CSI and the digital baseline** (fig14: mean PSNR / share vs σ and vs r).
-  - On par with exact CQI (+0.3 dB).
-  - With HARQ, the single decoder: +1.1 dB / +10.7 points at σ = 2 dB and +1.5 dB / +13.5
-    points at r = 0.8; ahead of HEIC and of a 3 dB-gap code from σ = 1 dB or r = 0.95 (0.7 dB
-    behind the gap code with exact CSI). Per-length decoders add 0.17-0.21 dB and 1.4-2.5
-    points to every lead.
+- **D. Imperfect CSI and the digital baseline** (fig14: the proposed scheduler and the digital
+  chain, mean PSNR / share vs σ and vs r; paired over 2000 frames, NOTES 6h).
+  - Exact CQI: +0.20 dB and +3.6 points.
+  - With HARQ, the single decoder: +1.19 dB / +8.1 points at σ = 2 dB and +1.56 dB / +12.0
+    points at r = 0.8; ahead of HEIC at every σ and r run, and of a 3 dB-gap code from
+    σ = 1 dB or r = 0.95 (0.64 dB behind the gap code with exact CSI). Fresh → r = 0.8 costs
+    the proposed scheduler 0.57 dB, digital 1.93 dB.
+  - At the target, the planner on the same abstraction is 1.1-4.6 points ahead of the index
+    from σ = 2 dB and from r = 0.9 (Table IV, C7). Per-length decoders add 0.17-0.21 dB and
+    1.4-2.5 points to the closed form's leads.
   - On outdated reports the opportunistic gain fades, and stopping needs the posterior plus
     a margin.
 - **E. Scheduler-aware training** (fig15: per-phase SNR lift; the trained code's κ and ρ: a
   table).
-  - +0.28 dB on the same slots; codes learn their scheduler.
+  - +0.21 dB on the same slots under the proposed scheduler (two seeds), +0.28 under the closed
+    form; its lengths with blindly taken slots gain nothing (-0.09 dB); a code per scheduler,
+    and after co-design the closed form ties the index for the mean; codes learn their
+    scheduler.
   - The lift keeps 65% of itself at r = 0.8 and 8% at 0.3.
 - **F. System choice and ablations** (fig05 and Table II = table02: the calibration-aware
   reward; Table V (appendix) = table05: everything else tried on the 30 dB gap; fig16: what a

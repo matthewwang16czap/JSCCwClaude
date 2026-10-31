@@ -1,20 +1,18 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-30. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-10-31. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 30. It measures the Introduction's numbers for CLASP itself, where the
-trace (docs/INTRO_NUMBERS.md) found them resting on another scheduler's runs: CLASP against the
-digital chain, scheduler-aware training under CLASP's index, and CLASP's decoded gains with
-their own intervals.
-- CPU: 12 background chains, about 3.5 h.
-- GPUs 1-4: about 6.5 h, mostly three trainings.
-- It ends with section 28's figure redraw, so 28 needs no separate run.
+WHAT TO RUN: section 31. CPU only, about 2 minutes, no GPU. It redraws the figures with
+round 30's runs (fig14 is now CLASP against the digital chain; Table III gets its decoded
+2 dB CQI-error row) and prints four paired checks that put intervals on what round 30 showed
+only as differences of means: the planner against CLASP at 30 dB, CLASP's margin on aged
+reports, and the tie of the two schedulers after co-design.
 
-Sections 0-27 are done (docs/NOTES.md 6d-6g; the figures: docs/FIGURES.md). Section 29 is
+Sections 0-30 are done (docs/NOTES.md 6d-6h; the figures: docs/FIGURES.md). Section 29 is
 optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
 
   section                                     status
@@ -69,10 +67,13 @@ optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
      the policy comparison as tables
   29 a full code review (optional,              done (docs/CORRECTNESS_REVIEW.md): no bug
      informational; CPU, seconds)               found; a new smoke test added
-  30 the Introduction's numbers for CLASP:      TO RUN NOW
+  30 the Introduction's numbers for CLASP:      done (docs/NOTES.md 6h; docs/INTRO_NUMBERS.md)
      against digital, scheduler-aware
      training under its index, decoded gains
      with their own intervals
+  31 redraw with round 30; paired checks of     TO RUN NOW
+     the planner against CLASP, the margin,
+     the tie after co-design
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3034,7 +3035,7 @@ grep -A 4 "\[bootstrap CI\]" results/s29_smoke.txt                        # the 
 # reply unless something fails, which would itself be worth knowing about.
 
 ================================================================================
- 30. TO RUN NOW -- the Introduction's numbers, measured for CLASP itself
+ 30. DONE 2026-10-31 (docs/NOTES.md 6h) -- the Introduction's numbers, measured for CLASP itself
      (CPU: 12 background chains, ~3.5 h; GPUs 1-4: ~6.5 h, mostly three trainings)
 ================================================================================
 # Why: docs/INTRO_NUMBERS.md traced every number in the Introduction to its run. Three of them
@@ -3256,3 +3257,65 @@ python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s3
 #       (section 14's sa - hf, for CLASP); lag - lagblind is what CLASP's slot SELECTION is worth
 #       to the code, beyond its lengths; lagb is the second seed; sa:lagrange asks whether a code
 #       trained on the closed form's channel serves CLASP as well.
+
+================================================================================
+ 31. TO RUN NOW -- redraw with round 30, and four paired checks (CPU, ~2 min; no GPU)
+================================================================================
+# Why: round 30 is in (docs/NOTES.md 6h; the Introduction's numbers: docs/INTRO_NUMBERS.md).
+# Three of its findings rest on differences of two means, without an interval of their own:
+#   - at the 30 dB target the planner (plan_adv) beats CLASP from 2 dB of CQI error and from
+#     r = 0.9, by 1.1-4.6 points (the "best JSCC" rows of 30.5 minus the "CLASP" rows);
+#   - on aged reports CLASP took a 0.5 dB stopping margin at r <= 0.8 and none at r >= 0.9
+#     (paired_runs printed only the better one);
+#   - after co-design the closed form with its own code (sa) ties CLASP with its own (lag):
+#     31.887 vs 31.875 dB.
+# 31.1 prints each with a paired 95% interval from round 30's files (nothing is simulated or
+# decoded again). 31.2 redraws the figures and tables with the code of this commit:
+#   - fig14 shows CLASP itself (the Lagrangian index for the mean, the calibration-aware one at
+#     30 dB; aware on aged reports, the better margin) against digital with IR-HARQ and the
+#     3 dB-gap code, from round 30's files; the per-length decoders' series is gone (it came
+#     from best-policy runs; fig16 covers that decoder);
+#   - table03 (Table III) gets the decoded CQI 2 dB row (with MS-SSIM and LPIPS), table04 a
+#     "dec CQI 2 dB" column, fig03 the CQI-error decodes.
+
+# 31.0 -- pull (seconds) --------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: fig14 takes CLASP's run)
+
+# 31.1 -- the four paired checks (CPU, seconds; send back everything it prints) ----------------
+. logs_s30/env.sh
+S0="results/s30_dec_s0_snrc4.json results/s30_dec_s0_hf.json results/s30_dec_s0_sa.json results/s30_dec_s0_lagblind.json results/s30_dec_s0_lag.json results/s30_dec_s0_lag2.json"
+{ for c in f e1 e2 e3 r95 r90 r80 r60 r40 r0; do
+    case $c in
+      f|e1|e2|e3) a="results/s30_j_tgt_$c.json:plan_adv"; b="results/s30_j_tgt_$c.json:lagrange_soft" ;;
+      *) a="results/s30_j_tgt_$c.json:plan_adv results/s30_j_tgtm_$c.json:plan_adv"
+         b="results/s30_j_tgt_$c.json:lagrange_soft results/s30_j_tgtm_$c.json:lagrange_soft" ;;
+    esac
+    python tools/paired_runs.py --label "[$c] 30 dB: planner - CLASP" --a $a --b $b
+  done
+  grep -H "^lagrange_soft \|^plan_adv " results/s30_j_tgt_r*.txt results/s30_j_tgtm_r*.txt
+  python tools/replay_report.py results/s30_dec_e2_tgt.json --base lagrange_soft
+  python tools/replay_report.py $S0 --tags snrc4 hf sa lagblind lag lagb --base lag:lagrange
+} 2>&1 | tee results/s31_checks.txt
+
+# 31.2 -- the redraw (CPU, ~1 min) ------------------------------------------------------------
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s31_figs.txt
+ls figures/
+
+# Reading (send back results/s31_checks.txt and results/s31_figs.txt):
+#   (1) "[c] 30 dB: planner - CLASP": the planner's lead at each condition with its interval.
+#       Round 30's means say about +0 at f, e1 and r95 (CLASP best there) and +1.1 to +4.6
+#       from e2 and r90; C7 quotes these intervals.
+#   (2) the grep: CLASP's and the planner's share at 30 dB with no margin (s30_j_tgt_*) and a
+#       0.5 dB margin (s30_j_tgtm_*) at every r: the margin rule the paper states for aged
+#       reports.
+#   (3) decoded at 2 dB CQI error: plan_adv minus lagrange_soft, paired over 60 frames (round 30:
+#       74.0 vs 72.1%).
+#   (4) co-design: sa:slope_adv minus lag:lagrange (the closed form with its own code against
+#       CLASP with its own; round 30: +0.012 dB from the means) with its interval.
+#   (5) the figures: fig14 is now CLASP against digital; table03 prints a decoded CQI 2 dB row
+#       (round 30.3: +0.51 dB over PF, +8.1 points over PADC), table04 a "dec CQI 2 dB" column.
+#       After these, the figures to review are fig12-fig16.

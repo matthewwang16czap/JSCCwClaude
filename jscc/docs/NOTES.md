@@ -1,4 +1,4 @@
-# Results notes (condensed 2026-10-15; sections 18-19 added 2026-10-19, section 20 2026-10-20)
+# Results notes (condensed 2026-10-15; later rounds added as sections 6b-6h, the last 2026-10-31)
 
 What the experiments established, by topic; the last section indexes every experiment round.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
@@ -677,6 +677,110 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
   Lagrangian index (21.3), 20.4 for online and more than 32 for PADC: the reward alone saves
   2 slots (11%).
 
+## 6h. CLASP's own numbers (COMMANDS 30, returned 2026-10-31)
+
+The Introduction's trace (docs/INTRO_NUMBERS.md) found three of its numbers resting on another
+scheduler's runs or on arithmetic between printouts. This round measured them for CLASP:
+`lagrange` for mean PSNR, `lagrange_soft` for the 30 dB share, the aware transmitter on stale
+reports. The frames are the old ones: `slope_adv` 31.424 / 31.274 / 30.902 (fresh / 2 dB CQI
+error / r = 0.8 aware) and `greedy` 31.291 / 30.146 / 29.359 (fresh / 2 dB / r = 0.8 naive)
+reproduce 23.2 and 20.2 exactly.
+
+**Decoded gains with their own intervals (30.1; the decodes of 22.1 and 24.3, 60 frames; paired
+by frame):**
+
+| decoded | CLASP minus the baseline | model error: MAE, bias (dB) |
+|---|---|---|
+| Kodak, mean PSNR, over PF | **+0.524 [0.464, 0.585] dB** | 0.062, -0.022 |
+| CLIC, mean PSNR, over PF | **+0.631 [0.558, 0.703] dB** | 0.076, -0.029 |
+| Kodak, r = 0.8, mean PSNR, over PF | +0.514 [0.406, 0.625] dB | 0.076, -0.012 |
+| Kodak, 30 dB, over PADC | **+14.8 [11.7, 17.9] points** | 0.070, -0.006 |
+| CLIC, 30 dB, over PADC | **+8.1 [5.8, 10.6] points** | 0.083, -0.005 |
+
+**CLASP against the digital chain (30.2; 2000 frames, paired by frame,
+`tools/paired_runs.py`).** Digital: HEIC, the LTE CQI table, IR-HARQ, 6 slots, its best policy
+and transmitter (naive or aware) at each point, as in C5. CLASP on stale reports: aware, with
+the better of no margin and section 20's 0.5 dB margin at the target (the files chose no margin
+at r >= 0.9, the margin at r <= 0.8). "Best JSCC" is C5's rule, the best of PF, the closed form
+and CLASP for the mean, and of PADC, online, the planners and CLASP for the target:
+
+| condition | mean PSNR: CLASP / digital (dB) | CLASP - digital (dB) | 30 dB: CLASP / digital (%) | CLASP - digital (points) | best JSCC - digital (points) |
+|---|---|---|---|---|---|
+| fresh, exact reports | 31.487 / 31.291 | **+0.196 [0.174, 0.217]** | 78.0 / 74.4 | **+3.6 [3.1, 4.1]** | CLASP |
+| CQI error 1 dB | 31.449 / 30.679 | +0.770 [0.743, 0.794] | 75.9 / 68.4 | +7.5 [7.0, 8.0] | CLASP |
+| CQI error 2 dB | 31.339 / 30.146 | **+1.192 [1.164, 1.221]** | 70.8 / 62.7 | **+8.1 [7.5, 8.7]** | +10.7 (plan_adv 73.4%) |
+| CQI error 3 dB | 31.194 / 29.730 | +1.465 [1.436, 1.494] | 66.3 / 58.1 | +8.2 [7.6, 8.8] | +12.8 (plan_adv 70.9%) |
+| r = 0.95 | 31.354 / 30.192 | +1.162 [1.132, 1.191] | 73.9 / 63.6 | +10.3 [9.7, 10.9] | CLASP |
+| r = 0.9 | 31.202 / 29.821 | +1.381 [1.351, 1.410] | 70.8 / 59.5 | +11.4 [10.7, 12.0] | +12.4 (plan_adv 71.9%) |
+| r = 0.8 | 30.921 / 29.359 | **+1.561 [1.530, 1.591]** | 66.8 / 54.8 | **+12.0 [11.4, 12.6]** | +14.3 (plan_adv 69.1%) |
+| r = 0.6 | 30.449 / 28.915 | +1.535 [1.505, 1.565] | 61.3 / 49.8 | +11.5 [10.9, 12.2] | +14.5 (plan_adv 64.3%) |
+| r = 0.4 | 30.090 / 28.784 | +1.306 [1.270, 1.346] | 58.8 / 46.8 | +12.0 [11.4, 12.7] | +13.9 (plan_adv 60.7%) |
+| r = 0 | 29.846 / 28.748 | +1.099 [1.064, 1.135] | 55.5 / 47.0 | +8.5 [7.9, 9.1] | +10.6 (plan_adv 57.5%) |
+
+* CLASP beats the digital chain at every CSI condition, on both objectives. With exact reports
+  the lead is small but not zero: +0.20 dB and +3.6 points, where C5's best-policy rows said
+  on par (+0.13 dB, +0.3 points; the calibration-aware index is the new part at the target).
+* For the mean, CLASP is the best JSCC policy at every condition but r = 0.4 (the closed form,
+  by 0.004 dB), so its leads are C5's, slightly larger: +1.19 vs +1.13 dB at 2 dB CQI error,
+  +1.56 vs +1.54 at r = 0.8.
+* At the target, the planner on the same abstraction reaches more users than CLASP once CSI
+  errors are large: 2.6 / 4.6 points more at 2 / 3 dB CQI error and 1.1-3.0 points more at
+  r <= 0.9 (from the means). CLASP is the best target policy with exact reports, at 1 dB CQI
+  error and at r = 0.95. This is C7's second case, now over the whole CSI axis (open item 10).
+* Against the 3 dB-gap code with HARQ (section 5's runs, the same frames, no paired interval):
+  CLASP is 0.64 dB behind with exact reports, and ahead from 1 dB of CQI error (+0.30) and from
+  r = 0.95 (+0.70).
+
+**What aged reports cost (30.2, fresh minus r = 0.8, paired):** CLASP **0.567 [0.555, 0.579] dB**;
+digital, its best of naive and aware, **1.932 [1.907, 1.957] dB** (the closed form lost 0.522).
+
+**CLASP's schedules at 2 dB CQI error, decoded (30.3; the 60 frames of 22.1 and 24.3, snrc4,
+with MS-SSIM and LPIPS):**
+
+| decoded | model error: MAE, bias (dB) | over the baseline (decoded) | simulated (main frames) |
+|---|---|---|---|
+| mean PSNR: `lagrange` - `pf` | 0.068, -0.009 (1440 histories) | **+0.512 [0.445, 0.583] dB** (closed form +0.434) | +0.48 [0.46, 0.51] |
+| 30 dB: `lagrange_soft` - `padc` | 0.070, +0.003 (1415 histories) | **+8.1 [5.2, 10.8] points** | +6.1 [5.1, 7.1] |
+| 30 dB: `plan_adv` - `padc` | | +10.0 [7.3, 12.7] points | +8.3 |
+
+Decoded shares: PADC 64.0%, the planner 74.0%, CLASP 72.1% (predicted 64.6, 74.8, 71.9). The
+model's error under CQI errors is within that of fresh reports (0.05-0.09 dB). The planner is
+ahead of CLASP decoded too (74.0 vs 72.1%), as simulated; their paired difference was not
+printed, and over 60 frames it may not be significant.
+
+**Scheduler-aware training under CLASP (30.4).** Section 14's design under CLASP's index: the
+150 frames of section 14, scheduled once on the snrc4 belief and decoded by every code on the
+same slots (snrc4 + 400 epochs each; mean PSNR, dB):
+
+| code (trained on) | under PF | under the closed form | under CLASP | CLASP's schedules: minus hf |
+|---|---|---|---|---|
+| snrc4 (no extra training) | 31.034 | 31.514 | 31.568 | -0.095 [-0.097, -0.093] |
+| hf (the usual chunks, the same budget) | 31.138 | 31.609 | 31.663 | 0 |
+| lagblind (CLASP's lengths, every slot taken blindly) | 31.152 | 31.573 | 31.575 | -0.089 [-0.095, -0.082] |
+| sa (the closed form's channel, section 14) | 31.231 | **31.887** | 31.831 | +0.167 [0.148, 0.185] |
+| lag (CLASP's channel) | 31.258 | 31.838 | **31.875** | **+0.211 [0.204, 0.219]** |
+| lag, seed 2 (tag lagb) | 31.250 | 31.834 | 31.870 | **+0.206 [0.199, 0.214]** |
+
+* Training on CLASP's channel adds **+0.21 dB** under CLASP's schedules over the same-budget
+  control, the same for both seeds (section 14's sa - hf under the closed form, +0.278,
+  reproduces on these frames: 31.887 - 31.609).
+* CLASP's lengths alone are worth nothing: the blind bank (the same phase counts, the slots
+  taken blindly) is 0.09 dB below hf, as section 14's blind bank was (-0.04), and 0.30 [0.29,
+  0.31] dB below lag. The gain is in the slots CLASP selects (C9 holds under CLASP).
+* A code per scheduler (C10) holds: lag is the best code under CLASP, sa under the closed form.
+* After co-design the two schedulers tie for the mean: sa + the closed form 31.887 dB, lag +
+  CLASP 31.875 (both against hf under CLASP: +0.224 [0.201, 0.245] and +0.211 [0.204, 0.219]).
+  CLASP's 0.054 dB over the closed form with the base code (31.568 vs 31.514) is gone once each
+  scheduler has its own code. For the mean, what CLASP adds over its certainty-equivalent
+  version is the bound it certifies, not dB.
+* The channels (`codesign.py stats`, 4000 frames each): CLASP gives 2 / 3 / 4 phases to 11.5 /
+  76.2 / 11.9% of users (the closed form 3 phases to 99.9%) and lifts phases 1-4 by +3.82 /
+  +2.99 / +2.43 / +1.68 dB over the user's mean SNR (the closed form +3.21 / +2.66 / +1.83);
+  the blind bank's slots sit 1.8 dB below.
+* The replay header of `s30_codesign.txt` (bias -0.184, MAE 0.227 dB over 21,600 histories)
+  pools the six codes against snrc4's curves; the retrained codes decode better than those
+  curves predict, so it is not a model error of any one code (snrc4's: 30.1).
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -782,6 +886,11 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
    lagrange_soft). If one spread reaches the planner, the principled version measures the
    CSI-induced spread per prefix length (as `--soft-sigma auto` does for the curves), and C7
    becomes one policy; if none does, C7 keeps its two cases.
+   Round 30 (section 6h, 2000 frames) maps the whole axis: the planner is ahead of CLASP at the
+   target by 2.6 / 4.6 points at 2 / 3 dB CQI error and by 1.1-3.0 points at r <= 0.9; CLASP is
+   the best target policy with exact reports, at 1 dB CQI error and at r = 0.95; decoded at 2 dB
+   CQI error the planner is ahead too (74.0 vs 72.1%). The spread test above is still the next
+   step, and is not run.
 
 ## 8. Experiment index
 
@@ -807,4 +916,4 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
 | Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
 | Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |
-| The Introduction's numbers for CLASP | 30 | to run | CLASP (lagrange / lagrange_soft) against the digital chain on the frames of 20.2 / 23.2, paired with intervals (tools/paired_runs.py); scheduler-aware training under CLASP's index with section 14's controls; CLASP's decoded gains with their own intervals; its schedules decoded at 2 dB CQI error |
+| The Introduction's numbers for CLASP | 30 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean |

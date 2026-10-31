@@ -1,5 +1,5 @@
 """The paper's result figures and tables (IEEE TWC), drawn with matplotlib from the results/
-files that COMMANDS sections 13-26 wrote. CPU, seconds; no GPU, no simulation.
+files that COMMANDS sections 13-30 wrote. CPU, seconds; no GPU, no simulation.
 
     python tools/paper_figs.py                         # everything: results/ -> figures/
     python tools/paper_figs.py --only fig05 table02    # some of them
@@ -37,7 +37,9 @@ every series also has its own marker and line style, so the figures read in gray
     PI ratio index         magenta   cross-hatched bars
     PF, PADC               greys     the baselines
     codes, JSCC            green     piecewise-trained / one decoder: solid; a decoder per length:
-                                     dashed, hollow; constant-SNR-trained, digital: greys
+                                     dashed, hollow; constant-SNR-trained, digital: greys (the
+                                     3 dB-gap code dashed, hollow); JSCC against digital (fig14)
+                                     is the one decoder under the proposed scheduler
     true curves (oracle)   ink       dotted
     users, prefix lengths  a blue ramp (dark = the most users, or the longest prefix)
 Gains and gaps carry 95% bootstrap intervals over frames, as the tools print them.
@@ -75,8 +77,7 @@ ENT = {                                                    # entity -> (label, c
     "pi": ("PI ratio index", MAGENTA, "P"),
     "pf": ("PF", MUTED, "v"),
     "padc": ("PADC", INK2, "X"),
-    "jscc": ("JSCC, one decoder", GREEN, "o"),
-    "jscc_hd": ("JSCC, a decoder per length", GREEN, "o"),
+    "jscc": ("JSCC, proposed scheduler", GREEN, "o"),
     "heic": ("HEIC + IR-HARQ", INK2, "s"),
     "gap3": ("3 dB-gap code + IR-HARQ", MUTED, "^"),
     "code": ("piecewise-trained code", GREEN, "o"),
@@ -86,7 +87,7 @@ ENT = {                                                    # entity -> (label, c
     "kodak": ("Kodak", GREEN, "o"),
     "clic": ("CLIC", INK2, "s"),
 }
-ALT = ("jscc_hd", "gap3", "code_hd", "lagrange_hard", "whittle_hard")  # dashed, hollow, hatched
+ALT = ("gap3", "code_hd", "lagrange_hard", "whittle_hard")              # dashed, hollow, hatched
 PLANNER = {"plan_adv": "planner", "replan_adv": "planner"}
 TARGET = dict(PLANNER, lagrange_soft="lagrange", whittle_soft="whittle",   # a target run's
               lagrange="lagrange_hard", whittle="whittle_hard")            # policies -> entities
@@ -107,7 +108,8 @@ CONDITIONS = (
           ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 0.0, "corr": 1.0},
           "s22_dec_mean.json", "s24_dec_auto.json", "Kodak"),
     _cond("CQI error 2 dB", r"CQI error 2~dB", "CQI 2 dB", r"CQI 2~dB",
-          ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 2.0}),
+          ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 2.0},
+          "s30_dec_e2_mean.json", "s30_dec_e2_tgt.json", "CQI 2 dB"),
     _cond("reports r = 0.8", r"reports $r = 0.8$", "r = 0.8", r"$r = 0.8$",
           ("s22_main_mean.txt",), ("s24_main_soft_r80.txt",), {"corr": 0.8},
           "s22_dec_r80_mean.json", "s24_dec_r80.json", "r = 0.8"),
@@ -616,7 +618,8 @@ def fig03(I, plt):
     history (every policy's schedules), (a) along the predicted PSNR: median and 10-90% range
     per 1 dB; (b) its distribution."""
     sets = (("kodak", ("s22_dec_mean.json", "s22_dec_tgt.json", "s22_dec_r80_mean.json",
-                       "s22_dec_r80_tgt.json", "s24_dec_auto.json", "s24_dec_r80.json")),
+                       "s22_dec_r80_tgt.json", "s24_dec_auto.json", "s24_dec_r80.json",
+                       "s30_dec_e2_mean.json", "s30_dec_e2_tgt.json")),
             ("clic", ("s22_clic_dec_mean.json", "s22_clic_dec_tgt.json", "s24_dec_clic.json")))
     data = []
     for key, files in sets:
@@ -920,37 +923,50 @@ def fig12(I, plt):
     return fig
 
 
-def _best(blocks, kind, axis, x, pred):
-    """The best policy (and transmitter) over the blocks at one point of an axis."""
+def _at(s, axis, x):
+    """Is a block's setting the point x of an axis (the CQI error, or the report correlation)?"""
+    if axis == "corr":
+        return abs(s["corr"] - x) < 1e-9 and s["cqi_error"] == 0.0
+    return abs(s["cqi_error"] - x) < 1e-9 and s["corr"] == 1.0
+
+
+def _best(blocks, kind, axis, x, pred, policy=None):
+    """The best policy (and transmitter) over the blocks at one point of an axis; with policy,
+    that one policy's best over the blocks (e.g. with and without a margin)."""
     key = "mean_psnr" if kind == "mean" else "satisfied"
     best = None
     for b in blocks:
-        s = b["set"]
-        if b["kind"] != kind or not pred(s):
+        if b["kind"] != kind or not pred(b["set"]) or not _at(b["set"], axis, x):
             continue
-        if axis == "corr" and not (abs(s["corr"] - x) < 1e-9 and s["cqi_error"] == 0.0):
-            continue
-        if axis == "cqi" and not (abs(s["cqi_error"] - x) < 1e-9 and s["corr"] == 1.0):
-            continue
-        for r in b["rows"].values():
-            best = r[key] if best is None else max(best, r[key])
+        for p, r in b["rows"].items():
+            if policy is None or p == policy:
+                best = r[key] if best is None else max(best, r[key])
     return best
 
 
+C5_R, C5_S = (1.0, 0.95, 0.9, 0.8, 0.6, 0.4, 0.0), (0.0, 1.0, 2.0, 3.0)
+C5_TAGS = ("f", "e1", "e2", "e3", "r95", "r90", "r80", "r60", "r40", "r0")   # COMMANDS 30.2
+PROPOSED_POLICY = {"mean": "lagrange", "target": "lagrange_soft"}
+
+
 def fig14(I, plt):
-    """JSCC against digital with HARQ (C5): the best policy (and transmitter, naive or
-    aware) of each system under CQI errors and outdated reports."""
-    single = parse_sim(I.path("s23_c5_single.txt"))
+    """JSCC against digital with HARQ (C5): the proposed scheduler (the Lagrangian index for the
+    mean, the calibration-aware index at 30 dB; aware on outdated reports, at the target the
+    better of no margin and a 0.5 dB one) against the digital chain's best policy and
+    transmitter (naive or aware) at each point, under CQI errors and outdated reports; the
+    3 dB-gap code with HARQ is the optimistic digital reference. The same 2000 frames."""
+    clasp = []
+    for kind in ("mean", "tgt", "tgtm"):
+        for t in C5_TAGS:
+            p = I.path(f"s30_j_{kind}_{t}.txt", required=kind == "mean" and t == "f")
+            if p:
+                clasp += parse_sim(p)
     dig = parse_sim(I.path("s20_harq_mean.txt"))
-    dig_t, hd = [], []
+    dig_t = []
     for fn in ("s20_harq_tgt.txt", "s20_harq_tgt_aware.txt", "s20_harq_tgt_cqi.txt"):
         p = I.path(fn, required=False)
         if p:
             dig_t += parse_sim(p)
-    for fn in ("s18_stale_jscc.txt", "s13_cqi_jscc.txt"):
-        p = I.path(fn, required=False)
-        if p:
-            hd += [b for b in parse_sim(p) if "utility_hd" in b["set"]["utility"]]
 
     def ir(link):
         return lambda s: s["harq"] == "ir" and s["link"] == link
@@ -958,18 +974,18 @@ def fig14(I, plt):
     def everything(s):
         return True
 
-    series = (("jscc", single, single, everything), ("jscc_hd", hd, hd, everything),
-              ("heic", dig, dig_t, ir("cqi")), ("gap3", dig, dig_t, ir("shannon")))
-    R, S = (1.0, 0.95, 0.9, 0.8, 0.6, 0.4, 0.0), (0.0, 1.0, 2.0, 3.0)
+    series = (("jscc", clasp, clasp, everything, True), ("heic", dig, dig_t, ir("cqi"), False),
+              ("gap3", dig, dig_t, ir("shannon"), False))
     fig, axes = plt.subplots(2, 2, figsize=(COL2, 4.2), sharex="col")
-    for col, (axis, xs, xlabel) in enumerate((("cqi", S, "CQI error sd (dB)"),
-                                              ("corr", R, "report correlation r"))):
+    for col, (axis, xs, xlabel) in enumerate((("cqi", C5_S, "CQI error sd (dB)"),
+                                              ("corr", C5_R, "report correlation r"))):
         for row, kind in enumerate(("mean", "target")):
             ax = axes[row, col]
             sc = 1.0 if kind == "mean" else 100.0
-            for key, mb, tb, pred in series:
+            for key, mb, tb, pred, proposed in series:
                 blocks = mb if kind == "mean" else tb
-                pts = [(x, _best(blocks, kind, axis, x, pred)) for x in xs]
+                pol = PROPOSED_POLICY[kind] if proposed else None
+                pts = [(x, _best(blocks, kind, axis, x, pred, pol)) for x in xs]
                 pts = [(x, sc * y) for x, y in pts if y is not None]
                 if pts:
                     ax.plot([p[0] for p in pts], [p[1] for p in pts], **style(key))
@@ -977,13 +993,13 @@ def fig14(I, plt):
                 ax.set_xlim(1.04, -0.04)
                 ax.set_xticks([1.0, 0.8, 0.6, 0.4, 0.2, 0.0])
             else:
-                ax.set_xticks(S)
+                ax.set_xticks(C5_S)
             if row == 1:
                 ax.set_xlabel(xlabel)
             ax.set_ylabel("mean PSNR (dB)" if kind == "mean" else "users at 30 dB (%)")
             panel(ax, "abcd"[2 * row + col], ("mean PSNR" if kind == "mean" else "a 30 dB target")
                   + (", CQI errors" if axis == "cqi" else ", outdated reports"))
-    fig_legend(fig, axes, 4)
+    fig_legend(fig, axes, 3)
     return fig
 
 
@@ -1419,9 +1435,9 @@ FIGS = (
      "frame length; users at 30 dB by each slot",
      "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json) and/or "
      "s24_main_soft.txt (its --delay table)"),
-    ("fig14_digital", fig14, "JSCC vs digital with IR-HARQ, CQI errors and outdated reports",
-     "s23_c5_single.txt s20_harq_mean.txt [s20_harq_tgt*.txt s18_stale_jscc.txt "
-     "s13_cqi_jscc.txt]"),
+    ("fig14_digital", fig14, "JSCC with the proposed scheduler vs digital with IR-HARQ, CQI "
+     "errors and outdated reports", "s30_j_mean_f.txt s20_harq_mean.txt [s30_j_mean/tgt/tgtm_*"
+     ".txt s20_harq_tgt*.txt]"),
     ("fig15_scheduler_channel", fig15, "SNR lift of the first phases vs report age and K",
      "bank_sa.json [bank_sa_cqi*.json bank_sa_k16.json bank_lift_k*.json]"),
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "

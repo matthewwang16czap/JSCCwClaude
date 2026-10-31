@@ -1968,6 +1968,24 @@ def check_figures():
            and rows["reports r = 0.8"].count(" -") == 5,
            "figures: table03 takes the proposed index from each run (simulated, decoded; the "
            "calibration-aware one at the target) and leaves the rest empty")
+        tg = os.path.join(tmp, "s30_tgt.txt")
+        tp = ("padc", "plan_adv", "lagrange_soft")
+        st.sim_file(tg, [(st.args(target=30.0, cqi_aware=True), st.JSCC,
+                          st.target_summary(dict(zip(tp, (.55, .70, .65))), rng), 0, 0.8),
+                         (st.args(target=30.0, margin=0.5, cqi_aware=True), st.JSCC,
+                          st.target_summary(dict(zip(tp, (.56, .69, .668))), rng), 0, 0.8),
+                         (st.args(target=30.0), st.JSCC,
+                          st.target_summary(dict(zip(tp, (.60, .74, .78))), rng), 0, 1)])
+        bl = pf.parse_sim(tg)
+
+        def every(s):
+            return True
+        ok(abs(pf._best(bl, "target", "corr", 0.8, every, "lagrange_soft") - .668) < 1e-9
+           and abs(pf._best(bl, "target", "corr", 0.8, every) - .70) < 1e-9
+           and abs(pf._best(bl, "target", "cqi", 0.0, every, "lagrange_soft") - .78) < 1e-9
+           and pf._best(bl, "target", "corr", 0.6, every, "lagrange_soft") is None,
+           "figures: fig14 takes the proposed index's best run at each point (with or without a "
+           "margin), not the best policy")
         out = os.path.join(tmp, "out")
         os.makedirs(out)
         for fn in ("fig07_target_variants.png", "fig08_users.pdf", "table03_main.tex", "notes.txt",
