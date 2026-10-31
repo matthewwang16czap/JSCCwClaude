@@ -724,9 +724,10 @@ and CLASP for the mean, and of PADC, online, the planners and CLASP for the targ
   by 0.004 dB), so its leads are C5's, slightly larger: +1.19 vs +1.13 dB at 2 dB CQI error,
   +1.56 vs +1.54 at r = 0.8.
 * At the target, the planner on the same abstraction reaches more users than CLASP once CSI
-  errors are large: 2.6 / 4.6 points more at 2 / 3 dB CQI error and 1.1-3.0 points more at
-  r <= 0.9 (from the means). CLASP is the best target policy with exact reports, at 1 dB CQI
-  error and at r = 0.95. This is C7's second case, now over the whole CSI axis (open item 10).
+  errors are large: 2.5 / 4.6 points more at 2 / 3 dB CQI error and 1.1-3.0 points more at
+  r <= 0.9 (paired intervals: COMMANDS 31, below). CLASP is the best target policy with exact
+  reports, at 1 dB CQI error and at r = 0.95. This is C7's second case, now over the whole CSI
+  axis (open item 10).
 * Against the 3 dB-gap code with HARQ (section 5's runs, the same frames, no paired interval):
   CLASP is 0.64 dB behind with exact reports, and ahead from 1 dB of CQI error (+0.30) and from
   r = 0.95 (+0.70).
@@ -744,9 +745,9 @@ with MS-SSIM and LPIPS):**
 | 30 dB: `plan_adv` - `padc` | | +10.0 [7.3, 12.7] points | +8.3 |
 
 Decoded shares: PADC 64.0%, the planner 74.0%, CLASP 72.1% (predicted 64.6, 74.8, 71.9). The
-model's error under CQI errors is within that of fresh reports (0.05-0.09 dB). The planner is
-ahead of CLASP decoded too (74.0 vs 72.1%), as simulated; their paired difference was not
-printed, and over 60 frames it may not be significant.
+model's error under CQI errors is within that of fresh reports (0.05-0.09 dB). Decoded, the
+planner minus CLASP is +1.9 [-0.6, +4.6] points (COMMANDS 31): consistent with the simulated
++2.5, not significant over 60 frames.
 
 **Scheduler-aware training under CLASP (30.4).** Section 14's design under CLASP's index: the
 150 frames of section 14, scheduled once on the snrc4 belief and decoded by every code on the
@@ -767,9 +768,10 @@ same slots (snrc4 + 400 epochs each; mean PSNR, dB):
 * CLASP's lengths alone are worth nothing: the blind bank (the same phase counts, the slots
   taken blindly) is 0.09 dB below hf, as section 14's blind bank was (-0.04), and 0.30 [0.29,
   0.31] dB below lag. The gain is in the slots CLASP selects (C9 holds under CLASP).
-* A code per scheduler (C10) holds: lag is the best code under CLASP, sa under the closed form.
+* A code per scheduler (C10) holds: lag is the best code under CLASP (0.044 [0.032, 0.057] dB
+  above sa there, COMMANDS 31), sa under the closed form (0.050 above lag, from the means).
 * After co-design the two schedulers tie for the mean: sa + the closed form 31.887 dB, lag +
-  CLASP 31.875 (both against hf under CLASP: +0.224 [0.201, 0.245] and +0.211 [0.204, 0.219]).
+  CLASP 31.875, paired +0.013 [-0.013, +0.037] dB (COMMANDS 31).
   CLASP's 0.054 dB over the closed form with the base code (31.568 vs 31.514) is gone once each
   scheduler has its own code. For the mean, what CLASP adds over its certainty-equivalent
   version is the bound it certifies, not dB.
@@ -780,6 +782,32 @@ same slots (snrc4 + 400 epochs each; mean PSNR, dB):
 * The replay header of `s30_codesign.txt` (bias -0.184, MAE 0.227 dB over 21,600 histories)
   pools the six codes against snrc4's curves; the retrained codes decode better than those
   curves predict, so it is not a model error of any one code (snrc4's: 30.1).
+
+**Paired checks (COMMANDS 31, returned 2026-10-31; `results/s31_checks.txt`).** Round 30's
+differences of means, with paired 95% intervals:
+
+The planner minus CLASP at 30 dB (points; 2000 frames; on aged reports each takes its better
+margin):
+
+| f | e1 | e2 | e3 | r 0.95 | r 0.9 | r 0.8 | r 0.6 | r 0.4 | r 0 |
+|---|---|---|---|---|---|---|---|---|---|
+| -3.3 [-3.6, -3.0] | -1.4 [-1.7, -1.0] | +2.5 [2.1, 3.0] | +4.6 [4.1, 5.2] | -0.6 [-1.0, -0.2] | +1.1 [0.6, 1.5] | +2.4 [2.0, 2.8] | +3.0 [2.5, 3.4] | +1.9 [1.4, 2.4] | +2.1 [1.4, 2.7] |
+
+Every interval excludes zero: CLASP leads with exact reports, at 1 dB CQI error and at
+r = 0.95; the planner from 2 dB CQI error and from r = 0.9.
+
+The margin on aged reports (share at 30 dB, %, no margin / 0.5 dB margin):
+
+| r | 0.95 | 0.9 | 0.8 | 0.6 | 0.4 | 0 |
+|---|---|---|---|---|---|---|
+| CLASP | **73.9** / 72.9 | **70.8** / 70.7 | 66.2 / **66.8** | 60.2 / **61.3** | 56.9 / **58.8** | 54.1 / **55.5** |
+| planner | **73.3** / 73.2 | 71.7 / **71.9** | 68.3 / **69.1** | 61.9 / **64.3** | 56.9 / **60.7** | 52.5 / **57.5** |
+
+* The margin pays from r = 0.8 down, and much more for the planner (+0.8 to +5.0 points) than
+  for CLASP (+0.6 to +1.9). CLASP's rule on aged reports: a 0.5 dB margin when r <= 0.8.
+* Decoded at 2 dB CQI error: the planner minus CLASP +1.9 [-0.6, +4.6] points (60 frames).
+* Co-design: sa + the closed form minus lag + CLASP +0.013 [-0.013, +0.037] dB, a tie; the
+  second seed is 0.005 [0.004, 0.007] dB below the first.
 
 ## 7. Open
 
@@ -889,8 +917,10 @@ same slots (snrc4 + 400 epochs each; mean PSNR, dB):
    Round 30 (section 6h, 2000 frames) maps the whole axis: the planner is ahead of CLASP at the
    target by 2.6 / 4.6 points at 2 / 3 dB CQI error and by 1.1-3.0 points at r <= 0.9; CLASP is
    the best target policy with exact reports, at 1 dB CQI error and at r = 0.95; decoded at 2 dB
-   CQI error the planner is ahead too (74.0 vs 72.1%). The spread test above is still the next
-   step, and is not run.
+   CQI error the planner is ahead too (74.0 vs 72.1%). Round 31 confirms each with a paired
+   interval (section 6h). COMMANDS 32 runs the spread test above: --soft-sigma 0.25 / 0.5 /
+   1.0 dB on round 30's frames, at 1-3 dB CQI error and r = 0.95 to 0, paired against round
+   30's planner and CLASP.
 
 ## 8. Experiment index
 
@@ -916,4 +946,5 @@ same slots (snrc4 + 400 epochs each; mean PSNR, dB):
 | Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
 | Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |
-| The Introduction's numbers for CLASP | 30 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean |
+| The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
+| Can the calibration-aware reward cover CSI errors? | 32 | to run | --soft-sigma 0.25 / 0.5 / 1.0 dB where the planner beat CLASP (and at 1 dB, r 0.95), paired against round 30 |
