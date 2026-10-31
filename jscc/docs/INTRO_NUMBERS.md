@@ -128,8 +128,10 @@ All simulated, over the same 2000 frames, paired by frame (`tools/paired_runs.py
 `s30_vs_digital.txt` (one JSON line per comparison in `s30_vs_digital.jsonl`) and
 `s30_loss.txt`, COMMANDS 30.2 and 30.5 (2026-10-31).
 - CLASP: `lagrange` for the mean, `lagrange_soft` for the 30 dB share; aware on aged reports,
-  where the target run takes the better of no margin and a 0.5 dB margin (`s30_j_tgtm_*`; the
-  margin was better at r <= 0.8).
+  where the target run takes the better of no margin and a 0.5 dB margin (`s30_j_tgtm_*`). The
+  margin is better at r <= 0.8. At r = 0.8 the quoted 66.8% is the margin run's
+  `lagrange_soft  66.8%` in `s30_j_tgtm_r80.txt`, against `lagrange_soft  66.2%` in
+  `s30_j_tgt_r80.txt` without it (every r: the grep in `s31_checks.txt`, COMMANDS 31.1).
 - Digital: HEIC, the LTE CQI table, IR-HARQ, 6 slots; its best policy (`pf`, `greedy`; `padc`,
   `stop`, `online_pf`) and transmitter (naive or aware) at each point.
 
@@ -151,7 +153,9 @@ The outline does not use the `best JSCC - digital (as C5)` rows. They take the b
 at each point, as C5 did. For the mean that is CLASP everywhere but r = 0.4 (the closed form, by
 0.004 dB). For the 30 dB share it is the planner `plan_adv` from 2 dB of CQI error and from
 r = 0.9, 1.1-4.6 points above CLASP (for example `[e2] 30 dB: best JSCC - digital (as C5)`:
-`a - b: +10.650 pts [+10.056, +11.225]`). Section VII reports them (C7).
+`a - b: +10.650 pts [+10.056, +11.225]`). Section VII reports them (C7). The planner minus
+CLASP, paired, is in `s31_checks.txt` (COMMANDS 31.1), under labels such as
+`[e2] 30 dB: planner - CLASP`: `a - b: +2.544 pts [+2.069, +2.987]`.
 
 Superseded: the old rows took the best JSCC policy from `s23_c5_single.txt` (COMMANDS 23.2):
 +0.13 dB / +0.3 points with fresh reports, +1.13 dB / +10.7 points at 2 dB CQI error, +1.54 dB
