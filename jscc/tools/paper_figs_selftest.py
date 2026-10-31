@@ -297,6 +297,29 @@ def write_sims(d, rng):
     sim_file(J("s20_harq_tgt.txt"), dig_runs("cqi", "ir", ht_r - .01, R, "corr", False, True))
     sim_file(J("s20_harq_tgt_aware.txt"), dig_runs("cqi", "ir", ht_r, R, "corr", True, True))
     sim_file(J("s20_harq_tgt_cqi.txt"), dig_runs("cqi", "ir", ht_s, S, "cqi", False, True))
+
+    # C5 under the proposed scheduler (COMMANDS 30.2): one file per condition and objective
+    tags = ("f", "e1", "e2", "e3", "r95", "r90", "r80", "r60", "r40", "r0")
+    cm = (31.49, 31.45, 31.34, 31.19, 31.35, 31.20, 30.92, 30.45, 30.09, 29.85)
+    ct = (.780, .759, .708, .663, .739, .708, .650, .600, .575, .545)
+    tp = ("padc", "online", "plan_adv", "replan_adv", "lagrange_soft")
+    for t, m_, t_ in zip(tags, cm, ct):
+        sig = float(t[1:]) if t[0] == "e" else 0.0
+        cor = (0.0 if t == "r0" else float("0." + t[1:])) if t[0] == "r" else 1.0
+        aware = t[0] == "r"
+        sim_file(J(f"s30_j_mean_{t}.txt"), [
+            (args(frames=2000, cqi_aware=aware), JSCC,
+             mean_summary({"pf": 0.0, "slope_adv": 0.46, "lagrange": 0.52}, m_ - 0.52, rng),
+             sig, cor)])
+        sim_file(J(f"s30_j_tgt_{t}.txt"), [
+            (args(frames=2000, target=30.0, cqi_aware=aware), JSCC,
+             target_summary(dict(zip(tp, (t_ - .12, t_ - .03, t_ + .02, t_ + .015, t_))), rng),
+             sig, cor)])
+        if aware:
+            sim_file(J(f"s30_j_tgtm_{t}.txt"), [
+                (args(frames=2000, target=30.0, margin=0.5, cqi_aware=True), JSCC,
+                 target_summary(dict(zip(tp, (t_ - .11, t_ - .02, t_ + .03, t_ + .02,
+                                              t_ + .015))), rng), sig, cor)])
     return m, ("pf", "padc", "online", "plan_adv", "whittle", "lagrange", "lagrange_relax")
 
 
@@ -475,6 +498,9 @@ def write_decoded(d, rng):
     decoded_file(J("s24_dec_s15.json"), sel("padc", "lagrange", "lagrange_soft"), rng, **kw)
     decoded_file(J("s24_dec_clic.json"), sel("padc", "online", "lagrange", "lagrange_soft"),
                  rng, **kw)
+    decoded_file(J("s30_dec_e2_mean.json"), {"pf": 0.0, "slope_adv": 0.43, "lagrange": 0.51},
+                 rng, level=30.9)
+    decoded_file(J("s30_dec_e2_tgt.json"), sel("padc", "plan_adv", "lagrange_soft"), rng, **kw)
 
 
 # ------------------------------------------------------------------------------ build --------

@@ -66,7 +66,8 @@ category ours belongs to.
    - An optimistic report costs a retransmission; a pessimistic one leaves capacity unused.
    - Link adaptation and HARQ protect the bits only by spending extra slots.
    - In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the digital
-     chain 1.9 dB, against 0.5 dB for the learned code (Section VII).
+     chain 1.9 dB of mean PSNR, against 0.6 dB for a learned code under our scheduler
+     (Section VII).
 6. In contrast, the JSCC way replaces the two codes with one learned code that maps the image
    straight to channel symbols [Bourtsoulatze19].
    - Its quality degrades smoothly with the SNR its symbols meet, so no block is lost outright
@@ -193,11 +194,11 @@ serves every user slot by slot up to the deadline."
    - Twelve decodes per image calibrate it. The calibrated curves predict held-out mixed-SNR
      decodes with a mean absolute error of 0.03-0.06 dB per prefix length (0.05-0.09 dB on CLIC).
    - Used by a scheduler, the model predicts the decoded quality of complete scheduled deliveries
-     with a mean absolute error of 0.05-0.09 dB with fresh reports (up to 0.12 dB with aged
-     ones), and a bias within ±0.05 dB.
-   - But its calibration error (0.03-0.05 dB) is first-order at a hard quality target. A
-     scheduler that trusts it loses 1.7-2.0 points of the share of users reaching 30 dB, at
-     every cell size from 16 to 128 users.
+     with a mean absolute error of 0.05-0.09 dB with fresh reports or 2 dB CQI errors (up to
+     0.12 dB with aged reports), and a bias within ±0.05 dB.
+   - But even this small error is first-order at a hard quality target. A scheduler that takes
+     the calibrated curves as exact loses 1.7-2.0 points of the share of users reaching 30 dB,
+     at every cell size from 16 to 128 users.
 5. In short, a learned code can be given a link abstraction through training. With it, each
    user's state reduces to two numbers: the phases received, and their accumulated weighted noise.
    Scheduling then becomes a planning problem, provided the abstraction's residual error is part
@@ -223,21 +224,26 @@ serves every user slot by slot up to the deadline."
      - users are served in the order of the Lagrangian index those programs define [Hao22,
        Brown20].
    - **Challenge (3), imperfect information.**
-     - Each program rewards the probability of reaching the quality target under the
-       abstraction's measured calibration error, rather than a hard threshold.
+     - Each program rewards the probability of reaching the quality target given the measured
+       spread of the calibrated curves around the fitted ones (0.03-0.05 dB per prefix length),
+       rather than a hard threshold.
      - Each program decides on the posterior of the channel given an aged report, not on the
        report itself.
 4. Results:
-   - Decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair, and brings
-     8-15 points more users to 30 dB than per-image rate selection [Zhang23].
+   - Decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair in all
+     four decoded cases (Kodak with fresh reports, 2 dB CQI errors or aged reports; CLIC with
+     fresh reports). With fresh reports or 2 dB CQI errors it brings 8-15 points more users to
+     30 dB than per-image rate selection [Zhang23].
    - Simulated against the bound, its gap shrinks to 0.005 dB per user at 128 users for mean
      PSNR, and stays within ±0.3 points from 16 users on for the target.
-   - Simulated under CQI errors and aged reports, the learned code scheduled on its abstraction
-     beats a digital chain with CQI-table link adaptation and incremental-redundancy HARQ by
-     1.1-1.5 dB of mean PSNR. With error-free reports the two are on par.
-   - Decoded on the same slots, training the code on the channel its scheduler creates adds
-     0.28 dB under the closed-form version of the index. Of that, 0.08-0.12 dB is beyond training
-     for the one prefix length that scheduler gives.
+   - Simulated on the same frames as a digital chain with CQI-table link adaptation and
+     incremental-redundancy HARQ, CLASP beats it at every CSI condition tested: by 1.2-1.6 dB of
+     mean PSNR and 8-12 points at 30 dB with 2 dB CQI errors or aged reports (correlation 0.8),
+     and by 0.2 dB and 3.6 points with exact reports.
+   - Decoded on the same slots, training the code on the channel CLASP creates adds 0.21 dB (two
+     seeds) over training it as long on the usual channel. Training on CLASP's prefix lengths
+     with blindly taken slots gains nothing (-0.09 dB), so the gain comes from the slots CLASP
+     selects.
 
 ## Paragraph 6. Contributions (Discovery-Method-Performance)
 
@@ -256,27 +262,26 @@ Overall, our main contributions are as follows.
      bandit with a two-number user state.
    - It solves that bandit with exact per-user dynamic programs, a Lagrangian bound on every
      causal scheduler, and an index policy.
-   - A calibration-aware reward and report-aware programs make it robust to the abstraction's
-     error and to aged channel reports.
+   - A calibration-aware reward makes it robust to the abstraction's error, and report-aware
+     programs let it decide on aged channel reports.
 3. **Performance.**
    - Decoded, CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB
-     over per-image rate selection.
+     over per-image rate selection with fresh reports or 2 dB CQI errors.
    - Simulated, its gap to the bound vanishes as the cell grows:
      - for mean PSNR, from 0.21 to 0.005 dB per user between 8 and 128 users;
      - for the target, within ±0.3 points from 16 users on.
-   - Simulated under CQI errors and aged reports, the learned code scheduled on the abstraction
-     outperforms a digital chain with link adaptation and HARQ by 1.1-1.5 dB and 10.7-13.5
-     points. This uses the best JSCC policy at each point: the closed form for the mean, a
-     planner for the target.
-   - Decoded, training the code on its scheduler's channel adds 0.28 dB.
+   - Simulated, CLASP outperforms a digital chain with link adaptation and HARQ at every CSI
+     condition tested: by 1.2-1.6 dB and 8-12 points with 2 dB CQI errors or reports aged to
+     correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
+   - Decoded, training the code on CLASP's channel adds 0.21 dB.
 
 **How paragraphs 3, 5 and 6 line up:**
 
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
-| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.05-0.09 dB with fresh reports |
+| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.05-0.09 dB with fresh reports or 2 dB CQI errors |
 | (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
-| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +1.1-1.5 dB over digital under CQI errors and aged reports (simulated, closed-form policy) |
+| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +1.2-1.6 dB and +8-12 points over digital with 2 dB CQI errors or r = 0.8 (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
 
