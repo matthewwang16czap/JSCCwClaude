@@ -69,24 +69,48 @@ def norm_cdf(z):
 
 
 def soft_spread(truth, belief, sigma="auto", n_prof=16, mean_snr=(0.0, 15.0), clip=(-2.0, 22.0),
-                seed=0):
-    """The calibration error of a transmitter's curves, per prefix length n = 1 ... P: (sigma,
+                seed=0, csi=None):
+    """The error of a transmitter's predicted PSNR, per prefix length n = 1 ... P: (sigma,
     bias), each (P,), in dB. "auto": the standard deviation and the mean of truth - belief PSNR
     over every image of the pool and n_prof random n-phase histories per image and length
     (mean SNR uniform on mean_snr plus Rayleigh fading, clipped: the simulation's slots), pooled
     over images (what a transmitter learns by cross-validating its calibration on images it has
-    measured; nothing image-specific). A number: that sigma at every length, no bias."""
+    measured; nothing image-specific). A number: that sigma at every length, no bias.
+    csi = (cqi_error, cqi_corr, aware), with "auto": the error of the prediction a transmitter
+    makes from its reports, not from the true slots. The truth is read at the true SNRs and the
+    belief at the SNRs the transmitter decides on, drawn as tools/schedule_sim.draw_frames
+    draws them: a CQI error of sd cqi_error dB on each report; reports of correlation cqi_corr
+    with the slot (alloc/csi.outdated), read through their posterior (equivalent_snr) if
+    aware, as they are if not. That is the curves' error plus the error the reports leave.
+    With exact reports (cqi_error 0, cqi_corr 1) it is "auto", draw for draw."""
     P = belief.P
     if sigma != "auto":
         return np.full(P, float(sigma)), np.zeros(P)
+    err, corr, aware = (0.0, 1.0, False) if csi is None else (float(csi[0]), float(csi[1]),
+                                                               bool(csi[2]))
+    if corr < 1.0:
+        from alloc.csi import equivalent_snr, outdated
     rng = np.random.default_rng(seed)
+    crng = np.random.default_rng([seed, 1])                     # the reports' own draws
     d = [[] for _ in range(P)]
     for i in range(len(belief.names)):
+        kap = float(belief.kappa if np.ndim(belief.kappa) == 0 else belief.kappa[i])
         for n in range(1, P + 1):
             for _ in range(n_prof):
-                g = np.clip(rng.uniform(*mean_snr) + 10.0 * np.log10(rng.exponential(1.0, n)),
-                            clip[0], clip[1]).tolist()
-                d[n - 1].append(truth.psnr(i, g) - belief.psnr(i, g))
+                mu = rng.uniform(*mean_snr)
+                fade = 10.0 * np.log10(rng.exponential(1.0, n))
+                g = np.clip(mu + fade, clip[0], clip[1])
+                if corr < 1.0:                                  # stale (and noisy) reports
+                    rep = outdated(crng, fade, corr)
+                    if err > 0:
+                        rep = rep + err * crng.standard_normal(n)
+                    seen = (equivalent_snr(rep[None, :], np.array([mu]), kap, corr, clip)[0]
+                            if aware else np.clip(mu + rep, clip[0], clip[1]))
+                elif err > 0:                                   # fresh reports with an error
+                    seen = np.clip(g + err * crng.standard_normal(n), clip[0], clip[1])
+                else:
+                    seen = g
+                d[n - 1].append(truth.psnr(i, g.tolist()) - belief.psnr(i, seen.tolist()))
     d = [np.asarray(x, dtype=np.float64) for x in d]
     return np.array([float(x.std()) for x in d]), np.array([float(x.mean()) for x in d])
 

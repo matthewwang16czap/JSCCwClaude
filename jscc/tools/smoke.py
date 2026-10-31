@@ -1218,6 +1218,36 @@ def check_soft():
             same &= h1 == h2
     ok(same, "schedule_sim's whittle_soft / lagrange_soft schedule exactly as tools/rmab_scale.py's "
              "with one unit per slot (calibrated curves)")
+    # --soft-sigma csi: the error of the prediction a transmitter makes from its reports
+    a0, a1 = soft_spread(u, b), soft_spread(u, b, csi=(0.0, 1.0, True))
+    e2, e3 = soft_spread(u, b, csi=(2.0, 1.0, False)), soft_spread(u, b, csi=(3.0, 1.0, False))
+    r8, r0 = soft_spread(u, b, csi=(0.0, 0.8, True)), soft_spread(u, b, csi=(0.0, 0.0, True))
+    ok(np.array_equal(a0[0], a1[0]) and np.array_equal(a0[1], a1[1])
+       and np.all(e2[0] > a0[0]) and e3[0].mean() > e2[0].mean()
+       and np.all(r8[0] > a0[0]) and r0[0].mean() > r8[0].mean(),
+       f"csi spread: with exact reports it is auto, draw for draw; it grows with the CQI error "
+       f"(1 phase: {a0[0][0]:.3f} / {e2[0][0]:.3f} / {e3[0][0]:.3f} dB at 0 / 2 / 3 dB) and as "
+       f"reports age (aware, r 0.8 / 0: {r8[0][0]:.3f} / {r0[0][0]:.3f} dB)")
+    same = True
+    for imgs, means, snr, belief, avail, seen in draw_frames(
+            u, 4, 10, 2, (0.0, 15.0), "rayleigh", clip, seed=6, belief_util=b):
+        for pol in ("lagrange_soft", "whittle_soft"):
+            same &= (run_frame(u, belief, imgs, means, snr, pol, target=29.0)
+                     == run_frame(u, belief, imgs, means, snr, pol, target=29.0, soft_sigma="csi",
+                                  csi=(0.0, 1.0, False)))
+    import subprocess
+    sim = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedule_sim.py")
+    r = subprocess.run([sys.executable, sim, "--utility", pu, "--belief", pb, "--users", "4",
+                        "--slots", "10", "--frames", "2", "--target", "29", "--policies", "padc",
+                        "lagrange_soft", "--soft-sigma", "csi", "--cqi-error", "0", "2",
+                        "--cqi-corr", "1", "0.8", "--cqi-aware"], capture_output=True, text=True)
+    lines = [ln for ln in r.stdout.splitlines() if ln.startswith("calibration-aware programs")]
+    sg = [[float(v) for v in ln.split(" sigma ")[1].split(" dB")[0].split()] for ln in lines]
+    ok(same and r.returncode == 0 and len(lines) == 4 and all("(measured)" in ln for ln in lines)
+       and np.allclose(sg[0], np.round(a0[0], 3)) and np.all(np.array(sg[1]) > np.array(sg[0]))
+       and np.all(np.array(sg[2]) > np.array(sg[0])),
+       "schedule_sim --soft-sigma csi: with exact reports it schedules exactly as auto; it measures "
+       "the spread per CSI condition and prints it (wider under a CQI error and stale reports)")
 
 
 def check_harq():

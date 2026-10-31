@@ -86,8 +86,11 @@ phases left, so every policy can use the whole frame. Policies:
                  its true PSNR reaches the target when the transmitter's curves are off by
                  N(bias, sigma^2) dB (alloc/whittle.soft_spread; --soft-sigma auto measures
                  sigma and bias per prefix length from --utility against --belief, pooled over
-                 the images; a number: that sigma, no bias), instead of 1 if the PREDICTED PSNR
-                 reaches it: a hedge against the curves' error that a uniform margin is not
+                 the images; csi measures the same with the belief read at the SNRs the
+                 transmitter decides on under the run's CQI error / stale reports, so the
+                 spread includes the error the reports leave; a number: that sigma, no
+                 bias), instead of 1 if the PREDICTED PSNR reaches it: a hedge against the
+                 prediction's error that a uniform margin is not
     pi           (mean, on request) a PI-type ratio index (Ayesta, Erausquin and Jacko): the
                  predicted gain of this slot over the expected excess of a typical slot's gain
                  above it, E[(g(S') - g(s))^+], S' on 32 equiprobable fades at the user's mean
@@ -268,16 +271,20 @@ def arms_for(belief, imgs, means, T, goal, offset, p_avail, clip, cqi_corr=1.0, 
 _SOFT = {}
 
 
-def soft_for(util, belief, sigma, clip):
+def soft_for(util, belief, sigma, clip, csi=None):
     """The calibration-aware programs' (sigma, bias) per prefix length, cached by content (a
-    --pred-noise run draws a new belief every frame)."""
+    --pred-noise run draws a new belief every frame). sigma "csi": "auto" with the belief read
+    at the SNRs the transmitter decides on under csi = (cqi_error, cqi_corr, aware), the run's
+    reports (alloc/whittle.soft_spread); without csi, or with exact reports, it is "auto"."""
     from alloc.whittle import soft_spread
+    c = tuple(float(x) for x in csi) if sigma == "csi" and csi is not None else None
     key = (id(util), np.asarray(belief.dsrc).tobytes(), np.asarray(belief.csens).tobytes(),
-           str(sigma), tuple(clip))
+           str(sigma), tuple(clip), c)
     if key not in _SOFT:
         if len(_SOFT) > 8:
             _SOFT.clear()
-        _SOFT[key] = soft_spread(util, belief, sigma, clip=tuple(clip))
+        _SOFT[key] = soft_spread(util, belief, "auto" if sigma == "csi" else sigma,
+                                 clip=tuple(clip), csi=c)
     return _SOFT[key]
 
 
@@ -457,7 +464,7 @@ def delay_times(util, imgs, hist, log, T, target=None, whole=False):
 def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, margin=0.0,
               offset=0.0, avg=None, corr=0.0, fixed_codes=False, avail=None, p_avail=1.0,
               t_plan=None, seen=None, backoff=0.0, start=None, stop_after=None, log=None,
-              clip=(-2.0, 22.0), aware=None, harq=None, soft_sigma="auto"):
+              clip=(-2.0, 22.0), aware=None, harq=None, soft_sigma="auto", csi=None):
     """One frame under one policy: per-user delivered SNR lists. With a target (dB) the
     target policies size, stop and admit by it, and a slot that no policy rule claims goes
     to PF over every user with phases left (so every policy can use the whole frame).
@@ -472,11 +479,12 @@ def run_frame(util, belief, imgs, means, snr, policy, alpha=0.0, target=None, ma
     (--cqi-aware): it decides on aware_snr, the whittle policy on its reports. `harq` =
     (mode, max_tx): a digital link retransmits failed blocks (harq_deliver); a user's slot
     is then valued, by the policies that value slots, by the block waiting for it. A *_soft
-    policy is the whittle / lagrange policy on calibration-aware programs (soft_for)."""
+    policy is the whittle / lagrange policy on calibration-aware programs (soft_for; `csi`:
+    the run's reports, (cqi_error, cqi_corr, aware), for soft_sigma "csi")."""
     soft = None
     if policy.endswith("_soft"):
         policy = policy[:-len("_soft")]
-        soft = soft_for(util, belief, soft_sigma, clip)
+        soft = soft_for(util, belief, soft_sigma, clip, csi)
     K, T = snr.shape
     P = util.P
     digital = getattr(util, "kind", "") == "digital"
@@ -811,6 +819,7 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
     frame_iter = draw_frames(util, users, slots, frames, mean_snr, fading, clip, seed, same_image,
                              pred_noise, belief_util, fade_corr, preempt, cqi_error, cqi_corr)
     aware = cqi_corr if cqi_aware and cqi_corr < 1.0 and fading != "none" else None
+    csi = (cqi_error, cqi_corr if fading != "none" else 1.0, aware is not None)   # for "csi"
     for f, (imgs, means, snr, belief, avail, seen) in enumerate(frame_iter):
         avg = belief.average() if target is not None else None
         for p in policies:
@@ -819,7 +828,8 @@ def simulate(util, users, slots, frames, mean_snr, fading, clip, policies, seed=
                              fade_corr if plan == "conditional" else 0.0, fixed_codes,
                              avail, 1.0 - preempt, t_plan, seen,
                              backoff.get(p, 0.0) if isinstance(backoff, dict) else backoff,
-                             log=lg, clip=clip, aware=aware, harq=harq, soft_sigma=soft_sigma)
+                             log=lg, clip=clip, aware=aware, harq=harq, soft_sigma=soft_sigma,
+                             csi=csi)
             q = np.array([util.psnr(i, h) for i, h in zip(imgs, hist)])
             r = res[p]
             r["psnr"] += q.tolist()
@@ -976,8 +986,11 @@ def main():
                     help="sd of the log-normal error of the transmitter's curves")
     ap.add_argument("--alpha", type=float, default=0.0, help="greedy: alpha-fair weighting")
     ap.add_argument("--soft-sigma", default="auto",
-                    help="whittle_soft / lagrange_soft: the transmitter's curve error, 'auto' "
-                         "(measured from --utility against --belief) or a number in dB")
+                    help="whittle_soft / lagrange_soft: the error of the transmitter's predicted "
+                         "PSNR, 'auto' (its curves', measured from --utility against --belief), "
+                         "'csi' (the curves' and the reports': auto with the belief read at the "
+                         "SNRs the transmitter decides on under --cqi-error / --cqi-corr, "
+                         "measured per condition; auto with exact reports) or a number in dB")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--delay", action="store_true",
                     help="also the timing of the deliveries: first phase, PSNR over the frame, "
@@ -1000,12 +1013,12 @@ def main():
         ap.error(f"{', '.join(needs)} need --target")
     if "pi" in a.policies and a.target is not None:
         ap.error("pi is for the mean objective (no --target)")
-    if a.soft_sigma != "auto":
+    if a.soft_sigma not in ("auto", "csi"):
         try:
             if float(a.soft_sigma) < 0:
                 raise ValueError
         except ValueError:
-            ap.error("--soft-sigma is 'auto' or a number >= 0 (dB)")
+            ap.error("--soft-sigma is 'auto', 'csi' or a number >= 0 (dB)")
     dig = {"link": a.link, "gap_db": a.gap_db, "mode": a.digital_mode, "P": a.digital_max_phases}
     util = load_utility(a.utility, **dig)
     belief = load_utility(a.belief, **dig) if a.belief else None
@@ -1033,7 +1046,8 @@ def main():
         bonus = a.length_bonus * util.P if len(a.length_bonus) == 1 else a.length_bonus
         util = util.shifted(bonus)
         belief = belief.shifted(bonus) if belief is not None else None
-    if any(p.endswith("_soft") for p in a.policies):
+    soft = any(p.endswith("_soft") for p in a.policies)
+    if soft and a.soft_sigma != "csi":
         sg, bs = soft_for(util, belief or util, a.soft_sigma, a.snr_clip)
         print("calibration-aware programs (*_soft): the curves' error per prefix length, sigma "
               + " ".join(f"{v:.3f}" for v in sg) + " dB, bias (truth - belief) "
@@ -1043,6 +1057,16 @@ def main():
         backoff, ref = 0.0, None
         stale = corr < 1.0 and a.fading != "none"
         aw = bool(a.cqi_aware and stale)                     # an aware rate: tuned only with HARQ
+        if soft and a.soft_sigma == "csi":
+            c = (sigma, corr if a.fading != "none" else 1.0, aw)
+            sg, bs = soft_for(util, belief or util, "csi", a.snr_clip, c)
+            how = ("the curves' only: exact reports" if c[0] == 0 and c[1] >= 1.0 else
+                   f"the curves', and the reports' at CQI error {c[0]:g} dB, correlation {c[1]:g}, "
+                   + ("aware" if aw else "naive"))
+            print(f"calibration-aware programs (*_soft): the prediction's error per prefix length "
+                  f"({how}), sigma "
+                  + " ".join(f"{v:.3f}" for v in sg) + " dB, bias (truth - belief) "
+                  + " ".join(f"{v:+.3f}" for v in bs) + " dB (measured)")
         if digital and (sigma > 0 or stale) and (not aw or harq is not None):
             if a.cqi_backoff == "auto":
                 if not aw:
