@@ -6,12 +6,14 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 32. CPU only, about 3 hours on 14 cores, no GPU. It asks whether
-CLASP's calibration-aware reward can cover CSI errors too: the same runs as round 30 with the
-reward's spread set wider (0.25 / 0.5 / 1.0 dB), where the planner beat CLASP at the 30 dB
-target, paired against round 30's planner and CLASP. No new code.
+WHAT TO RUN: section 33. CPU about 1.5 hours (13 runs at once, one core each), GPUs 1-2 about
+30 minutes. Round 32 showed that a wider reward spread makes CLASP the best target policy at
+every CSI condition. This round runs the spread MEASURED rather than chosen (new:
+--soft-sigma csi) at every condition of round 30, paired against the planner, round 30's
+CLASP, round 32's 0.5 dB spread and the digital chain, and decodes its schedules at r = 0.8
+and 2 dB CQI error.
 
-Sections 0-31 are done (docs/NOTES.md 6d-6h; the figures: docs/FIGURES.md). Section 29 is
+Sections 0-32 are done (docs/NOTES.md 6d-6i; the figures: docs/FIGURES.md). Section 29 is
 optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
 
   section                                     status
@@ -73,8 +75,10 @@ optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
   31 redraw with round 30; paired checks of     done (docs/NOTES.md 6h)
      the planner against CLASP, the margin,
      the tie after co-design
-  32 can the calibration-aware reward cover     TO RUN NOW
-     CSI errors? (a wider reward spread)
+  32 can the calibration-aware reward cover     done (docs/NOTES.md 6i): yes, with a spread
+     CSI errors? (a wider reward spread)        of 0.5 dB at every CSI condition
+  33 the measured spread (curves and reports):  TO RUN NOW
+     every condition, decoded checks
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3322,7 +3326,7 @@ ls figures/
 #       After these, the figures to review are fig12-fig16.
 
 ================================================================================
- 32. TO RUN NOW -- can CLASP's calibration-aware reward cover CSI errors too?
+ 32. DONE 2026-10-31 (docs/NOTES.md 6i) -- can CLASP's calibration-aware reward cover CSI errors too?
      (CPU only: 27 runs, 14 at a time, ~3 h; no GPU; no new code)
 ================================================================================
 # Why: round 31 confirmed with paired intervals (2000 frames) that at the 30 dB target the
@@ -3390,3 +3394,116 @@ rm -f results/s32_soft.jsonl
 #   as the planner there. "CLASP - CLASP as run in 30": what the wider spread gains over the
 #   measured one (on aged reports, against CLASP's better margin). The grep: each run's share
 #   at 30 dB and mean PSNR (column 3): what the hedge costs the users who miss.
+
+================================================================================
+ 33. TO RUN NOW -- CLASP with the measured spread of its prediction (the curves' and the reports')
+     (CPU: 13 runs at once, one core each, ~1.5 h; GPUs 1-2: ~30 min; no training)
+================================================================================
+# Why: round 32 (NOTES 6i) found that the planner's lead at 30 dB under CSI errors came from
+# CLASP's reward spread being too narrow. With 0.5 dB CLASP beats the planner at every CSI
+# condition (+1.1 to +3.4 points), and any spread from 0.25 to 1 dB does nearly everywhere. But
+# a spread chosen on the test frames is a tuned number. New in the code: --soft-sigma csi, the
+# spread MEASURED offline the way --soft-sigma auto measures the curves' (random slot histories
+# over the image pool), with the transmitter's curves read at the SNRs it decides on under the
+# run's reports (its CQI error; aged reports through their posterior, as the aware transmitter
+# reads them) and the truth at the true SNRs. It chooses nothing on the test frames, and with
+# exact reports it is auto, draw for draw (smoke: [calibration-aware programs]).
+#   33.1 CPU, background: CLASP (no margin) with the measured spread at the ten conditions of
+#        round 30, on its 2000 frames (the fresh run is a check: it must equal round 30's);
+#        the main frames (500) at 2 dB CQI error and r = 0.8 for Tables III and IV; and the 60
+#        decoded frames of rounds 24 and 30 dumped again with the new CLASP
+#   33.2 GPUs 1-2: those dumps decoded (PADC again: it must decode as before, the frames' check)
+#   33.3 reading
+
+# 33.0 -- pull and checks (~5 min CPU) --------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: the csi spread)
+mkdir -p logs_s33
+nvidia-smi -i 1,2,3,4
+
+# 33.1 -- CPU, background: 13 jobs at once (one core each; ~1-1.5 h; the dumps take minutes) ----
+cat > logs_s33/run.sh <<'RUN'
+. logs_s30/env.sh
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONUNBUFFERED=1
+T="--target 30 --soft-sigma csi"
+case $1 in
+  f) f="" ;;
+  e1|e2|e3) f="--cqi-error ${1#e}" ;;
+  r95|r90|r80|r60|r40) f="--cqi-corr 0.${1#r} --cqi-aware" ;;
+  r0) f="--cqi-corr 0 --cqi-aware" ;;
+esac
+case $1 in
+  rep)
+    [ -s results/s33_rep_r80_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 $T --cqi-corr 0.8 --cqi-aware --policies padc lagrange_soft --out results/s33_rep_r80.json > results/s33_rep.txt 2>&1
+    [ -s results/s33_rep_e2_histories.json ] || python tools/schedule_sim.py $NUB --frames 60 --dump 60 $T --cqi-error 2 --policies padc lagrange_soft --out results/s33_rep_e2.json >> results/s33_rep.txt 2>&1 ;;
+  me2) [ -s results/s33_main_csi_e2.txt ] || python tools/schedule_sim.py $NUB --frames 500 $T --cqi-error 2 --policies padc whittle_soft lagrange_soft > results/s33_main_csi_e2.txt 2>&1 ;;
+  mr80) [ -s results/s33_main_csi_r80.txt ] || python tools/schedule_sim.py $NUB --frames 500 $T --cqi-corr 0.8 --cqi-aware --policies padc whittle_soft lagrange_soft > results/s33_main_csi_r80.txt 2>&1 ;;
+  *) [ -s results/s33_csi_$1.json ] || python tools/schedule_sim.py $J $T --policies padc lagrange_soft $f --out results/s33_csi_$1.json > results/s33_csi_$1.txt 2>&1 ;;
+esac
+echo done > logs_s33/$1.done
+RUN
+for k in rep f e1 e2 e3 r95 r90 r80 r60 r40 r0 me2 mr80; do nohup bash logs_s33/run.sh $k > logs_s33/$k.log 2>&1 & done
+sleep 120; head -n 1 results/s33_csi_e2.txt results/s33_csi_r80.txt
+#   each prints the spread it measured: "... (the curves', and the reports' at CQI error 2 dB,
+#   correlation 1, naive), sigma ... dB, bias ... dB (measured)"; send me these two lines
+
+# 33.2 -- GPUs 1 and 2: decode the dumps when they exist (~15 min each, MS-SSIM and LPIPS too) ---
+cat > logs_s33/gpu.sh <<'GPU'
+. logs_s30/env.sh
+G=$1; K=$2
+waitfor() { for i in $(seq 1 240); do [ -e "$1" ] && return 0; sleep 60; done; return 1; }
+waitfor logs_s33/rep.done && { [ -s results/s33_dec_$K.json ] || CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $REPF $PM --pretrained $SNRC4 --profiles-json results/s33_rep_${K}_histories.json --out results/s33_dec_$K.json > results/s33_dec_$K.txt 2>&1 ; }
+echo done > logs_s33/gpu$G.done
+GPU
+nohup bash logs_s33/gpu.sh 1 r80 > logs_s33/gpu1.log 2>&1 &
+nohup bash logs_s33/gpu.sh 2 e2 > logs_s33/gpu2.log 2>&1 &
+
+# 33.3 -- reading (send back everything it prints), when logs_s33/ holds 15 .done files ----------
+. logs_s30/env.sh
+ls logs_s33/*.done | wc -l                    # 15
+#   (1) the spread each run measured (per prefix length, dB)
+grep -h "calibration-aware" results/s33_csi_*.txt
+#   (2)-(3) per condition, CLASP with the measured spread against round 30's CLASP ([f] is the
+#   check: it must print +0.000 [+0.000, +0.000]), the planner, round 32's 0.5 dB spread and the
+#   digital chain (each with its better margin or transmitter, as in round 30)
+rm -f results/s33_csi.jsonl
+{ for c in f e1 e2 e3 r95 r90 r80 r60 r40 r0; do
+    case $c in
+      f|e1|e2|e3) pl="results/s30_j_tgt_$c.json:plan_adv"; cl="results/s30_j_tgt_$c.json:lagrange_soft"
+                  dt="results/s30_d_tgt_$c.json:padc,stop,online_pf" ;;
+      *) pl="results/s30_j_tgt_$c.json:plan_adv results/s30_j_tgtm_$c.json:plan_adv"
+         cl="results/s30_j_tgt_$c.json:lagrange_soft results/s30_j_tgtm_$c.json:lagrange_soft"
+         dt="results/s30_d_tgt_n${c#r}.json:padc,stop,online_pf results/s30_d_tgt_$c.json:padc,stop,online_pf" ;;
+    esac
+    L="--log results/s33_csi.jsonl"; a="results/s33_csi_$c.json:lagrange_soft"
+    python tools/paired_runs.py $L --label "[$c] measured spread - CLASP as run in 30" --a $a --b $cl
+    python tools/paired_runs.py $L --label "[$c] measured spread - planner" --a $a --b $pl
+    [ $c = f ] || python tools/paired_runs.py $L --label "[$c] measured spread - 0.5 dB spread (32)" --a $a --b results/s32_soft05_$c.json:lagrange_soft
+    python tools/paired_runs.py $L --label "[$c] 30 dB: CLASP (measured spread) - digital" --a $a --b $dt
+  done
+  grep -H "^padc \|^lagrange_soft " results/s33_csi_*.txt
+} 2>&1 | tee results/s33_csi.txt
+#   (4) decoded: the new CLASP's schedules against the old ones on the same 60 frames (old:padc
+#   and csi:padc must agree: the same frames, the same policy)
+{ python tools/replay_report.py results/s24_dec_r80.json results/s33_dec_r80.json --tags old csi --base old:padc ;
+  python tools/replay_report.py results/s24_dec_r80.json results/s33_dec_r80.json --tags old csi --base csi:lagrange_soft ;
+  python tools/replay_report.py results/s30_dec_e2_tgt.json results/s33_dec_e2.json --tags old csi --base old:padc ;
+  python tools/replay_report.py results/s30_dec_e2_tgt.json results/s33_dec_e2.json --tags old csi --base csi:lagrange_soft ; } 2>&1 | tee results/s33_dec.txt
+#   (5) the main frames (500) for Tables III and IV
+grep -H "calibration-aware\|^padc \|^whittle_soft \|^lagrange_soft " results/s33_main_csi_*.txt
+
+# Reading:
+#   (1) the measured spread under each condition; round 32's best fixed spreads were 0.25 dB
+#       (1 dB CQI error, r = 0.95) to 0.5-1 dB (3 dB, r = 0).
+#   (2) [f] +0.000: with exact reports the measured spread is the curves' (as in round 30).
+#   (3) "measured spread - planner" at or above zero everywhere means CLASP needs one policy for
+#       every CSI condition, with nothing tuned; "- 0.5 dB spread" says whether measuring loses
+#       anything against the best fixed spread; "- digital" are the Introduction's new numbers.
+#   (4) the decoded check: csi:lagrange_soft against old:plan_adv (the planner) and old:padc.
+#   (5) the inputs for the redraw of Tables III and IV (next round, with the figures).
