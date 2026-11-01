@@ -1,17 +1,16 @@
 ================================================================================
- COMMANDS.txt — rev 2026-10-31. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-11-01. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 34. CPU only, about 2 minutes, no GPU. It redraws the figures and tables
-with round 33's CLASP (the reward's measured spread under CSI errors): fig14, Table II (a new
-r = 0.8 row), Tables III and IV (the CQI 2 dB and r = 0.8 rows), fig03 (more decoded histories).
-
-Sections 0-33 are done (docs/NOTES.md 6d-6j; the figures: docs/FIGURES.md). Section 29 is
-optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
+WHAT TO RUN: nothing new. Sections 0-34 are done (docs/NOTES.md 6d-6j; the figures:
+docs/FIGURES.md, drawn by section 34 into figures/). Section 29 is optional: it reruns the
+code review's checks (docs/CORRECTNESS_REVIEW.md). The next steps are reviews, not runs: the
+figures fig12-fig16 (fig14 now shows the measured-spread CLASP) and the Introduction outline
+from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers: docs/INTRO_NUMBERS.md).
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -76,7 +75,7 @@ optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
      CSI errors? (a wider reward spread)        of 0.5 dB at every CSI condition
   33 the measured spread (curves and reports):  done (docs/NOTES.md 6j): one target policy
      every condition, decoded checks            for every CSI condition
-  34 redraw with round 33                       TO RUN NOW
+  34 redraw with round 33                       done 2026-11-01 (results/s34_figs.txt)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3507,7 +3506,7 @@ grep -H "calibration-aware\|^padc \|^whittle_soft \|^lagrange_soft " results/s33
 #   (5) the inputs for the redraw of Tables III and IV (next round, with the figures).
 
 ================================================================================
- 34. TO RUN NOW -- redraw the figures and tables with round 33 (CPU, ~2 min; no GPU)
+ 34. DONE 2026-11-01 (docs/NOTES.md 6j) -- redraw the figures and tables with round 33 (CPU, ~2 min)
 ================================================================================
 # Why: round 33 (NOTES 6j) made CLASP's reward under CQI errors and aged reports use the
 # measured spread of its prediction (the curves' and the reports'), with no margin. With it
