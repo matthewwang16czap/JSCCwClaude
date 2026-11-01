@@ -2054,6 +2054,60 @@ def check_figures():
            and pf._best(bl, "target", "corr", 0.6, every, "lagrange_soft") is None,
            "figures: fig14 takes the proposed index's best run at each point (with or without a "
            "margin), not the best policy")
+        # COMMANDS 35: fig14's 3 dB-gap code at the target, fig12(c) every slot, fig15 CLASP's
+        # banks only, fig16 intervals over images
+        r35 = os.path.join(tmp, "r35")
+        os.makedirs(r35)
+        gp = os.path.join(r35, "s35_g_tgt_r80.txt")
+        st.sim_file(gp, [(st.args(utility="results/rd_heic.json", belief=None, frames=2000,
+                                  harq="ir", target=30.0, cqi_aware=True), st.DIGITAL["shannon"],
+                          st.target_summary({"padc": .50, "stop": .55, "online_pf": .57}, rng),
+                          0.0, 0.8)])
+        g3 = pf.parse_sim(gp)
+        best = pf._best(g3, "target", "corr", 0.8,
+                        lambda s: s["harq"] == "ir" and s["link"] == "shannon")
+        sh = {"padc": .656, "lagrange": .767, "lagrange_soft": .783}
+        by = {"padc": [.05, .30, .55], "lagrange": [.15, .45, .70], "lagrange_soft": [.14, .44, .71]}
+        summ = st.target_summary(sh, rng, 24, by)
+        st.sim_file(os.path.join(r35, "s24_main_soft.txt"),
+                    [(st.args(target=30.0, delay=True), st.JSCC, summ, 0, 1)])
+        quarters = pf.delay_curves(pf.Inputs(r35))
+        with open(os.path.join(r35, "s35_delay_tgt.json"), "w") as f:
+            json.dump({"args": vars(st.args(target=30.0, delay=True)), "summary": summ}, f)
+        slots = pf.delay_curves(pf.Inputs(r35))
+        same = all(abs(slots["delay"][p][c - 1] - v) < 0.051
+                   for p in sh for c, v in zip(quarters["cuts"], quarters["delay"][p]))
+        refused = []
+        for bank in ({"policy": "slope_adv", "cqi_corr": 1.0, "blind": False},
+                     {"policy": "lagrange", "cqi_corr": 0.8, "cqi_aware": False, "blind": False}):
+            with open(os.path.join(r35, "bank_lag.json"), "w") as f:
+                json.dump(bank, f)
+            try:
+                pf.fig15(pf.Inputs(r35), None)
+            except pf.Missing:
+                refused.append(True)
+        kodak = [f"kodim{i:02d}" for i in range(1, 25)]
+        st.mixed_run(os.path.join(r35, "one.json"), st.code(24, 1), [2, 3], kodak, 1)
+        st.mixed_run(os.path.join(r35, "hd.json"), st.code(24, 1, gain_db=[0.0, 0.1, 0.2, 0.2,
+                                                                           0.2, 0.2]),
+                     [2, 3], kodak[:20], 2)
+        with open(os.path.join(r35, "one.json")) as f:
+            one = pf.constant_per_image(json.load(f))
+        with open(os.path.join(r35, "hd.json")) as f:
+            hd = pf.constant_per_image(json.load(f))
+        ig = pf.image_gains(one, hd)
+        snrs = sorted(hd[3])
+        g = [np.mean([hd[3][s][i] - one[3][s][i] for s in snrs]) for i in kodak[:20]]
+        from tools.schedule_sim import bootstrap
+        ok(best is not None and abs(best - .57) < 1e-9
+           and quarters["cuts"] == [6, 12, 18, 24] and slots["cuts"] == list(range(1, 25))
+           and same and len(refused) == 2
+           and ig[3][3] == 20 and np.allclose(ig[3][:3], [np.mean(g), *bootstrap(g)])
+           and abs(ig[3][0] - 0.2) < 0.05,
+           "figures: fig14 reads the 3 dB-gap code at the target; fig12(c) takes every slot of "
+           "the --out run (equal to the --delay table's cuts on the same frames); fig15 refuses "
+           "a bank that is not the proposed scheduler's; fig16's interval is over the images "
+           "both decoded")
         out = os.path.join(tmp, "out")
         os.makedirs(out)
         for fn in ("fig07_target_variants.png", "fig08_users.pdf", "table03_main.tex", "notes.txt",

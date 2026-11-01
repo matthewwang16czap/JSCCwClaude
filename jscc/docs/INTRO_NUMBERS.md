@@ -135,7 +135,9 @@ CQI-error rows are new decodes (30.3).
 | gap to the bound, 30 dB: within **±0.3** points from K 16 | `s24_soft_auto.txt`, summary table; 24.1 | the `lagrange_soft` column: 0.841 -0.103 -0.296 0.011 -0.194 | simulated, 100 frames per K |
 
 The 8-15 points over PADC cover all four decoded cases: Kodak with fresh reports (+14.8), CLIC
-(+8.1), 2 dB CQI errors (+13.3) and r = 0.8 (+12.5). Before the measured spread, CLASP's
+(+8.1), 2 dB CQI errors (+13.3) and r = 0.8 (+12.5). Table III prints the same four, with their
+intervals (`s34_figs.txt`, COMMANDS 34, the column "30 dB: decoded (points)" of `table03_main`:
+`+14.8 [11.7, 17.9]`, `+13.3 [10.6, 16.0]`, `+12.5 [9.8, 15.2]`, `+8.1 [5.8, 10.6]`). Before the measured spread, CLASP's
 decoded gains there were +8.1 (`s30_dec_e2.txt`) and +4.4 [0.8, 8.1] (`s24_dec_r80.json`).
 
 ## D. Against digital (paragraphs 2, 5 and 6)

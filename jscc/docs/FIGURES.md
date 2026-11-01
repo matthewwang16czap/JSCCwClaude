@@ -115,10 +115,10 @@ review so the comments can go on by number; retired names are listed below the t
 | table02_calibration | 2 col | ablation, decoded: users at 30 dB with a hard target and calibration-aware, the paired gain, users missed, mean PSNR, LPIPS; Kodak, Kodak σ 0.15 dB, CLIC, Kodak r = 0.8 with the curves' spread only, Kodak r = 0.8 with the measured spread (the reports' error too; its schedules decoded in their own file, paired with the hard target's on the same frames) | C13, V-F | s24_dec_auto.json [s24_dec_s15.json, s24_dec_clic.json, s24_dec_r80.json, s33_dec_r80.json] | Table II |
 | table03_main | 2 col | **main results**: the proposed scheduler minus the baseline it replaces, under each condition of the main frames (fresh reports, CQI error 2 dB, r = 0.8, 25% of slots lost, T 16, CLIC): mean PSNR over PF (simulated; decoded with MS-SSIM and LPIPS) and users at 30 dB over PADC (simulated; decoded) | C3, C4, V-B, V-C | the main-frame runs (s22_main_mean.txt, s24_main_soft*.txt, s26_tgt_lost/t16/clic.txt, s21_lag_mean_more.txt, s21_lag_t16.txt, s22_clic.txt) and decoded replays (s22_dec_mean.json, s22_dec_r80_mean.json, s22_clic_dec_mean.json, s24_dec_auto/r80/clic.json, s30_dec_e2_mean/tgt.json: CQI error 2 dB); under CSI errors the measured spread's runs first (s33_main_csi_e2/r80.txt, s33_dec_e2/r80.json); any one is enough | Table III |
 | fig08_users | 2 col | what the scheduler does to the users, decoded (Kodak, K 8, T 24): the share of users whose decoded PSNR is at or above x, the baseline against the proposed scheduler, (a) scheduled for mean PSNR (PF), (b) for a 30 dB target (PADC); notes: the paired gain, the 5th-percentile user, the users below 30 dB, users sent nothing | C3, C4, V-B, V-C | s22_dec_mean.json and/or s24_dec_auto.json | main |
-| fig12_latency | 2 col | latency, the baseline against the proposed scheduler: (a) mean PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline needs to match the index at T 24 (dashed: more than the longest frame run); (c) users at 30 dB by each slot of a 24-slot frame | C14, V-C | s21_latency_mean.json, s26_latency_tgt.json (else s21_latency_tgt.json), s24_main_soft.txt (its --delay table); any one is enough | main |
-| fig14_digital | 2 col | JSCC with the proposed scheduler vs digital with IR-HARQ (its best policy and transmitter per point) and the 3 dB-gap code with IR-HARQ: mean PSNR and users at 30 dB against the CQI error and the report correlation, the same 2000 frames | C5, V-D | s30_j_mean_f.txt, s33_csi_f.txt, s20_harq_mean.txt [the other s30_j_mean_*.txt and s33_csi_*.txt, s20_harq_tgt*.txt] | main |
-| fig15_scheduler_channel | 2 col | served SNR minus the user's mean for phases 1-3 under the closed form, against report age and K | C8, C11, V-E | bank_sa.json [bank_sa_cqi*.json, bank_sa_k16.json, bank_lift_k*.json] | main |
-| fig16_decoders | 1 col | what a decoder per length and one model per CBR add over the single decoder at each prefix length (constant SNRs) | C6, V-F | p2_full_snrc4.json, p4_full_h*.json and/or p3_full_fix*.json | main or appendix |
+| fig12_latency | 2 col | latency, the baseline against the proposed scheduler: (a) mean PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline needs to match the index at T 24 (dashed: more than the longest frame run); (c) users at 30 dB by each slot of a 24-slot frame | C14, V-C | s21_latency_mean.json, s26_latency_tgt.json (else s21_latency_tgt.json), s35_delay_tgt.json (every slot; else s24_main_soft.txt's --delay table, every sixth slot); any one is enough | main |
+| fig14_digital | 2 col | JSCC with the proposed scheduler vs digital with IR-HARQ (its best policy and transmitter per point) and the 3 dB-gap code with IR-HARQ: mean PSNR and users at 30 dB against the CQI error and the report correlation, the same 2000 frames | C5, V-D | s30_j_mean_f.txt, s33_csi_f.txt, s20_harq_mean.txt [the other s30_j_mean_*.txt and s33_csi_*.txt, s20_harq_tgt*.txt, s35_g_tgt_*.txt: the 3 dB-gap code at 30 dB] | main |
+| fig15_scheduler_channel | 2 col | served SNR minus the user's mean for phases 1-3 under the proposed scheduler (the Lagrangian index; aware on outdated reports), against report age (K 8) and K (T = 3K) | C8, C11, V-E | bank_lag.json [bank_lag_r*.json, bank_lag_k*.json] | main |
+| fig16_decoders | 1 col | what a decoder per length and one model per CBR add over the single decoder at each prefix length: each image's gain averaged over the constant SNRs, the mean over the 24 images with its 95% bootstrap interval over images | C6, V-F | p2_full_snrc4.json, p4_full_h*.json and/or p3_full_fix*.json | appendix |
 | table04_schedulers | 2 col | every scheduler built on the abstraction (PI, closed form, planner, Whittle, Lagrangian): gain over PF (mean) and over PADC (30 dB) under each condition, simulated and decoded; bold: the best per column | C7, V-B, V-C | the inputs of table03 | appendix |
 | table05_variants | 2 col | everything tried on the 30 dB gap (the relaxation's tie rule, prices, LP update, grids, margins, calibration-aware, true curves): the gap to the bound per user at K 8 / 32 / 128 with intervals | C13, V-F | s22_gap_ties/prices/lpu/grid.json, s23_gap_m25/m50/truth.json, s24_soft_auto.json (two or more) | appendix |
 
@@ -139,8 +139,9 @@ the target) is fig12(c). A run deletes their old files.
 * In table03 and table04 the r = 0.8 target runs use the 0.5 dB stopping margin they were run
   with (simulated) and the stale-report-aware transmitter (both).
 * table04 is where the policy facts live: the Lagrangian index is the best for the mean
-  everywhere and for the target with exact reports; under CQI errors and stale reports the
-  planner is ahead (C7).
+  everywhere and for the target in every column but 25% of slots lost and T 16, where the
+  calibration-aware Whittle index is 0.4 / 0.1 points ahead (COMMANDS 34; under CQI errors and
+  outdated reports with the measured spread, C7).
 * fig14 shows the proposed scheduler, not the best JSCC policy: the Lagrangian index for the
   mean (COMMANDS 30, docs/NOTES.md 6h) and the calibration-aware index for the target, with the
   reward's measured spread (the curves' and the reports' error) and no margin (COMMANDS 33,
@@ -149,7 +150,18 @@ the target) is fig12(c). A run deletes their old files.
   docs/NOTES.md 5 does. With the measured spread the proposed index is also the best JSCC
   target policy at every point (table04, C7). The per-length decoders' series is gone from
   fig14 (it came from best-policy runs; fig16 and C6 cover that decoder).
-* fig15 reads the banks with `tools/codesign.py`'s own `stats`.
+* fig15 reads the banks with `tools/codesign.py`'s own `stats`, and only banks of the proposed
+  scheduler (`--policy lagrange`, `--cqi-aware` on outdated reports; COMMANDS 30 and 35). The
+  earlier banks (bank_sa*, bank_lift_k*) were the closed form's, naive on outdated reports.
+* fig16's intervals are over images: the per-image gain, averaged over the five constant SNRs,
+  varies from image to image; its spread over the SNRs is not an interval. fig16 shows the
+  setting most favourable to the alternatives (the length known in advance). One model per CBR
+  needs the length fixed before encoding: with 25% of slots lost the single decoder leads it by
+  0.54 dB (simulated) and a decoder per length (shared encoder, chosen after reception) by
+  0.78 dB (decoded) (C6). So fig16 belongs with C6, in the appendix or V-F, with that context
+  in its caption.
+* fig12(c) from the round-35 run (`--out`) has every slot; on the same frames its values at slots
+  6, 12, 18 and 24 equal s24_main_soft.txt's --delay table.
 * To change a figure (a series, an axis, a size, a label), edit its function in
   `tools/paper_figs.py`; the encoding sits at the top (`ENT`), the conditions of the main frames
   in `CONDITIONS`, the IEEE sizes in `COL1`, `COL2` and `FONT`.

@@ -924,8 +924,16 @@ transmitter, as in round 30):**
 +9.3 [8.4, 10.2] (round 24 with a 0.5 dB margin: +7.1 / +6.3, the planner +9.7).
 
 From here CLASP's target reward under CQI errors and aged reports uses the measured spread (the
-curves' and the reports'), with no margin; with exact reports nothing changes. COMMANDS 34
-redraws fig14 and Tables II-IV with it.
+curves' and the reports'), with no margin; with exact reports nothing changes.
+
+**Redrawn (COMMANDS 34, 2026-11-01; `results/s34_figs.txt`).** Table II, r = 0.8, decoded on
+the same 60 frames: the hard target 63.3% of users at 30 dB, the measured spread 72.1%, +8.75
+[6.04, 11.25] points; users missed 1.7% -> 0.4%; mean PSNR 28.66 -> 28.85 dB; LPIPS 0.211 ->
+0.213 (the curves' spread alone: 64.0%, +0.62 [-1.67, 2.92]). Table III's CQI 2 dB and r = 0.8
+rows: +10.5 [9.6, 11.4] / +10.3 [9.3, 11.2] points simulated, +13.3 [10.6, 16.0] / +12.5
+[9.8, 15.2] decoded (the Introduction's numbers). Table IV: the Lagrangian index is the best
+30 dB policy in every column but 25% of slots lost and T 16, where the calibration-aware
+Whittle index is 0.4 / 0.1 points ahead with exact reports (as in 6g).
 
 ## 7. Open
 
@@ -1070,4 +1078,4 @@ redraws fig14 and Tables II-IV with it.
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |
 | The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
 | Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1 to +3.4 points) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
-| The measured spread (curves and reports) | 33 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4 to +3.6 points over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7 / +15.8 points at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB |
+| The measured spread (curves and reports) | 33, 34 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4 to +3.6 points over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7 / +15.8 points at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB; 34: fig14 and Tables II-IV redrawn with it (Table II at r 0.8: +8.75 [6.0, 11.3] over the hard target, missed 1.7% -> 0.4%) |
