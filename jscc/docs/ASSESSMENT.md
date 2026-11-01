@@ -335,9 +335,9 @@ IEEE Transactions on Wireless Communications (TWC).
    optional.
 29. **The calibration-aware reward closes the target gap (2026-10-26, COMMANDS 24; NOTES 6f).**
    Rewarding the probability of success under the curves' measured 0.03-0.05 dB error, instead
-   of 1 at the predicted threshold, recovers 99-100% of the ~1.6 points per user at every K: on
+   of 1 at the predicted threshold, recovers 100% of the cost at K 8 and 99% pooled over K 16-128 (~1.6 points per user): on
    the transmitter's calibrated curves the Lagrangian index is now as close to the bound as the
-   hard index given the true curves, insensitive to the assumed spread (0.03-0.2 dB). Decoded it
+   hard index given the true curves; an assumed spread of 0.05-0.2 dB does as well at K 32 and 128. Decoded it
    adds +1.7 points over the hard index (+14.8 over PADC on Kodak) and its schedules decode
    exactly as predicted (0.0% missed). C13 holds for both objectives on the transmitter's own
    information; the finding the paper keeps is that a hard target makes the abstraction's

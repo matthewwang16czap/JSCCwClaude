@@ -2,14 +2,18 @@
 
 Seven paragraphs, in the order of the supervisor's template. Each numbered item is one sentence
 (or two short ones) of the prose. [Keys] point to the reference list at the end. Every number,
-with the round and the result file it comes from, is in `docs/INTRO_NUMBERS.md`.
+in the order it appears here, with the printed line, the result file and the round it comes
+from, is in `docs/INTRO_NUMBERS.md`.
 
 **Terms used throughout.** *Learned code*: a deep JSCC encoder-decoder pair. *Progressive code*: a
 learned code whose symbols are sent in phases and that decodes from whatever prefix of phases has
 arrived. *Slot*, *frame*, *deadline*: the base station has a frame of T slots and serves K users;
 every image must be delivered by the end of the frame. *Link abstraction*: a rule that maps the
 SNRs a codeword's symbols met to its decoded quality. *Physical link design* and *the JSCC way*:
-the two existing categories (paragraph 2). *CLASP*: our method (paragraph 5).
+the two existing categories (paragraph 2). *Calibration-aware*: deciding on a calibrated
+predictive distribution of a user's decoded quality, whose spread is the measured error of the
+prediction, from the quality model and from the channel reports. *CLASP* (Calibration-aware,
+Link-Abstraction-based Scheduling of Progressive codes): our method (paragraph 5).
 
 ## Paragraph 1. Why the problem matters
 
@@ -67,7 +71,7 @@ category ours belongs to.
    - Link adaptation and HARQ protect the bits only by spending extra slots.
    - In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the digital
      chain 1.9 dB of mean PSNR, against 0.6 dB for a learned code under our scheduler
-     (Section VII).
+     (Section V-D).
 6. In contrast, the JSCC way replaces the two codes with one learned code that maps the image
    straight to channel symbols [Bourtsoulatze19].
    - Its quality degrades smoothly with the SNR its symbols meet, so no block is lost outright
@@ -165,7 +169,7 @@ serves every user slot by slot up to the deadline."
 
 1. To answer it, we trained a progressive code under slot-varying SNR, with the chunks of each
    codeword at independent SNRs. We then decoded it on held-out histories of mixed slot SNRs and
-   tested candidate rules (Section IV).
+   tested candidate rules (Sections IV-B and V-A).
    - The code has six phases, any prefix of which decodes.
    - It is a vision transformer whose encoder and decoder never see the SNR.
 
@@ -194,8 +198,8 @@ serves every user slot by slot up to the deadline."
    - Twelve decodes per image calibrate it. The calibrated curves predict held-out mixed-SNR
      decodes with a mean absolute error of 0.03-0.06 dB per prefix length (0.05-0.09 dB on CLIC).
    - Used by a scheduler, the model predicts the decoded quality of complete scheduled deliveries
-     with a mean absolute error of 0.05-0.09 dB with fresh reports or 2 dB CQI errors (up to
-     0.12 dB with aged reports), and a bias within ±0.05 dB.
+     with a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB, whether the reports
+     are exact, carry 2 dB CQI errors, or are aged (correlation 0.8).
    - But even this small error is first-order at a hard quality target. A scheduler that takes
      the calibrated curves as exact loses 1.7-2.0 points of the share of users reaching 30 dB,
      at every cell size from 16 to 128 users.
@@ -224,10 +228,12 @@ serves every user slot by slot up to the deadline."
      - users are served in the order of the Lagrangian index those programs define [Hao22,
        Brown20].
    - **Challenge (3), imperfect information.**
-     - Each program rewards the probability of reaching the quality target given the measured
-       error of its own prediction, rather than a hard threshold. The error has two parts, both
-       measured offline: the spread of the calibrated curves around the fitted ones (0.03-0.05
-       dB per prefix length), and the error that noisy or aged channel reports leave (0.2-1 dB).
+     - Each program rewards the probability of reaching the quality target under a calibrated
+       predictive distribution of the user's decoded quality, rather than a hard threshold on
+       the predicted quality.
+     - The distribution's spread is the measured error of the prediction, measured offline. With
+       exact reports it is the calibrated curves' error alone, 0.03-0.05 dB per prefix length.
+       With noisy or aged reports it includes the reports' error, 0.18-0.97 dB.
      - Each program decides on the posterior of the channel given an aged report, not on the
        report itself.
 4. Results:
@@ -241,6 +247,9 @@ serves every user slot by slot up to the deadline."
      incremental-redundancy HARQ, CLASP beats it at every CSI condition tested: by 1.2-1.6 dB of
      mean PSNR and 13-16 points at 30 dB with 2 dB CQI errors or aged reports (correlation
      0.8), and by 0.2 dB and 3.6 points with exact reports.
+   - An idealised digital code 3 dB from capacity, with the same HARQ, reaches 2.4 points more
+     users at 30 dB than CLASP with exact reports; from 1 dB CQI errors or correlation 0.95 on,
+     CLASP leads it by 5-14 points.
    - Decoded on the same slots, training the code on the channel CLASP creates adds 0.21 dB (two
      seeds) over training it as long on the usual channel. Training on CLASP's prefix lengths
      with blindly taken slots gains nothing (-0.09 dB), so the gain comes from the slots CLASP
@@ -275,15 +284,17 @@ Overall, our main contributions are as follows.
    - Simulated, CLASP outperforms a digital chain with link adaptation and HARQ at every CSI
      condition tested: by 1.2-1.6 dB and 13-16 points with 2 dB CQI errors or reports aged to
      correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
+   - Once reports are imperfect, from 1 dB CQI errors or correlation 0.95 on, CLASP also leads an
+     idealised digital code 3 dB from capacity, by 5-14 points at 30 dB.
    - Decoded, training the code on CLASP's channel adds 0.21 dB.
 
 **How paragraphs 3, 5 and 6 line up:**
 
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
-| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.05-0.09 dB with fresh reports or 2 dB CQI errors |
+| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
 | (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
-| (3) imperfect information | a reward on the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +13.3 / +12.5 points over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and +13-16 points over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
+| (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +13.3 / +12.5 points over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and +13-16 points over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
 
@@ -292,13 +303,12 @@ The rest of the paper is organised as follows:
 - Section II reviews related work in three subsections: physical link design for multi-user media
   delivery, the JSCC way (adaptive and multi-user learned codes), and restless bandits with index
   policies.
-- Section III states the system model.
-- Section IV reports the pilot experiments and derives the MMSE link abstraction.
-- Section V develops CLASP.
-- Section VI studies the channel the scheduler creates, and trains the code on it.
-- Section VII evaluates CLASP against proportional fair, per-image rate selection, the Lagrangian
-  bound and the digital chain.
-- Section VIII concludes and states the limitations.
+- Section III states the system model and the problem.
+- Section IV presents the method: training the progressive code under slot-varying SNR, its
+  MMSE link abstraction, CLASP, and training the code on the channel CLASP creates.
+- Section V evaluates it: the abstraction's accuracy, and CLASP against proportional fair,
+  per-image rate selection, the Lagrangian bound and the digital chain.
+- Section VI concludes and states the limitations.
 
 ## References cited in Section I
 
@@ -340,5 +350,5 @@ The rest of the paper is organised as follows:
 
 ## Numbers used
 
-Each number above, with the result file, the COMMANDS round that wrote it, the line to look
-for and whether it is simulated or decoded: `docs/INTRO_NUMBERS.md`.
+Each number above, in order of appearance, with the line the run printed, the result file, the
+COMMANDS round that wrote it and whether it is simulated or decoded: `docs/INTRO_NUMBERS.md`.

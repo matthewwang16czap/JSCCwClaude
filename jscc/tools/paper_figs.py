@@ -16,14 +16,15 @@ what is there is what this run drew; figures/INDEX.txt lists it.
 
 What the figures are for: each one shows a contribution (the abstraction, the bound and how
 close the index gets to it, the calibration-aware reward, latency, JSCC against digital, the
-scheduler's channel, the decoders). The proposed scheduler is compared with the baselines it
-replaces (PF for mean PSNR, PADC for a target): table03 holds the numbers, fig08 what it does
+scheduler's channel, the decoders). The proposed scheduler, CLASP, is compared with the baselines
+it replaces (PF for mean PSNR, PADC for a target): table03 holds the numbers, fig08 what it does
 to the users. How the schedulers built on the abstraction compare with each other is a fact,
 not a contribution: one appendix table (table04), as are the variants tried on the 30 dB gap
 (table05).
 
-The proposed scheduler is the Lagrangian index; for a quality target its programs use the
-calibration-aware reward (schedule_sim.py / rmab_scale.py lagrange_soft, whittle_soft). The
+CLASP (Calibration-aware, Link-Abstraction-based Scheduling of Progressive codes) schedules by
+the Lagrangian index; for a quality target its programs use the calibration-aware reward
+(schedule_sim.py / rmab_scale.py lagrange_soft, whittle_soft). The
 target figures and tables show the indices in that form; the hard-target versions appear in the
 ablation (fig05, table02), and elsewhere only where a run had no calibration-aware version
 (labelled).
@@ -77,7 +78,7 @@ ENT = {                                                    # entity -> (label, c
     "pi": ("PI ratio index", MAGENTA, "P"),
     "pf": ("PF", MUTED, "v"),
     "padc": ("PADC", INK2, "X"),
-    "jscc": ("JSCC, proposed scheduler", GREEN, "o"),
+    "jscc": ("JSCC with CLASP (proposed)", GREEN, "o"),
     "heic": ("HEIC + IR-HARQ", INK2, "s"),
     "gap3": ("3 dB-gap code + IR-HARQ", MUTED, "^"),
     "code": ("piecewise-trained code", GREEN, "o"),
@@ -92,8 +93,8 @@ PLANNER = {"plan_adv": "planner", "replan_adv": "planner"}
 TARGET = dict(PLANNER, lagrange_soft="lagrange", whittle_soft="whittle",   # a target run's
               lagrange="lagrange_hard", whittle="whittle_hard")            # policies -> entities
 
-PROPOSED = "Lagrangian index (proposed)"           # Table IV's row, among the other schedulers
-PROPOSED_FIG = "proposed scheduler"   # a figure's legend where only it and a baseline show: the
+PROPOSED = "CLASP: Lagrangian index (proposed)"    # Table IV's row, among the other schedulers
+PROPOSED_FIG = "CLASP (proposed)"     # a figure's legend where only it and a baseline show: the
                                       # Lagrangian index for the mean, calibration-aware at 30 dB
 
 
@@ -878,7 +879,7 @@ def fig08(I, plt):
         none = [100.0 * float(np.mean(~s)) for s in (sp, sb)]
         sent = (f"sent nothing: {none[0]:.1f}% ({ENT[base][0]}: {none[1]:.1f}%)"
                 if max(none) > 0 else None)
-        who = (f"proposed $-$ {ENT[base][0]}:" if ent == "lagrange"
+        who = (f"CLASP $-$ {ENT[base][0]}:" if ent == "lagrange"
                else f"{ENT[ent][0]} $-$ {ENT[base][0]}:")
         if tgt is None:
             g = paired(d, base).get(ent)
@@ -1379,10 +1380,10 @@ def table03(I):
     tex = ["% tools/paper_figs.py table03: results/s22_main_mean.txt, s24_main_soft*.txt, "
            "s26_tgt_*.txt, s21_lag_*.txt, s22_clic.txt, s22_*dec_*mean.json, s24_dec_*.json",
            r"\begin{table*}[t]", r"\centering",
-           r"\caption{The proposed scheduler against the baselines it replaces, on the main "
-           r"frames ($K = 8$ users, $T = 24$ slots unless noted). Mean PSNR: the Lagrangian index "
-           r"minus PF, in PSNR, MS-SSIM and LPIPS (lower is better); 30~dB target: the "
-           r"calibration-aware Lagrangian index minus PADC, in users at 30~dB. Simulated: 500 "
+           r"\caption{CLASP against the baselines it replaces, on the main "
+           r"frames ($K = 8$ users, $T = 24$ slots unless noted). Mean PSNR: CLASP (the Lagrangian "
+           r"index) minus PF, in PSNR, MS-SSIM and LPIPS (lower is better); 30~dB target: CLASP "
+           r"(the calibration-aware Lagrangian index) minus PADC, in users at 30~dB. Simulated: 500 "
            r"frames on the transmitter's calibrated curves; decoded: 60 frames of the schedules "
            r"decoded by the codec. Paired by frame; 95\% bootstrap intervals; --: not run. "
            r"$r$: the correlation between the reported and the served channel (the transmitter "
@@ -1408,8 +1409,8 @@ def table03(I):
     tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
     head = ["condition", "mean: sim (dB)", "decoded (dB)", "MS-SSIM", "LPIPS",
             "30 dB: sim (points)", "decoded (points)"]
-    note = ("the proposed scheduler minus the baseline: mean PSNR (Lagrangian index - PF), 30 dB "
-            "(calibration-aware index - PADC); [95% CI]" + ("; * hard target" if hard else ""))
+    note = ("CLASP minus the baseline it replaces: mean PSNR (CLASP - PF), 30 dB (CLASP - PADC); "
+            "[95% CI]" + ("; * hard target" if hard else ""))
     return "\n".join(tex) + "\n", note + "\n" + _text_table(head, text)
 
 
@@ -1569,17 +1570,17 @@ FIGS = (
      "curves against K; the assumed sigma", "s24_soft_auto.json [s23_gap_truth.json "
      "s24_soft_s05/s10/s20.json s24_soft_auto.txt]"),
     ("fig08_users", fig08, "decoded: the share of users at or above each PSNR, the baseline "
-     "against the proposed scheduler (mean PSNR: PF; 30 dB: PADC)",
+     "against CLASP (mean PSNR: PF; 30 dB: PADC)",
      "s22_dec_mean.json and/or s24_dec_auto.json"),
-    ("fig12_latency", fig12, "latency, the baseline against the proposed scheduler: quality vs "
+    ("fig12_latency", fig12, "latency, the baseline against CLASP: quality vs "
      "frame length; users at 30 dB by each slot",
      "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json) and/or "
      "s35_delay_tgt.json (else s24_main_soft.txt's --delay table)"),
-    ("fig14_digital", fig14, "JSCC with the proposed scheduler vs digital with IR-HARQ, CQI "
+    ("fig14_digital", fig14, "JSCC with CLASP vs digital with IR-HARQ, CQI "
      "errors and outdated reports", "s30_j_mean_f.txt s33_csi_f.txt s20_harq_mean.txt "
      "[s30_j_mean_*.txt s33_csi_*.txt s20_harq_tgt*.txt s35_g_tgt_*.txt]"),
-    ("fig15_scheduler_channel", fig15, "SNR lift of the first phases under the proposed "
-     "scheduler vs report age and K", "bank_lag.json [bank_lag_r*.json bank_lag_k*.json "
+    ("fig15_scheduler_channel", fig15, "SNR lift of the first phases under CLASP "
+     "vs report age and K", "bank_lag.json [bank_lag_r*.json bank_lag_k*.json "
      "bank_lagblind.json]"),
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "
      "decoder, by length (95% intervals over images)",
@@ -1591,7 +1592,7 @@ TABLES = (
     ("table02_calibration", table02, "ablation, decoded: hard target vs calibration-aware",
      "s24_dec_auto.json [s24_dec_s15.json s24_dec_clic.json s24_dec_r80.json "
      "s33_dec_r80.json]"),
-    ("table03_main", table03, "main results: the proposed scheduler minus the baseline under "
+    ("table03_main", table03, "main results: CLASP minus the baseline under "
      "each condition, simulated and decoded",
      "any of s22_main_mean.txt s24_main_soft.txt [s24_main_soft_r80.txt s33_main_csi_e2/r80.txt "
      "s26_tgt_lost/t16/clic.txt s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt "
