@@ -92,7 +92,9 @@ PLANNER = {"plan_adv": "planner", "replan_adv": "planner"}
 TARGET = dict(PLANNER, lagrange_soft="lagrange", whittle_soft="whittle",   # a target run's
               lagrange="lagrange_hard", whittle="whittle_hard")            # policies -> entities
 
-PROPOSED = "Lagrangian index (proposed)"           # the label where only it and a baseline show
+PROPOSED = "Lagrangian index (proposed)"           # Table IV's row, among the other schedulers
+PROPOSED_FIG = "proposed scheduler"   # a figure's legend where only it and a baseline show: the
+                                      # Lagrangian index for the mean, calibration-aware at 30 dB
 
 
 def _cond(name, tex, short, short_tex, mean, tgt, want, dec_mean=None, dec_tgt=None, dec=None):
@@ -219,7 +221,7 @@ def cbr_axis(ax, label="prefix length: phases (CBR)"):
 def baselines_first(fig, axes):
     """A one-row legend: the baselines, then the proposed scheduler (only the series drawn)."""
     drawn = {ln.get_label() for ax in np.ravel(axes) for ln in ax.get_lines()}
-    order = [x for x in (ENT["pf"][0], ENT["padc"][0], PROPOSED, ENT["lagrange_hard"][0])
+    order = [x for x in (ENT["pf"][0], ENT["padc"][0], PROPOSED_FIG, ENT["lagrange_hard"][0])
              if x in drawn]
     fig_legend(fig, axes, len(order), rows=[tuple(order)])
 
@@ -869,14 +871,15 @@ def fig08(I, plt):
     for ax, (d, base, tgt, raw, ent), letter in zip(axes[0], todo, "ab"):
         (vb, sb), (vp, sp) = user_psnr(d, base), user_psnr(d, raw)
         share_curve(ax, vb, style(base))
-        share_curve(ax, vp, style(ent, PROPOSED if ent == "lagrange" else None))
+        share_curve(ax, vp, style(ent, PROPOSED_FIG if ent == "lagrange" else None))
         got = np.concatenate([vb[sb], vp[sp]])         # users sent nothing sit left of the axis
         ax.set_xlim(np.floor(np.percentile(got, 1)), np.ceil(np.percentile(got, 99.5)))
         ax.set_ylim(0, 103)
         none = [100.0 * float(np.mean(~s)) for s in (sp, sb)]
         sent = (f"sent nothing: {none[0]:.1f}% ({ENT[base][0]}: {none[1]:.1f}%)"
                 if max(none) > 0 else None)
-        who = f"{ENT[ent][0]} $-$ {ENT[base][0]}:"
+        who = (f"proposed $-$ {ENT[base][0]}:" if ent == "lagrange"
+               else f"{ENT[ent][0]} $-$ {ENT[base][0]}:")
         if tgt is None:
             g = paired(d, base).get(ent)
             note = [who, f"mean {g[0]:+.2f} dB [{g[1][0]:.2f}, {g[1][1]:.2f}]" if g else None,
@@ -921,9 +924,10 @@ def delay_curves(I):
 
 def fig12(I, plt):
     """Latency (C14), the proposed scheduler against the baseline it replaces, K 8: (a) mean
-    PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline
-    needs for the index's quality at T 24 (dashed: more than the longest frame run); (c) users
-    at 30 dB by each slot of a 24-slot frame (the index calibration-aware at the target)."""
+    PSNR and (b) users at 30 dB against the frame length T, the arrow: from the proposed
+    scheduler's quality at T 24 to the frame length the baseline needs for it (dashed: more than
+    the longest frame run); (c) users at 30 dB by each slot of a 24-slot frame (the index
+    calibration-aware at the target). (a)-(b): 300 frames per T; (c): the 500 main frames."""
     a = I.json("s21_latency_mean.json", required=False)
     b = I.first(("s26_latency_tgt.json", "s21_latency_tgt.json"))
     c = delay_curves(I)
@@ -934,7 +938,7 @@ def fig12(I, plt):
                              squeeze=False)
 
     def lab(k):
-        return PROPOSED if k == "lagrange" else None
+        return PROPOSED_FIG if k == "lagrange" else None
 
     for ax, (what, d), letter in zip(axes[0], todo, "abc"):
         if what == "delay":
@@ -969,8 +973,9 @@ def fig12(I, plt):
                         arrowprops=dict(arrowstyle="->", color=INK2, lw=0.8, shrinkA=0,
                                         shrinkB=0, ls="-" if not r["flag"] else "--"))
             more = f"+{r['needed'] - 24:.1f}" if not r["flag"] else f"more than +{Ts[-1] - 24}"
-            ax.text(0.97, 0.04, f"{ENT[ref][0]} needs {more} slots\nto match the index at "
-                    "T = 24", transform=ax.transAxes, ha="right", va="bottom", color=INK2)
+            same = "the same mean PSNR" if mean else "the same share"
+            ax.text(0.97, 0.04, f"{ENT[ref][0]} needs {more} slots\nfor {same}",
+                    transform=ax.transAxes, ha="right", va="bottom", color=INK2)
         ax.set_xticks(Ts)
         ax.set_xlabel("frame length T (slots)")
         ax.set_ylabel("mean PSNR (dB)" if mean else "users at 30 dB (%)")
