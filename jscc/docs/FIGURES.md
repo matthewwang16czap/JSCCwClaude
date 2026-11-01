@@ -88,7 +88,7 @@ Terms used in the figures:
 
 | entity | colour | marker / style |
 |---|---|---|
-| Lagrangian index (proposed) | blue | circle, solid; with a hard target (ablation) dashed, hollow |
+| the proposed scheduler ("proposed scheduler" in fig08 and fig12: the Lagrangian index for the mean, calibration-aware at 30 dB; "Lagrangian index (proposed)" in Table IV) | blue | circle, solid; with a hard target (ablation) dashed, hollow |
 | PF, PADC | grey, dark grey | down triangle, cross |
 | closed form (advantage index for the mean, online rule for the target) | orange | square |
 | Whittle index | aqua | triangle; hard target as above |
@@ -164,7 +164,14 @@ the target) is fig12(c). A run deletes their old files.
   0.78 dB (decoded) (C6). So fig16 belongs with C6, in the appendix or V-F, with that context
   in its caption.
 * fig12(c) from the round-35 run (`--out`) has every slot; on the same frames its values at slots
-  6, 12, 18 and 24 equal s24_main_soft.txt's --delay table.
+  6, 12, 18 and 24 equal s24_main_soft.txt's --delay table. (a) and (b) are tools/latency.py's
+  runs, 300 frames per T: the first 300 of (c)'s 500 main frames. So (b) at T 24 and (c) at
+  slot 24, the same quantity, differ by sampling (about 77.7 against 77.2% for the proposed
+  scheduler, 64.8 against 64.6% for PADC); the caption gives both frame counts.
+* In fig08 and fig12 the blue line is "proposed scheduler": the Lagrangian index for the mean,
+  its calibration-aware version at 30 dB. Table IV, which compares schedulers, names it
+  "Lagrangian index (proposed)". Once the method has its name, it replaces both labels
+  (`PROPOSED_FIG` and `PROPOSED` at the top of `tools/paper_figs.py`).
 * To change a figure (a series, an axis, a size, a label), edit its function in
   `tools/paper_figs.py`; the encoding sits at the top (`ENT`), the conditions of the main frames
   in `CONDITIONS`, the IEEE sizes in `COL1`, `COL2` and `FONT`.
