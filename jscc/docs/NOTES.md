@@ -109,7 +109,7 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 ## 5. Against digital (HEVC intra / HEIC + link adaptation, same schedulers, 6-slot cap)
 
 The JSCC numbers in this section are the per-length decoders' (hd). With the single decoder, the
-paper's main system, see section 6e: every lead is 0.17-0.21 dB and 1.4-2.5 points smaller, and
+paper's main system, see section 6e: every lead is about 0.2 dB (0.16-0.21) and 1.4-2.5 points smaller, and
 the verdict is the same.
 
 | CQI error sd (dB) | 0 | 1 | 2 | 3 |
@@ -555,7 +555,7 @@ decoders' lead (section 5).
 
 The verdict stands with the single decoder: on par with exact CSI (+0.13 dB, +0.3 points; a
 3 dB-gap code is 0.7 dB ahead), ahead of HEIC with HARQ from 1 dB of CQI error or r = 0.95, and of
-the 3 dB-gap code from 1 dB / r = 0.95. Per-length decoders add a uniform 0.17-0.21 dB and 1.4-2.5
+the 3 dB-gap code from 1 dB / r = 0.95. Per-length decoders add about 0.2 dB (0.16-0.21) and 1.4-2.5
 points to every lead. On stale reports the naive target policies break as in section 6b (online
 -4.0 points under PADC at r = 0.8 naive, +3.3 aware); plan_adv aware is the best target policy
 from r = 0.95 to 0.4, PADC at r = 0. The JSCC side holds decoded at r = 0.8 with this decoder
@@ -954,9 +954,9 @@ aware on aged reports; `s35_banks.txt`): the served SNR of each phase minus the 
 
 * With reports that carry nothing (r = 0) the served slots sit where blindly taken ones do
   (-1.8 dB, round 30's blind bank). Over a blind slot the fresh lift is +5.6 / +4.8 / +4.2 dB
-  (the closed form +5.0 / +4.5 / +3.6, 6b). "Kept" is the mean over phases 1-3 of (lift at r -
-  lift at 0) / (lift at 1 - lift at 0): 92 / 83 / 65 / 34 / 14% at r = 0.95 / 0.9 / 0.8 / 0.6 /
-  0.4, close to r^2 (90 / 81 / 64 / 36 / 16%), as under the closed form (91 / 65 / 36%; 8% at
+  (the closed form +5.0 / +4.5 / +3.6, 6b). "Kept" is (lift at r - lift at 0) / (lift at 1 - lift
+  at 0), each lift averaged over phases 1-3: 92 / 83 / 65 / 34 / 14% at r = 0.95 / 0.9 / 0.8 /
+  0.6 / 0.4, close to r^2 (90 / 81 / 64 / 36 / 16%), as under the closed form (91 / 65 / 36%; 8% at
   0.3). Under CLASP too the scheduler-made channel is a fresh-report effect (C8).
 * As reports age CLASP stops telling users apart: 3 phases to 76% of users with fresh reports,
   83% at r = 0.8, 97-99% from r = 0.6.
@@ -1063,7 +1063,8 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    target and nothing measurable for the mean; uniform margins make it worse. And recovered
    2026-10-26 (COMMANDS 24, section 6f): calibration-aware programs (the success probability
    under the curves' measured error) bring the index on the calibrated curves to the bound
-   (99-100% of the cost), and their schedules decode exactly as predicted.
+   (100% of the cost at K 8, 99% pooled over K 16-128), and their decoded schedules miss no user
+   they predicted at the target.
 7. A PI-type ratio baseline (Ayesta, Erausquin and Jacko, Performance Evaluation 2010, read in
    full 2026-10-20: nu^PI = c mu_n / sum_{m>n} q_m (mu_m - mu_n), infinite in the best channel
    state). For our arm: serve the largest g_k(s) / E[(g_k(S') - g_k(s))^+], g_k(s) the predicted
@@ -1140,7 +1141,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 | HARQ, decoded stale, Lagrangian delay, margins | 20 | 10-20 | C5 with HARQ: +1.3 dB at 2 dB CQI error, +1.7 dB / +15.5 points at r 0.8 (HARQ took 0.3 / 0.75 dB off); stale-report schedules decoded as simulated; the Lagrangian index has the best share at 30 dB, the Whittle index the earliest; margins of 0.5-1 dB on stale reports |
 | Before writing | 21, 22 | 10-23 to 10-25 | the Lagrangian index best for the mean everywhere and at 30 dB with fresh reports; the PI index loses to PF; CLIC, MS-SSIM and LPIPS hold; the 30 dB gap survives the tie rule, prices, LP update, grids |
 | The 30 dB gap; C5 with one decoder | 23 | 10-25 | the gap is the curve errors' cost (true curves meet the bound), margins worse; the single decoder leads digital by +1.1 / +1.5 dB at 2 dB CQI error / r 0.8 |
-| Calibration-aware programs | 24 | 10-26 | 99-100% of the curve errors' cost recovered at every K, any assumed sigma 0.03-0.2 dB; decoded +1.7 points, 0.0% missed |
+| Calibration-aware programs | 24 | 10-26 | the curve errors' cost recovered (100% at K 8, 99% pooled over K 16-128, with the measured sigma; an assumed 0.05-0.2 dB within +-0.3 points of the bound at K 32 and 128); decoded +1.7 points, 0.0% missed |
 | Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
 | Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |

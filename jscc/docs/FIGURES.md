@@ -47,11 +47,12 @@ closed form, planner, PI) is a fact, not a contribution: it is one appendix tabl
 (table05). Every figure that compares schedulers shows only the proposed one and the baseline
 it replaces: PF for mean PSNR, PADC (per-image rate selection) for a target.
 
-## The proposed scheduler, in the figures
+## The proposed scheduler, CLASP, in the figures
 
-The paper proposes the Lagrangian index; for a quality target its programs use the
+The paper proposes CLASP (Calibration-aware, Link-Abstraction-based Scheduling of Progressive
+codes). It schedules by the Lagrangian index; for a quality target its programs use the
 calibration-aware reward (the probability that a user's true PSNR reaches 30 dB given the
-transmitter's curve error; docs/PAPER_OUTLINE.md IV-C). So in every target figure and table
+measured error of the prediction; docs/PAPER_OUTLINE.md IV-C). So in every target figure and table
 "Lagrangian index" means the calibration-aware version (`lagrange_soft` in the tools; the
 Whittle index likewise, `whittle_soft`). The hard-target versions appear in the ablation (fig05,
 table02), and elsewhere only where a run had no calibration-aware version, marked "hard target"
@@ -88,7 +89,7 @@ Terms used in the figures:
 
 | entity | colour | marker / style |
 |---|---|---|
-| the proposed scheduler ("proposed scheduler" in fig08 and fig12: the Lagrangian index for the mean, calibration-aware at 30 dB; "Lagrangian index (proposed)" in Table IV) | blue | circle, solid; with a hard target (ablation) dashed, hollow |
+| CLASP ("CLASP (proposed)" in fig08 and fig12; "JSCC with CLASP (proposed)" in fig14; "CLASP: Lagrangian index (proposed)" in Table IV) | blue (green in fig14) | circle, solid; with a hard target (ablation) dashed, hollow |
 | PF, PADC | grey, dark grey | down triangle, cross |
 | closed form (advantage index for the mean, online rule for the target) | orange | square |
 | Whittle index | aqua | triangle; hard target as above |
@@ -113,7 +114,7 @@ review so the comments can go on by number; retired names are listed below the t
 | fig04_scaling | 2 col | gap to the bound per user vs K (B = K/8): (a) mean PSNR, log scale; (b) users at 30 dB (PF's range as a note: off the axis) | C13, V-B, V-C | s22_scale_mean.json [s24_soft_auto.json, else s22_gap_ties.json] | main |
 | fig05_ablation_calibration | 2 col | ablation: (a) the Lagrangian index's gap vs K with a hard target, with the calibration-aware reward (proposed), and with a hard target on the true curves (oracle); (b) the calibration-aware index against the curve error its reward assumes (0 = hard), K 8 / 32 / 128, the oracle dotted | C13, V-F | s24_soft_auto.json [s23_gap_truth.json, s24_soft_s05/s10/s20.json, s24_soft_auto.txt] | main (ablation) |
 | table02_calibration | 2 col | ablation, decoded: users at 30 dB with a hard target and calibration-aware, the paired gain, users missed, mean PSNR, LPIPS; Kodak, Kodak σ 0.15 dB, CLIC, Kodak r = 0.8 with the curves' spread only, Kodak r = 0.8 with the measured spread (the reports' error too; its schedules decoded in their own file, paired with the hard target's on the same frames) | C13, V-F | s24_dec_auto.json [s24_dec_s15.json, s24_dec_clic.json, s24_dec_r80.json, s33_dec_r80.json] | Table II |
-| table03_main | 2 col | **main results**: the proposed scheduler minus the baseline it replaces, under each condition of the main frames (fresh reports, CQI error 2 dB, r = 0.8, 25% of slots lost, T 16, CLIC): mean PSNR over PF (simulated; decoded with MS-SSIM and LPIPS) and users at 30 dB over PADC (simulated; decoded) | C3, C4, V-B, V-C | the main-frame runs (s22_main_mean.txt, s24_main_soft*.txt, s26_tgt_lost/t16/clic.txt, s21_lag_mean_more.txt, s21_lag_t16.txt, s22_clic.txt) and decoded replays (s22_dec_mean.json, s22_dec_r80_mean.json, s22_clic_dec_mean.json, s24_dec_auto/r80/clic.json, s30_dec_e2_mean/tgt.json: CQI error 2 dB); under CSI errors the measured spread's runs first (s33_main_csi_e2/r80.txt, s33_dec_e2/r80.json); any one is enough | Table III |
+| table03_main | 2 col | **main results**: CLASP minus the baseline it replaces, under each condition of the main frames (fresh reports, CQI error 2 dB, r = 0.8, 25% of slots lost, T 16, CLIC): mean PSNR over PF (simulated; decoded with MS-SSIM and LPIPS) and users at 30 dB over PADC (simulated; decoded) | C3, C4, V-B, V-C | the main-frame runs (s22_main_mean.txt, s24_main_soft*.txt, s26_tgt_lost/t16/clic.txt, s21_lag_mean_more.txt, s21_lag_t16.txt, s22_clic.txt) and decoded replays (s22_dec_mean.json, s22_dec_r80_mean.json, s22_clic_dec_mean.json, s24_dec_auto/r80/clic.json, s30_dec_e2_mean/tgt.json: CQI error 2 dB); under CSI errors the measured spread's runs first (s33_main_csi_e2/r80.txt, s33_dec_e2/r80.json); any one is enough | Table III |
 | fig08_users | 2 col | what the scheduler does to the users, decoded (Kodak, K 8, T 24): the share of users whose decoded PSNR is at or above x, the baseline against the proposed scheduler, (a) scheduled for mean PSNR (PF), (b) for a 30 dB target (PADC); notes: the paired gain, the 5th-percentile user, the users below 30 dB, users sent nothing | C3, C4, V-B, V-C | s22_dec_mean.json and/or s24_dec_auto.json | main |
 | fig12_latency | 2 col | latency, the baseline against the proposed scheduler: (a) mean PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline needs to match the index at T 24 (dashed: more than the longest frame run); (c) users at 30 dB by each slot of a 24-slot frame | C14, V-C | s21_latency_mean.json, s26_latency_tgt.json (else s21_latency_tgt.json), s35_delay_tgt.json (every slot; else s24_main_soft.txt's --delay table, every sixth slot); any one is enough | main |
 | fig14_digital | 2 col | JSCC with the proposed scheduler vs digital with IR-HARQ (its best policy and transmitter per point) and the 3 dB-gap code with IR-HARQ: mean PSNR and users at 30 dB against the CQI error and the report correlation, the same 2000 frames | C5, V-D | s30_j_mean_f.txt, s33_csi_f.txt, s20_harq_mean.txt [the other s30_j_mean_*.txt and s33_csi_*.txt, s20_harq_tgt*.txt, s35_g_tgt_*.txt: the 3 dB-gap code at 30 dB] | main |
@@ -160,7 +161,7 @@ the target) is fig12(c). A run deletes their old files.
   varies from image to image; its spread over the SNRs is not an interval. fig16 shows the
   setting most favourable to the alternatives (the length known in advance). One model per CBR
   needs the length fixed before encoding: with 25% of slots lost the single decoder leads it by
-  0.54 dB (simulated) and a decoder per length (shared encoder, chosen after reception) by
+  0.53 dB (simulated) and a decoder per length (shared encoder, chosen after reception) by
   0.78 dB (decoded) (C6). So fig16 belongs with C6, in the appendix or V-F, with that context
   in its caption.
 * fig12(c) from the round-35 run (`--out`) has every slot; on the same frames its values at slots
@@ -168,10 +169,10 @@ the target) is fig12(c). A run deletes their old files.
   runs, 300 frames per T: the first 300 of (c)'s 500 main frames. So (b) at T 24 and (c) at
   slot 24, the same quantity, differ by sampling (about 77.7 against 77.2% for the proposed
   scheduler, 64.8 against 64.6% for PADC); the caption gives both frame counts.
-* In fig08 and fig12 the blue line is "proposed scheduler": the Lagrangian index for the mean,
-  its calibration-aware version at 30 dB. Table IV, which compares schedulers, names it
-  "Lagrangian index (proposed)". Once the method has its name, it replaces both labels
-  (`PROPOSED_FIG` and `PROPOSED` at the top of `tools/paper_figs.py`).
+* In fig08 and fig12 the blue line is "CLASP (proposed)": the Lagrangian index for the mean, its
+  calibration-aware version at 30 dB. Table IV, which compares the schedulers built on the
+  abstraction, names its row "CLASP: Lagrangian index (proposed)". The labels are `PROPOSED_FIG`
+  and `PROPOSED` at the top of `tools/paper_figs.py`, and `ENT["jscc"]` for fig14.
 * To change a figure (a series, an axis, a size, a label), edit its function in
   `tools/paper_figs.py`; the encoding sits at the top (`ENT`), the conditions of the main frames
   in `CONDITIONS`, the IEEE sizes in `COL1`, `COL2` and `FONT`.

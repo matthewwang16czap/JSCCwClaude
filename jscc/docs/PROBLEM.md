@@ -204,7 +204,7 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         hard target and nothing measurable for the mean; uniform margins make it worse.
         Recovered 2026-10-26 (COMMANDS 24, docs/NOTES.md 6f): a terminal reward equal to the
         probability of success under the curves' measured error brings the index on the
-        calibrated curves to the bound (99-100% of the cost, every K). The lost-slot runs (--preempt) are outside these theorems
+        calibrated curves to the bound (100% of the cost at K 8, 99% pooled over K 16-128). The lost-slot runs (--preempt) are outside these theorems
         (a budget shared at random by all users; Zhang and Frazier list it as open). So the
         theory's regime holds, and at scale the programs' index is the scheduler to use; the
         closed form is its cheap approximation (one unit per slot: a tie). On stale reports (K
