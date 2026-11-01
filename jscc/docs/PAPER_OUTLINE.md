@@ -32,10 +32,10 @@ per-user dynamic programs, a Lagrangian bound on every causal scheduler and inde
 exactly. The index's gap to the bound vanishes as the cell grows, for mean PSNR and for a
 quality target, once the programs reward the probability of success under the abstraction's 0.04
 dB calibration error, which, ignored, costs 1.6 points of satisfied users. Decoded, the index
-gains 0.5-0.6 dB over proportional fair and, with fresh reports or 2 dB CQI errors, 8-15 points
-of users at 30 dB over per-image rate selection. Under CQI errors and outdated reports,
+gains 0.5-0.6 dB over proportional fair and 8-15 points of users at 30 dB over per-image rate
+selection, with fresh, noisy or aged reports. Under CQI errors and outdated reports,
 scheduled JSCC outperforms a digital chain with CQI-table link adaptation and HARQ by 1.2-1.6 dB
-and 8-12 points; training the code on its scheduler's channel adds 0.21 dB.
+and 13-16 points; training the code on its scheduler's channel adds 0.21 dB.
 
 **Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
 restless bandits, Whittle index, Lagrangian relaxation, imperfect CSI, HARQ, image transmission.
@@ -143,11 +143,14 @@ template, Figure 1, the references and the source of every number.
       no one to act on.
     - The Whittle index, taken at the top of the indifference range.
   - *Calibration-aware reward.* At a target the terminal reward is
-    Φ((q + μ_n − Q)/σ_n), the probability that the true PSNR reaches Q when the calibrated
-    curves are off by N(μ_n, σ_n²) at n phases; σ_n and μ_n are calibration statistics,
-    measured offline over images (0.03-0.05 dB). Exact Bayes for a Gaussian curve error: the
-    decisions reveal nothing about it within the frame, so only the terminal reward changes.
-    The bound keeps the hard reward on the true curves.
+    Φ((q + μ_n − Q)/σ_n), the probability that the true PSNR reaches Q when the prediction q
+    is off by N(μ_n, σ_n²) at n phases. σ_n and μ_n are the error of the transmitter's own
+    prediction, measured offline over images and random slot histories: its calibrated curves
+    against the fitted ones (0.03-0.05 dB), and, under CQI errors or aged reports, its curves
+    read at the SNRs it decides on (the reports, or their posterior) against the truth at the
+    true SNRs (0.2-1 dB). Exact Bayes for a Gaussian prediction error: the decisions reveal
+    nothing about it within the frame, so only the terminal reward changes. The bound keeps
+    the hard reward on the true curves.
   - *Outdated reports.* The programs decide on the report through a report-to-channel kernel,
     so the bound stays valid for every scheduler that sees only reports.
 - **D. Closed-form schedulers.**
@@ -210,9 +213,10 @@ template, Figure 1, the references and the source of every number.
     reports: +12.7 points over PADC simulated with fresh reports, +14.8 decoded (Kodak; CLIC
     +8.1 decoded, +9.5 simulated); with 25% of slots lost and at T 16 it ties the
     calibration-aware Whittle index (+11.2 / +11.5 vs +11.6), both ~2 points above the
-    planner. Under CQI errors (+6.1) and stale reports (+7.1) the planner plan_adv stays best
-    (+8.3, +9.7). A table of which policy when (C7): the index with exact reports, the
-    planner with CSI errors.
+    planner. Under CQI errors and stale reports, with the reports' error in its measured
+    spread, it stays the best (C7: one policy): +10.5 / +10.3 points over PADC at 2 dB CQI
+    error / r = 0.8 simulated, +13.3 / +12.5 decoded, and 1.4-3.6 points above the planner at
+    every CSI condition (2000 frames; decoded +3.3 [1.7, 5.2] at 2 dB).
   - The share has a price for the users who miss: the index's mean PSNR is 0.25 dB below the
     hard-target index's and its LPIPS 0.013 worse (F); online gains +8-9 points with better
     MS-SSIM and the same LPIPS as PADC.
@@ -227,17 +231,17 @@ template, Figure 1, the references and the source of every number.
     no other policy reaches its share within 32 slots; 70% of users at 30 dB take it 15.8
     slots, online 20.4, PADC more than 32 (the hard-target index 17.8: F).
 - **D. Imperfect CSI and the digital baseline** (fig14: the proposed scheduler and the digital
-  chain, mean PSNR / share vs σ and vs r; paired over 2000 frames, NOTES 6h).
+  chain, mean PSNR / share vs σ and vs r; paired over 2000 frames, NOTES 6h, 6j).
   - Exact CQI: +0.20 dB and +3.6 points.
-  - With HARQ, the single decoder: +1.19 dB / +8.1 points at σ = 2 dB and +1.56 dB / +12.0
-    points at r = 0.8; ahead of HEIC at every σ and r run, and of a 3 dB-gap code from
-    σ = 1 dB or r = 0.95 (0.64 dB behind the gap code with exact CSI). Fresh → r = 0.8 costs
-    the proposed scheduler 0.57 dB, digital 1.93 dB.
-  - At the target, the planner on the same abstraction is 1.1-4.6 points ahead of the index
-    from σ = 2 dB and from r = 0.9 (Table IV, C7). Per-length decoders add 0.17-0.21 dB and
-    1.4-2.5 points to the closed form's leads.
-  - On outdated reports the opportunistic gain fades, and stopping needs the posterior plus
-    a margin.
+  - With HARQ, the single decoder: +1.19 dB / +12.7 points at σ = 2 dB and +1.56 dB / +15.8
+    points at r = 0.8; ahead of HEIC at every σ and r run (+8.8 to +15.8 points at the target),
+    and of a 3 dB-gap code from σ = 1 dB or r = 0.95 (0.64 dB behind the gap code with exact
+    CSI). Fresh → r = 0.8 costs the proposed scheduler 0.57 dB, digital 1.93 dB.
+  - Per-length decoders add 0.17-0.21 dB and 1.4-2.5 points to the closed form's leads.
+  - On outdated reports the opportunistic gain fades, and stopping needs the posterior and a
+    reward that knows the reports' error. A uniform 0.5 dB margin gains the index 0.6-1.9
+    points from r = 0.8 down; the measured spread gains 1.9-5.7 points over the better of
+    the two at every r.
 - **E. Scheduler-aware training** (fig15: per-phase SNR lift; the trained code's κ and ρ: a
   table).
   - +0.21 dB on the same slots under the proposed scheduler (two seeds), +0.28 under the closed
@@ -256,8 +260,10 @@ template, Figure 1, the references and the source of every number.
     over the hard target; +2.1 with 25% of slots lost, +2.3 at T 16, +0.7 on CLIC; 70% of
     users at 30 dB in 15.8 slots instead of 17.8. Decoded (Table II): +1.7 [0.4, 2.9] points on
     Kodak, 0.0% of users missed against 1.2%; the price −0.25 dB mean PSNR and +0.013 LPIPS,
-    from the users who miss. Ruled out on the way (Table V): margins (worse), the relaxation's tie
-    rule, the price solver, re-solving, finer grids.
+    from the users who miss. Under aged reports (r = 0.8) the spread with the reports' error
+    adds +8.1 [5.6, 10.6] points over the curves' spread alone, decoded (Table II). Ruled out
+    on the way (Table V): margins (worse), the relaxation's tie rule, the price solver,
+    re-solving, finer grids.
   - Single multi-rate decoder vs per-length decoders: +0.23 dB mean and 2.5-3 points at 30 dB
     (decoded) for per-length decoders, at 6× decoder memory.
   - One model per CBR is 0.17 dB / 3.3 points ahead of the single decoder with known slots, but
@@ -289,7 +295,7 @@ template, Figure 1, the references and the source of every number.
 
 ---
 
-## How the assumptions came out (COMMANDS 21-24)
+## How the assumptions came out (COMMANDS 21-33)
 
 | assumed in the outline | run | if it comes out otherwise |
 |---|---|---|
@@ -301,3 +307,4 @@ template, Figure 1, the references and the source of every number.
 | ~~The Lagrangian index holds decoded~~ | 21 | confirmed: it is the paper's scheduler for the mean and for the target with fresh reports |
 | ~~JSCC's lead over digital with the single decoder is ~0.2 dB below the per-length decoders'~~ | 23.2 | confirmed: 0.17-0.21 dB and 1.4-2.5 points below; the verdict is unchanged |
 | ~~A calibration-aware reward recovers the curve errors' cost~~ | 24 | confirmed: 99-100% at every K, insensitive to the assumed spread; decoded +1.7 points over the hard index and 0.0% missed; the target result is now near-optimal |
+| ~~The planner is the target policy under CSI errors~~ | 30-33 | refuted: it led only while the reward's spread ignored the reports' error; with the measured spread (curves and reports) the index leads at every CSI condition (NOTES 6j) |

@@ -6,14 +6,11 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 33. CPU about 1.5 hours (13 runs at once, one core each), GPUs 1-2 about
-30 minutes. Round 32 showed that a wider reward spread makes CLASP the best target policy at
-every CSI condition. This round runs the spread MEASURED rather than chosen (new:
---soft-sigma csi) at every condition of round 30, paired against the planner, round 30's
-CLASP, round 32's 0.5 dB spread and the digital chain, and decodes its schedules at r = 0.8
-and 2 dB CQI error.
+WHAT TO RUN: section 34. CPU only, about 2 minutes, no GPU. It redraws the figures and tables
+with round 33's CLASP (the reward's measured spread under CSI errors): fig14, Table II (a new
+r = 0.8 row), Tables III and IV (the CQI 2 dB and r = 0.8 rows), fig03 (more decoded histories).
 
-Sections 0-32 are done (docs/NOTES.md 6d-6i; the figures: docs/FIGURES.md). Section 29 is
+Sections 0-33 are done (docs/NOTES.md 6d-6j; the figures: docs/FIGURES.md). Section 29 is
 optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
 
   section                                     status
@@ -77,8 +74,9 @@ optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md).
      the tie after co-design
   32 can the calibration-aware reward cover     done (docs/NOTES.md 6i): yes, with a spread
      CSI errors? (a wider reward spread)        of 0.5 dB at every CSI condition
-  33 the measured spread (curves and reports):  TO RUN NOW
-     every condition, decoded checks
+  33 the measured spread (curves and reports):  done (docs/NOTES.md 6j): one target policy
+     every condition, decoded checks            for every CSI condition
+  34 redraw with round 33                       TO RUN NOW
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3396,7 +3394,7 @@ rm -f results/s32_soft.jsonl
 #   at 30 dB and mean PSNR (column 3): what the hedge costs the users who miss.
 
 ================================================================================
- 33. TO RUN NOW -- CLASP with the measured spread of its prediction (the curves' and the reports')
+ 33. DONE 2026-11-01 (docs/NOTES.md 6j) -- CLASP with the measured spread of its prediction (the curves' and the reports')
      (CPU: 13 runs at once, one core each, ~1.5 h; GPUs 1-2: ~30 min; no training)
 ================================================================================
 # Why: round 32 (NOTES 6i) found that the planner's lead at 30 dB under CSI errors came from
@@ -3507,3 +3505,36 @@ grep -H "calibration-aware\|^padc \|^whittle_soft \|^lagrange_soft " results/s33
 #       anything against the best fixed spread; "- digital" are the Introduction's new numbers.
 #   (4) the decoded check: csi:lagrange_soft against old:plan_adv (the planner) and old:padc.
 #   (5) the inputs for the redraw of Tables III and IV (next round, with the figures).
+
+================================================================================
+ 34. TO RUN NOW -- redraw the figures and tables with round 33 (CPU, ~2 min; no GPU)
+================================================================================
+# Why: round 33 (NOTES 6j) made CLASP's reward under CQI errors and aged reports use the
+# measured spread of its prediction (the curves' and the reports'), with no margin. With it
+# CLASP is the best target policy at every CSI condition. The figures still drew round 30's
+# CLASP there. tools/paper_figs.py now reads round 33's runs:
+#   - fig14: the 30 dB panels from results/s33_csi_*.txt;
+#   - Table II: a new row, Kodak r = 0.8 with the measured spread (results/s33_dec_r80.json,
+#     paired with round 24's hard target on the same 60 frames), beside the old row (now
+#     labelled "curves' spread only");
+#   - Tables III and IV: the CQI 2 dB and r = 0.8 rows take the indices from round 33's runs
+#     (s33_main_csi_*.txt simulated, s33_dec_*.json decoded) and the planner and the online
+#     rule from the earlier runs of the same frames, each gain over PADC in its own run;
+#   - fig03: round 33's decoded histories too.
+# Nothing is simulated or decoded again.
+
+# 34.0 -- pull and checks (~5 min CPU) --------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: Tables II-IV across runs)
+
+# 34.1 -- the redraw (CPU, ~1 min; send back everything it prints) -----------------------------
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s34_figs.txt
+ls figures/
+
+# Reading: Table III's CQI 2 dB and r = 0.8 rows should now read about +10.5 / +10.3 points
+# simulated and +13.3 / +12.5 decoded at 30 dB (NOTES 6j); Table IV's Lagrangian index the best
+# in every 30 dB column; Table II's new row about 63.3 -> 72.1% (+8.75 points). After these, the
+# figures to review are fig12-fig16 (fig14 now shows the new CLASP).

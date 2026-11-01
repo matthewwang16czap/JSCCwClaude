@@ -320,6 +320,18 @@ def write_sims(d, rng):
                 (args(frames=2000, target=30.0, margin=0.5, cqi_aware=True), JSCC,
                  target_summary(dict(zip(tp, (t_ - .11, t_ - .02, t_ + .03, t_ + .02,
                                               t_ + .015))), rng), sig, cor)])
+        # COMMANDS 33: the target with the reward's measured spread (curves and reports)
+        sim_file(J(f"s33_csi_{t}.txt"), [
+            (args(frames=2000, target=30.0, cqi_aware=aware, soft_sigma="csi"), JSCC,
+             target_summary({"padc": t_ - .12, "lagrange_soft": t_ + (0.0 if t == "f" else .04)},
+                            rng), sig, cor)])
+    t3 = ("padc", "whittle_soft", "lagrange_soft")
+    sim_file(J("s33_main_csi_e2.txt"), [
+        (args(target=30.0, soft_sigma="csi"), JSCC,
+         target_summary(dict(zip(t3, (.636, .724, .741))), rng), 2, 1)])
+    sim_file(J("s33_main_csi_r80.txt"), [
+        (args(target=30.0, cqi_aware=True, soft_sigma="csi"), JSCC,
+         target_summary(dict(zip(t3, (.589, .682, .692))), rng), 0, 0.8)])
     return m, ("pf", "padc", "online", "plan_adv", "whittle", "lagrange", "lagrange_relax")
 
 
@@ -472,6 +484,22 @@ def decoded_file(path, effects, rng, target=None, level=31.0, spread=2.4, frames
                                                       "metrics": ["psnr", "msssim", "lpips"]}}, f)
 
 
+def decoded_copy(path, src, policies, shift, rng):
+    """A decoded replay of new schedules on the frames of `src` (the same images and mean SNRs,
+    so tools/replay_report.py pairs the two files), as COMMANDS 33 decoded new schedules of old
+    frames: the entries of `policies`, each one's PSNR moved by shift[policy] dB."""
+    with open(src) as f:
+        d = json.load(f)
+    out = []
+    for e in d["entries"]:
+        if e.get("policy") in policies:
+            q, sft = dict(e), shift.get(e["policy"], 0.0) + float(rng.normal(0.0, 0.05))
+            q["predicted_psnr"], q["actual_psnr"] = e["predicted_psnr"] + sft, e["actual_psnr"] + sft
+            out.append(q)
+    with open(path, "w") as f:
+        json.dump(dict(d, entries=out), f)
+
+
 def write_decoded(d, rng):
     J = lambda name: os.path.join(d, name)                                      # noqa: E731
     mean = {"pf": 0.0, "slope_adv": 0.47, "pi": -0.5, "whittle": 0.5, "lagrange": 0.53,
@@ -501,6 +529,10 @@ def write_decoded(d, rng):
     decoded_file(J("s30_dec_e2_mean.json"), {"pf": 0.0, "slope_adv": 0.43, "lagrange": 0.51},
                  rng, level=30.9)
     decoded_file(J("s30_dec_e2_tgt.json"), sel("padc", "plan_adv", "lagrange_soft"), rng, **kw)
+    decoded_copy(J("s33_dec_e2.json"), J("s30_dec_e2_tgt.json"), ("padc", "lagrange_soft"),
+                 {"lagrange_soft": 0.3}, rng)
+    decoded_copy(J("s33_dec_r80.json"), J("s24_dec_r80.json"), ("padc", "lagrange_soft"),
+                 {"lagrange_soft": 0.5}, rng)
 
 
 # ------------------------------------------------------------------------------ build --------
