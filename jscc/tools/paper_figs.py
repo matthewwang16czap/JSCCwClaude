@@ -551,6 +551,23 @@ def policy_stats(spec, target):
     return out
 
 
+def constant_per_image(d):
+    """{prefix length (phases): {SNR: {image: PSNR}}} of a tools/mixed_snr.py run (its
+    constant-SNR profiles)."""
+    out = {}
+    per = d.get("per_phase") or 1
+    names = d.get("images") or []
+    for lv in d["levels"]:
+        L = int(round(lv["units"] / per))
+        ps = np.asarray(lv["psnr"], dtype=np.float64)
+        for j, (pr, kind) in enumerate(zip(lv["profiles"], lv["kinds"])):
+            if kind == "constant":
+                out.setdefault(L, {})[float(pr[0])] = {
+                    (names[i] if i < len(names) else i): float(ps[i, j])
+                    for i in range(ps.shape[0]) if np.isfinite(ps[i, j])}
+    return out
+
+
 def constant_curves(d):
     """{prefix length (phases): {SNR: mean PSNR over images}} of a tools/mixed_snr.py run."""
     out = {}
@@ -885,6 +902,23 @@ def fig08(I, plt):
     return fig
 
 
+def delay_curves(I):
+    """Users at the target by each slot of a frame: {"cuts": slots, "delay": {policy: [%]},
+    "T": the frame's slots}; every slot from a schedule_sim.py --delay --out JSON (COMMANDS
+    35), else the quarter cuts of s24_main_soft.txt's --delay table."""
+    d = I.json("s35_delay_tgt.json", required=False)
+    if d is not None:
+        T = int(d["args"]["slots"])
+        by = {q: [100.0 * x for x in s["at_target_by"]] for q, s in d["summary"].items()
+              if len(s.get("at_target_by") or []) == T}
+        if by:
+            return {"cuts": list(range(1, T + 1)), "delay": by, "T": T}
+    p = I.path("s24_main_soft.txt", required=False)
+    c = next((x for x in parse_sim(p) if x["delay"]), None) if p else None
+    return None if c is None else {"cuts": c["cuts"], "delay": c["delay"],
+                                   "T": int(c["set"]["slots"])}
+
+
 def fig12(I, plt):
     """Latency (C14), the proposed scheduler against the baseline it replaces, K 8: (a) mean
     PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline
@@ -892,8 +926,7 @@ def fig12(I, plt):
     at 30 dB by each slot of a 24-slot frame (the index calibration-aware at the target)."""
     a = I.json("s21_latency_mean.json", required=False)
     b = I.first(("s26_latency_tgt.json", "s21_latency_tgt.json"))
-    p = I.path("s24_main_soft.txt", required=False)
-    c = next((x for x in parse_sim(p) if x["delay"]), None) if p else None
+    c = delay_curves(I)
     todo = [(k, d) for k, d in (("mean", a), ("target", b), ("delay", c)) if d is not None]
     if not todo:
         raise Missing("s21_latency_mean.json")
@@ -906,13 +939,16 @@ def fig12(I, plt):
     for ax, (what, d), letter in zip(axes[0], todo, "abc"):
         if what == "delay":
             delay = prefer({TARGET.get(q, q): v for q, v in d["delay"].items()})
+            T = d["T"]
+            every = max(T // 4, 1) if len(d["cuts"]) == T else 1      # markers at the quarters
             for k in ("padc", "lagrange", "lagrange_hard"):
                 if k in delay:
-                    ax.plot([0] + d["cuts"], [0.0] + delay[k], **style(k, lab(k)))
-            ax.set_xticks([0] + d["cuts"])
-            ax.set_xlim(0, d["cuts"][-1] + 0.5)
+                    ax.plot([0] + d["cuts"], [0.0] + delay[k], markevery=every,
+                            **style(k, lab(k)))
+            ax.set_xticks(sorted({0, T} | {max(1, int(round(T * f))) for f in (.25, .5, .75)}))
+            ax.set_xlim(0, T + 0.5)
             ax.set_ylim(bottom=0)
-            ax.set_xlabel(f"slot of a {d['set']['slots']}-slot frame")
+            ax.set_xlabel(f"slot of a {T}-slot frame")
             ax.set_ylabel("users at 30 dB so far (%)")
             panel(ax, letter, "within the frame")
             continue
@@ -966,6 +1002,7 @@ def _best(blocks, kind, axis, x, pred, policy=None):
 
 C5_R, C5_S = (1.0, 0.95, 0.9, 0.8, 0.6, 0.4, 0.0), (0.0, 1.0, 2.0, 3.0)
 C5_TAGS = ("f", "e1", "e2", "e3", "r95", "r90", "r80", "r60", "r40", "r0")   # COMMANDS 30.2
+C5_DTAGS = C5_TAGS[:4] + tuple("n" + t[1:] for t in C5_TAGS[4:]) + C5_TAGS[4:]  # naive, aware
 PROPOSED_POLICY = {"mean": "lagrange", "target": "lagrange_soft"}
 
 
@@ -975,7 +1012,7 @@ def fig14(I, plt):
     reports' measured error, no margin, COMMANDS 33; aware on outdated reports) against the
     digital chain's best policy and transmitter (naive or aware) at each point, under CQI
     errors and outdated reports; the 3 dB-gap code with HARQ is the optimistic digital
-    reference. The same 2000 frames."""
+    reference (its 30 dB runs: COMMANDS 35). The same 2000 frames."""
     clasp = []
     for fn in [f"s30_j_mean_{t}.txt" for t in C5_TAGS] + [f"s33_csi_{t}.txt" for t in C5_TAGS]:
         p = I.path(fn, required=fn in ("s30_j_mean_f.txt", "s33_csi_f.txt"))
@@ -983,7 +1020,8 @@ def fig14(I, plt):
             clasp += parse_sim(p)
     dig = parse_sim(I.path("s20_harq_mean.txt"))
     dig_t = []
-    for fn in ("s20_harq_tgt.txt", "s20_harq_tgt_aware.txt", "s20_harq_tgt_cqi.txt"):
+    for fn in ("s20_harq_tgt.txt", "s20_harq_tgt_aware.txt", "s20_harq_tgt_cqi.txt") + tuple(
+            f"s35_g_tgt_{t}.txt" for t in C5_DTAGS):
         p = I.path(fn, required=False)
         if p:
             dig_t += parse_sim(p)
@@ -1025,18 +1063,25 @@ def fig14(I, plt):
 
 def fig15(I, plt):
     """The scheduler makes the code's channel (C8, C11): how much better than the user's mean
-    SNR the first three phases' slots are, against report age and the number of users."""
+    SNR the first three phases' slots are under the proposed scheduler (the Lagrangian index;
+    aware on outdated reports; COMMANDS 30 and 35), against report age and the number of
+    users."""
     from tools.codesign import stats
-    by_r = ("bank_sa.json", "bank_sa_cqi95.json", "bank_sa_cqi80.json", "bank_sa_cqi60.json",
-            "bank_sa_cqi30.json", "bank_sa_cqi0.json")
-    by_k = ("bank_lift_k2.json", "bank_lift_k4.json", "bank_sa.json", "bank_sa_k16.json",
-            "bank_lift_k24.json")
-    I.path("bank_sa.json")
+    by_r = ("bank_lag.json",) + tuple(f"bank_lag_r{r}.json" for r in ("95", "90", "80", "60",
+                                                                        "40", "0"))
+    by_k = ("bank_lag_k2.json", "bank_lag_k4.json", "bank_lag.json", "bank_lag_k16.json",
+            "bank_lag_k24.json")
+    I.path("bank_lag.json")
     cache = {}
 
     def lifts(fn):
         if fn not in cache:
             d = I.json(fn, required=False)
+            if d is not None and (d.get("policy") != "lagrange" or d.get("blind")
+                                  or d.get("shuffled") or d.get("target") is not None
+                                  or (d.get("cqi_corr", 1.0) < 1.0 and not d.get("cqi_aware"))):
+                raise Missing(f"{fn} of the proposed scheduler (codesign.py bank --policy "
+                              f"lagrange, --cqi-aware on stale reports)")
             cache[fn] = None if d is None else (d, [p["lift"] for p in stats(d)["phase"]])
         return cache[fn]
 
@@ -1062,11 +1107,28 @@ def fig15(I, plt):
     return fig
 
 
+def image_gains(prefix, cur):
+    """{prefix length: (mean, 95% CI low, high, images)} of cur over prefix: each image's gain
+    averaged over the constant SNRs both ran, then the mean over the images both decoded (paired
+    by name) with its bootstrap interval over images."""
+    from tools.schedule_sim import bootstrap
+    out = {}
+    for L in sorted(L for L in cur if L in prefix):
+        snrs = [s for s in cur[L] if s in prefix[L]]
+        imgs = sorted(set.intersection(*[set(cur[L][s]) & set(prefix[L][s]) for s in snrs]),
+                      key=str) if snrs else []
+        if len(imgs) >= 2:
+            g = [float(np.mean([cur[L][s][i] - prefix[L][s][i] for s in snrs])) for i in imgs]
+            out[L] = (float(np.mean(g)), *bootstrap(g), len(imgs))
+    return out
+
+
 def fig16(I, plt):
     """Encode once with one decoder (C6): what a decoder per length (behind the same encoder)
-    and one model per CBR add over the single decoder at each prefix length; mean over the
-    constant SNRs, whiskers: the smallest and largest."""
-    prefix = constant_curves(I.json("p2_full_snrc4.json"))
+    and one model per CBR add over the single decoder at each prefix length: each image's gain
+    averaged over the constant SNRs, the mean over images with its 95% bootstrap interval over
+    images (the images paired by name)."""
+    prefix = constant_per_image(I.json("p2_full_snrc4.json"))
     out = {}
     for key, files in (("code_hd", ("p4_full_h48.json", "p4_full_h24.json", "p4_full_h16.json",
                                     "p4_full_h12.json", "p4_full_h5-48.json", "p4_full_h8.json")),
@@ -1075,7 +1137,7 @@ def fig16(I, plt):
         for fn in files:
             d = I.json(fn, required=False)
             if d is not None:
-                cur.update(constant_curves(d))
+                cur.update(constant_per_image(d))
         if cur:
             out[key] = cur
     if not out:
@@ -1083,14 +1145,13 @@ def fig16(I, plt):
     fig, ax = plt.subplots(figsize=(COL1, 2.4))
     zero(ax)
     for key, cur in out.items():
-        Ls = sorted(L for L in cur if L in prefix)
-        mean, el, eh = [], [], []
-        for L in Ls:
-            d = [cur[L][s] - prefix[L][s] for s in cur[L] if s in prefix[L]]
-            mean.append(float(np.mean(d)))
-            el.append(mean[-1] - float(np.min(d)))
-            eh.append(float(np.max(d)) - mean[-1])
-        ax.errorbar(Ls, mean, yerr=[el, eh], elinewidth=0.7, **style(key))
+        g = image_gains(prefix, cur)
+        if g:
+            Ls = sorted(g)
+            m = [g[L][0] for L in Ls]
+            el = [max(g[L][0] - g[L][1], 0.0) for L in Ls]
+            eh = [max(g[L][2] - g[L][0], 0.0) for L in Ls]
+            ax.errorbar(Ls, m, yerr=[el, eh], elinewidth=0.7, capsize=2.0, **style(key))
     cbr_axis(ax)
     ax.set_ylabel("PSNR over the one-decoder code (dB)")
     fig_legend(fig, [ax], 1)
@@ -1497,14 +1558,15 @@ FIGS = (
     ("fig12_latency", fig12, "latency, the baseline against the proposed scheduler: quality vs "
      "frame length; users at 30 dB by each slot",
      "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json) and/or "
-     "s24_main_soft.txt (its --delay table)"),
+     "s35_delay_tgt.json (else s24_main_soft.txt's --delay table)"),
     ("fig14_digital", fig14, "JSCC with the proposed scheduler vs digital with IR-HARQ, CQI "
      "errors and outdated reports", "s30_j_mean_f.txt s33_csi_f.txt s20_harq_mean.txt "
-     "[s30_j_mean_*.txt s33_csi_*.txt s20_harq_tgt*.txt]"),
-    ("fig15_scheduler_channel", fig15, "SNR lift of the first phases vs report age and K",
-     "bank_sa.json [bank_sa_cqi*.json bank_sa_k16.json bank_lift_k*.json]"),
+     "[s30_j_mean_*.txt s33_csi_*.txt s20_harq_tgt*.txt s35_g_tgt_*.txt]"),
+    ("fig15_scheduler_channel", fig15, "SNR lift of the first phases under the proposed "
+     "scheduler vs report age and K", "bank_lag.json [bank_lag_r*.json bank_lag_k*.json]"),
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "
-     "decoder, by length", "p2_full_snrc4.json and p4_full_h*.json and/or p3_full_fix*.json"),
+     "decoder, by length (95% intervals over images)",
+     "p2_full_snrc4.json and p4_full_h*.json and/or p3_full_fix*.json"),
 )
 TABLES = (
     ("table01_abstraction", table01, "held-out MAE of each effective-SNR rule per code",

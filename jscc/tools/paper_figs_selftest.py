@@ -194,12 +194,11 @@ def write_sims(d, rng):
          target_summary(dict(zip(("padc", "plan_adv", "whittle", "lagrange"),
                                  (.55, .65, .60, .59))), rng), 0, 0.8)])
     t7 = ("padc", "online", "plan_adv", "whittle", "lagrange", "whittle_soft", "lagrange_soft")
+    sh7 = dict(zip(t7, (.656, .75, .756, .75, .767, .772, .783)))
+    by7 = dict(zip(t7, ([.05, .30, .55], [.03, .20, .50], [.04, .25, .55], [.25, .55, .72],
+                        [.15, .45, .70], [.24, .56, .74], [.14, .44, .71])))
     sim_file(J("s24_main_soft.txt"), [
-        (args(target=30.0, delay=True), JSCC,
-         target_summary(dict(zip(t7, (.656, .75, .756, .75, .767, .772, .783))), rng, 24,
-                        dict(zip(t7, ([.05, .30, .55], [.03, .20, .50], [.04, .25, .55],
-                                      [.25, .55, .72], [.15, .45, .70], [.24, .56, .74],
-                                      [.14, .44, .71])))), 0, 1),
+        (args(target=30.0, delay=True), JSCC, target_summary(sh7, rng, 24, by7), 0, 1),
         (args(target=30.0), JSCC,
          target_summary(dict(zip(t7, (.62, .65, .703, .64, .636, .66, .681))), rng), 2, 1)])
     t6 = ("padc", "plan_adv", "whittle", "lagrange", "whittle_soft", "lagrange_soft")
@@ -297,6 +296,21 @@ def write_sims(d, rng):
     sim_file(J("s20_harq_tgt.txt"), dig_runs("cqi", "ir", ht_r - .01, R, "corr", False, True))
     sim_file(J("s20_harq_tgt_aware.txt"), dig_runs("cqi", "ir", ht_r, R, "corr", True, True))
     sim_file(J("s20_harq_tgt_cqi.txt"), dig_runs("cqi", "ir", ht_s, S, "cqi", False, True))
+    # COMMANDS 35: the 3 dB-gap code at 30 dB; s24's delay run again, every slot (--out)
+    gt_r = st_r - np.array([-0.4, 7.9, 10.1, 11.6, 10.6, 8.9, 7.4]) / 100
+    gt_s = st_s - np.array([-0.4, 4.0, 8.3, 10.9]) / 100
+    for t, x, v in zip(("f", "e1", "e2", "e3"), S, gt_s):            # one file per condition
+        sim_file(J(f"s35_g_tgt_{t}.txt"), dig_runs("shannon", "ir", [v], [x], "cqi", False, True))
+    for t, x, v in zip(("95", "90", "80", "60", "40", "0"), R[1:], gt_r[1:]):
+        sim_file(J(f"s35_g_tgt_n{t}.txt"),
+                 dig_runs("shannon", "ir", [v - .01], [x], "corr", False, True))
+        sim_file(J(f"s35_g_tgt_r{t}.txt"), dig_runs("shannon", "ir", [v], [x], "corr", True, True))
+    keep = ("padc", "lagrange", "lagrange_soft")
+    with open(J("s35_delay_tgt.json"), "w") as f:
+        json.dump({"args": vars(args(target=30.0, delay=True)), "backoff": 0.0, "cqi_corr": 1.0,
+                   "cqi_error": 0.0,
+                   "summary": target_summary({p: sh7[p] for p in keep}, rng, 24,
+                                             {p: by7[p] for p in keep})}, f)
 
     # C5 under the proposed scheduler (COMMANDS 30.2): one file per condition and objective
     tags = ("f", "e1", "e2", "e3", "r95", "r90", "r80", "r60", "r40", "r0")
@@ -433,6 +447,8 @@ def write_latency(d):
 
 # ---------------------------------------------------------------- banks, decoded replays -----
 def write_banks(d):
+    """The proposed scheduler's banks (COMMANDS 30 and 35), drawn here with the closed form and
+    labelled as the Lagrangian index's: a Lagrangian bank takes ~2 s a frame."""
     from alloc.utility import Utility, nested_rho
     from tools.codesign import build_bank
     rng = np.random.default_rng(0)
@@ -443,18 +459,19 @@ def write_banks(d):
     u = Utility(1.9, [nested_rho(MASTER, L) for L in range(1, P + 1)], dsrc, csens,
                 [f"kodim{i:02d}" for i in range(1, N + 1)], meta={"nested": MASTER.tolist()})
     b = u.perturbed(0.04, np.random.default_rng(11))
-    for name, kw in (("bank_sa.json", {}), ("bank_sa_cqi95.json", {"cqi_corr": 0.95}),
-                     ("bank_sa_cqi80.json", {"cqi_corr": 0.8}),
-                     ("bank_sa_cqi60.json", {"cqi_corr": 0.6}),
-                     ("bank_sa_cqi30.json", {"cqi_corr": 0.3}),
-                     ("bank_sa_cqi0.json", {"cqi_corr": 0.0}),
-                     ("bank_lift_k2.json", {"users": 2, "slots": 6, "frames": 200}),
-                     ("bank_lift_k4.json", {"users": 4, "slots": 12, "frames": 100}),
-                     ("bank_sa_k16.json", {"users": 16, "slots": 48, "frames": 24}),
-                     ("bank_lift_k24.json", {"users": 24, "slots": 72, "frames": 16})):
+    banks = [("bank_lag.json", {})]
+    banks += [(f"bank_lag_r{t}.json", {"cqi_corr": r, "cqi_aware": True})
+              for t, r in (("95", .95), ("90", .9), ("80", .8), ("60", .6), ("40", .4), ("0", 0.))]
+    banks += [("bank_lag_k2.json", {"users": 2, "slots": 6, "frames": 200}),
+              ("bank_lag_k4.json", {"users": 4, "slots": 12, "frames": 100}),
+              ("bank_lag_k16.json", {"users": 16, "slots": 48, "frames": 24}),
+              ("bank_lag_k24.json", {"users": 24, "slots": 72, "frames": 16})]
+    for name, kw in banks:
         kw = dict({"users": 8, "slots": 24, "frames": 60}, **kw)
+        bank = build_bank(u, "slope_adv", belief=b, **kw)
+        bank["policy"] = "lagrange"
         with open(os.path.join(d, name), "w") as f:
-            json.dump(build_bank(u, "slope_adv", belief=b, **kw), f)
+            json.dump(bank, f)
 
 
 def decoded_file(path, effects, rng, target=None, level=31.0, spread=2.4, frames=60, users=8):
