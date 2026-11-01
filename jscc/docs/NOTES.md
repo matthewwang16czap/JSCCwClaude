@@ -1,4 +1,4 @@
-# Results notes (condensed 2026-10-15; later rounds added as sections 6b-6i, the last 2026-10-31)
+# Results notes (condensed 2026-10-15; later rounds added as sections 6b-6j, the last 2026-11-01)
 
 What the experiments established, by topic; the last section indexes every experiment round.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
@@ -858,6 +858,75 @@ CLASP as run in round 30: +0.7 [0.4, 1.0] at 1 dB, +4.3 [3.9, 4.8] at 2 dB, +6.0
   0.25 / 0.42 / 0.57 dB at 1 / 2 / 3 dB CQI error and 0.54-0.80 dB at r = 0.95 ... 0: the
   range round 32 found best.
 
+## 6j. The measured spread: one target policy for every CSI condition (COMMANDS 33, returned 2026-11-01)
+
+CLASP's target reward with `--soft-sigma csi` (6i): the spread of its prediction measured
+offline, the curves' and the reports', nothing chosen on the test frames. No margin.
+
+**The measured spread** (sigma per prefix length 1-6, dB):
+
+| reports | sigma |
+|---|---|
+| exact (= auto, the curves' error) | 0.03 0.04 0.05 0.04 0.03 0.03 |
+| CQI error 1 / 2 / 3 dB | 0.24 0.22 0.24 0.21 0.19 0.18 / 0.47 0.43 0.45 0.39 0.36 0.34 / 0.68 0.63 0.63 0.56 0.53 0.50 |
+| r = 0.95 / 0.9 / 0.8, aware | 0.59 0.55 0.59 0.52 0.53 0.46 / 0.73 0.68 0.71 0.65 0.68 0.57 / 0.88 0.80 0.83 0.79 0.81 0.67 |
+| r = 0.6 / 0.4 / 0, aware | 0.96 0.90 0.93 0.91 0.90 0.74 / 0.97 0.94 0.95 0.94 0.92 0.75 / 0.96 0.95 0.96 0.96 0.92 0.76 |
+
+The bias (truth minus belief) is small: -0.07 to +0.03 dB under CQI errors, +0.00 to +0.14 on
+aged reports. It is positive there as it must be: the posterior's expected distortion gives a
+PSNR below the expected PSNR (Jensen's inequality).
+
+**Share at 30 dB (2000 frames, paired; the planner and digital with their better margin and
+transmitter, as in round 30):**
+
+| condition | CLASP, measured spread (%) | minus CLASP (30) | minus the planner | minus 0.5 dB spread (32) | minus digital |
+|---|---|---|---|---|---|
+| exact reports | 78.0 | +0.000 (the check) | +3.3 [3.0, 3.6] | | +3.6 [3.1, 4.1] |
+| CQI error 1 dB | 77.3 | +1.3 [1.1, 1.6] | +2.7 [2.4, 3.0] | +0.6 [0.4, 0.9] | +8.8 [8.3, 9.4] |
+| CQI error 2 dB | 75.5 | +4.6 [4.2, 5.0] | +2.1 [1.8, 2.4] | +0.3 [0.1, 0.5] | +12.7 [12.2, 13.3] |
+| CQI error 3 dB | 72.8 | +6.5 [6.0, 7.0] | +1.9 [1.5, 2.3] | +0.5 [0.3, 0.7] | +14.7 [14.0, 15.3] |
+| r = 0.95 | 75.8 | +1.9 [1.6, 2.3] | +2.6 [2.2, 2.9] | +0.1 [-0.1, 0.2] | +12.2 [11.6, 12.8] |
+| r = 0.9 | 74.0 | +3.2 [2.8, 3.5] | +2.1 [1.8, 2.4] | +0.1 [-0.1, 0.2] | +14.5 [13.9, 15.1] |
+| r = 0.8 | 70.6 | +3.9 [3.5, 4.2] | +1.5 [1.1, 1.9] | +0.0 [-0.2, 0.2] | +15.8 [15.2, 16.4] |
+| r = 0.6 | 65.7 | +4.3 [3.9, 4.7] | +1.4 [0.9, 1.8] | +0.3 [-0.0, 0.5] | +15.8 [15.2, 16.5] |
+| r = 0.4 | 62.6 | +3.8 [3.3, 4.2] | +1.8 [1.4, 2.3] | -0.0 [-0.3, 0.3] | +15.8 [15.1, 16.4] |
+| r = 0 | 61.2 | +5.7 [5.2, 6.1] | +3.6 [3.1, 4.2] | +0.2 [-0.2, 0.6] | +14.2 [13.6, 14.8] |
+
+* One policy. With the measured spread CLASP is the best target policy at every CSI condition,
+  +1.4 to +3.6 points over the planner, every interval above zero. C7's two cases are gone.
+* Measuring loses nothing against the best fixed spread of round 32: +0.3 to +0.6 points under
+  CQI errors, a tie on aged reports. With exact reports it is round 30's CLASP exactly.
+* Against digital (the Introduction's comparison): +3.6 points with exact reports, +8.8 / +12.7
+  / +14.7 at 1 / 2 / 3 dB CQI error, +12.2 to +15.8 on aged reports (round 30's CLASP: +7.5 /
+  +8.1 / +8.2 and +8.5 to +12.0).
+* Over PADC in its own runs: +12.4 with exact reports, +11.8 / +10.4 / +8.6 at 1 / 2 / 3 dB,
+  +11.7 / +11.2 / +10.4 / +8.2 / +6.5 / +5.9 at r = 0.95 ... 0.
+* The price stays with the users who miss: they average 29.17 dB at 2 dB CQI error and 28.71 dB
+  at r = 0.8 (PADC 30.44 / 30.10; round 30's CLASP with its margin 27.92 at r = 0.8).
+
+**Decoded (the 60 frames of rounds 24 and 30, paired by frame across the files; points at 30 dB):**
+
+| decoded | CLASP - PADC | the planner - PADC | CLASP - the planner | CLASP - round 30's CLASP | CLASP decoded / predicted (%) |
+|---|---|---|---|---|---|
+| 2 dB CQI error | **+13.3 [10.6, 16.0]** | +10.0 [7.3, 12.7] | **+3.3 [1.7, 5.2]** | +5.2 [2.9, 7.9] | 77.3 / 76.7 |
+| r = 0.8 | **+12.5 [9.8, 15.2]** | +10.4 [7.3, 13.8] | +2.1 [-0.2, +4.4] | +8.1 [5.6, 10.6] | 72.1 / 72.1 |
+
+* The schedules decode as predicted: the hedge also covers the reports' error. The decoded
+  r = 0.8 cell of Table III (+4.4 [0.8, 8.1] in round 24) becomes +12.5.
+* The check: the same PADC schedules decoded again agree within the decoder's noise (+0.2
+  [-0.4, +1.0] at r = 0.8, -0.4 [-1.0, 0.0] at 2 dB).
+* The model's error on these decodes: MAE 0.072 / 0.092 dB, bias +0.002 / +0.009 (2 dB / r = 0.8,
+  both files pooled), within the ranges of 6d.
+
+**Main frames (500; Tables III and IV), over PADC in the same run:** at 2 dB CQI error CLASP
++10.5 [9.6, 11.4], the Whittle index with the measured spread +8.8 [8.0, 9.6] (round 24: +6.1 /
++5.1, the planner +8.3); at r = 0.8 without a margin CLASP +10.3 [9.3, 11.2], the Whittle index
++9.3 [8.4, 10.2] (round 24 with a 0.5 dB margin: +7.1 / +6.3, the planner +9.7).
+
+From here CLASP's target reward under CQI errors and aged reports uses the measured spread (the
+curves' and the reports'), with no margin; with exact reports nothing changes. COMMANDS 34
+redraws fig14 and Tables II-IV with it.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -970,8 +1039,10 @@ CLASP as run in round 30: +0.7 [0.4, 1.0] at 1 dB, +4.3 [3.9, 4.8] at 2 dB, +6.0
    interval (section 6h). COMMANDS 32 runs the spread test above: --soft-sigma 0.25 / 0.5 /
    1.0 dB on round 30's frames, at 1-3 dB CQI error and r = 0.95 to 0, paired against round
    30's planner and CLASP. Resolved in principle 2026-10-31 (section 6i): a spread of 0.5 dB
-   makes CLASP the best target policy at every CSI condition. COMMANDS 33 runs the measured
-   spread (`--soft-sigma csi`), which chooses nothing on the test frames.
+   makes CLASP the best target policy at every CSI condition. Resolved 2026-11-01 (section 6j):
+   the measured spread (`--soft-sigma csi`), which chooses nothing on the test frames, does the
+   same (+1.4 to +3.6 points over the planner everywhere; decoded +3.3 [1.7, 5.2] at 2 dB CQI
+   error). C7 is one policy.
 
 ## 8. Experiment index
 
@@ -999,4 +1070,4 @@ CLASP as run in round 30: +0.7 [0.4, 1.0] at 1 dB, +4.3 [3.9, 4.8] at 2 dB, +6.0
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |
 | The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
 | Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1 to +3.4 points) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
-| The measured spread (curves and reports) | 33 | to run | --soft-sigma csi at every condition, paired against the planner, round 30's CLASP, the 0.5 dB spread and digital; decoded at r 0.8 and 2 dB CQI error |
+| The measured spread (curves and reports) | 33 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4 to +3.6 points over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7 / +15.8 points at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB |

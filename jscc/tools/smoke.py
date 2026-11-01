@@ -1998,6 +1998,44 @@ def check_figures():
            and rows["reports r = 0.8"].count(" -") == 5,
            "figures: table03 takes the proposed index from each run (simulated, decoded; the "
            "calibration-aware one at the target) and leaves the rest empty")
+        # Tables III / IV merge a condition's runs per scheduler, the newer file first
+        st.sim_file(os.path.join(tmp, "s33_main_csi_e2.txt"), [
+            (st.args(target=30.0), st.JSCC,
+             st.target_summary({"padc": .60, "lagrange_soft": .70}, rng), 2.0, 1)])
+        st.sim_file(os.path.join(tmp, "s24_main_soft.txt"), [
+            (st.args(target=30.0), st.JSCC,
+             st.target_summary({"padc": .60, "plan_adv": .68, "lagrange_soft": .66}, rng), 2.0, 1)])
+        cqi = [c for c in pf.CONDITIONS if c["name"] == "CQI error 2 dB"][0]
+        g = pf._sim_gains(pf.Inputs(tmp), cqi, "target")
+        # Table II pairs the hard target and the measured spread's schedules across two files
+        st.decoded_file(os.path.join(tmp, "s24_dec_r80.json"),
+                        {"padc": 0.0, "lagrange": 0.4, "lagrange_soft": 0.45}, rng, frames=20,
+                        target=30.0, level=30.4, spread=1.6)
+        st.decoded_copy(os.path.join(tmp, "s33_dec_r80.json"), os.path.join(tmp, "s24_dec_r80.json"),
+                        ("padc", "lagrange_soft"), {"lagrange_soft": 0.6}, rng)
+        with open(os.path.join(tmp, "s33_dec_r80.json")) as f:
+            new = json.load(f)
+        want = pf.policy_stats(new, 30.0)["lagrange_soft"]["share"]
+        with open(os.path.join(tmp, "s24_dec_r80.json")) as f:
+            old = json.load(f)
+        ref = pf.paired(dict(old, entries=[e for e in old["entries"] if e["policy"] == "padc"]
+                             + [e for e in new["entries"] if e["policy"] == "lagrange_soft"]),
+                        "padc", target=30.0, scale=100.0)["lagrange"]
+        r80 = [c for c in pf.CONDITIONS if c["name"] == "reports r = 0.8"][0]
+        dg = pf._decoded(pf.Inputs(tmp), r80["dec_tgt"], "target")
+        rows2 = {ln[:36].strip(): ln for ln in pf.table02(pf.Inputs(tmp))[1].splitlines()[2:]}
+        st.decoded_file(os.path.join(tmp, "s33_dec_r80.json"), {"padc": 0.0, "lagrange_soft": 0.6},
+                        rng, frames=20, target=30.0, level=30.4, spread=1.6)    # other frames
+        other = {ln[:36].strip() for ln in pf.table02(pf.Inputs(tmp))[1].splitlines()[2:]}
+        ok(abs(g["lagrange"][0] - 10.0) < 1e-6 and abs(g["planner"][0] - 8.0) < 1e-6
+           and np.allclose([dg["lagrange"][0], *dg["lagrange"][1]], [ref[0], *ref[1]])
+           and "lagrange_hard" not in dg
+           and f"{want:.1f}" in rows2.get("Kodak, r = 0.8", "")
+           and "Kodak, r = 0.8, curves' spread only" in rows2
+           and "Kodak, r = 0.8" not in other,
+           "figures: Tables III / IV take each scheduler from the newest run that has it (the "
+           "measured spread's index, the earlier planner); Table II pairs two files on the same "
+           "frames and refuses files of other frames")
         tg = os.path.join(tmp, "s30_tgt.txt")
         tp = ("padc", "plan_adv", "lagrange_soft")
         st.sim_file(tg, [(st.args(target=30.0, cqi_aware=True), st.JSCC,

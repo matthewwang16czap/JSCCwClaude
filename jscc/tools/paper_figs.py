@@ -102,17 +102,23 @@ def _cond(name, tex, short, short_tex, mean, tgt, want, dec_mean=None, dec_tgt=N
 
 # The main frames (K 8, T 24 unless the label says otherwise): the schedule_sim.py outputs of
 # the mean and the target runs (newer runs first), the settings that pick the run out of its
-# file, and the decoded replays of the same condition (dec: their short label).
+# file, and the decoded replays of the same condition (dec: their short label). A target's
+# runs and decoded files are merged per scheduler, the first file that has one first: under
+# CSI errors the indices come from the runs with the measured spread (COMMANDS 33), the
+# planner and the online rule from the earlier runs of the same frames (decoded: all against
+# the earlier file's PADC decode, the reference decode of those frames).
 CONDITIONS = (
     _cond("Kodak, fresh reports", "Kodak, fresh reports", "fresh", "fresh",
           ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 0.0, "corr": 1.0},
           "s22_dec_mean.json", "s24_dec_auto.json", "Kodak"),
     _cond("CQI error 2 dB", r"CQI error 2~dB", "CQI 2 dB", r"CQI 2~dB",
-          ("s22_main_mean.txt",), ("s24_main_soft.txt",), {"cqi_error": 2.0},
-          "s30_dec_e2_mean.json", "s30_dec_e2_tgt.json", "CQI 2 dB"),
+          ("s22_main_mean.txt",), ("s33_main_csi_e2.txt", "s24_main_soft.txt"),
+          {"cqi_error": 2.0}, "s30_dec_e2_mean.json", ("s33_dec_e2.json", "s30_dec_e2_tgt.json"),
+          "CQI 2 dB"),
     _cond("reports r = 0.8", r"reports $r = 0.8$", "r = 0.8", r"$r = 0.8$",
-          ("s22_main_mean.txt",), ("s24_main_soft_r80.txt",), {"corr": 0.8},
-          "s22_dec_r80_mean.json", "s24_dec_r80.json", "r = 0.8"),
+          ("s22_main_mean.txt",), ("s33_main_csi_r80.txt", "s24_main_soft_r80.txt"),
+          {"corr": 0.8}, "s22_dec_r80_mean.json", ("s33_dec_r80.json", "s24_dec_r80.json"),
+          "r = 0.8"),
     _cond("25% of slots lost", r"25\% of slots lost", "25% lost", r"25\% lost",
           ("s21_lag_mean_more.txt",), ("s26_tgt_lost.txt", "s21_lag_tgt_more.txt"),
           {"preempt": 0.25}),
@@ -417,6 +423,19 @@ def first_rows(I, files, kind, want, field="vs"):
     return None
 
 
+def merged_rows(I, files, kind, want, field="vs"):
+    """sim_rows of every file with a matching block, merged per entity: an entity comes from
+    the first file that has it (newer runs first); a target's indices calibration-aware where
+    any file has them (prefer)."""
+    out = {}
+    for fn in files:
+        p = I.path(fn, required=False)
+        if p:
+            for k, v in (sim_rows(parse_sim(p), kind, want, field) or {}).items():
+                out.setdefault(k, v)
+    return (prefer(out) if kind == "target" else out) or None
+
+
 ABS_RULES = (("mean dB", "mean_db"), ("noise variance", "noise"),
              ("capacity (MIESM-like)", "capacity"), ("exponential (EESM)", "eesm"))
 
@@ -619,7 +638,8 @@ def fig03(I, plt):
     per 1 dB; (b) its distribution."""
     sets = (("kodak", ("s22_dec_mean.json", "s22_dec_tgt.json", "s22_dec_r80_mean.json",
                        "s22_dec_r80_tgt.json", "s24_dec_auto.json", "s24_dec_r80.json",
-                       "s30_dec_e2_mean.json", "s30_dec_e2_tgt.json")),
+                       "s30_dec_e2_mean.json", "s30_dec_e2_tgt.json", "s33_dec_e2.json",
+                       "s33_dec_r80.json")),
             ("clic", ("s22_clic_dec_mean.json", "s22_clic_dec_tgt.json", "s24_dec_clic.json")))
     data = []
     for key, files in sets:
@@ -951,16 +971,16 @@ PROPOSED_POLICY = {"mean": "lagrange", "target": "lagrange_soft"}
 
 def fig14(I, plt):
     """JSCC against digital with HARQ (C5): the proposed scheduler (the Lagrangian index for the
-    mean, the calibration-aware index at 30 dB; aware on outdated reports, at the target the
-    better of no margin and a 0.5 dB one) against the digital chain's best policy and
-    transmitter (naive or aware) at each point, under CQI errors and outdated reports; the
-    3 dB-gap code with HARQ is the optimistic digital reference. The same 2000 frames."""
+    mean, COMMANDS 30; at 30 dB the calibration-aware index whose reward's spread includes the
+    reports' measured error, no margin, COMMANDS 33; aware on outdated reports) against the
+    digital chain's best policy and transmitter (naive or aware) at each point, under CQI
+    errors and outdated reports; the 3 dB-gap code with HARQ is the optimistic digital
+    reference. The same 2000 frames."""
     clasp = []
-    for kind in ("mean", "tgt", "tgtm"):
-        for t in C5_TAGS:
-            p = I.path(f"s30_j_{kind}_{t}.txt", required=kind == "mean" and t == "f")
-            if p:
-                clasp += parse_sim(p)
+    for fn in [f"s30_j_mean_{t}.txt" for t in C5_TAGS] + [f"s33_csi_{t}.txt" for t in C5_TAGS]:
+        p = I.path(fn, required=fn in ("s30_j_mean_f.txt", "s33_csi_f.txt"))
+        if p:
+            clasp += parse_sim(p)
     dig = parse_sim(I.path("s20_harq_mean.txt"))
     dig_t = []
     for fn in ("s20_harq_tgt.txt", "s20_harq_tgt_aware.txt", "s20_harq_tgt_cqi.txt"):
@@ -1136,14 +1156,22 @@ def table02(I):
     target and with the calibration-aware reward on the same frames: users at 30 dB, the paired
     gain, the users the model put at 30 dB that decoded below it, mean PSNR and LPIPS."""
     rows = []
-    for name, tex_name, fn in (("Kodak", "Kodak", "s24_dec_auto.json"),
-                               ("Kodak, sigma 0.15 dB", r"Kodak, $\sigma = 0.15$ dB",
-                                "s24_dec_s15.json"),
-                               ("CLIC", "CLIC", "s24_dec_clic.json"),
-                               ("Kodak, r = 0.8", r"Kodak, $r = 0.8$", "s24_dec_r80.json")):
+    for name, tex_name, fn, soft_fn in (
+            ("Kodak", "Kodak", "s24_dec_auto.json", None),
+            ("Kodak, sigma 0.15 dB", r"Kodak, $\sigma = 0.15$ dB", "s24_dec_s15.json", None),
+            ("CLIC", "CLIC", "s24_dec_clic.json", None),
+            ("Kodak, r = 0.8, curves' spread only", r"Kodak, $r = 0.8$, curves' spread only",
+             "s24_dec_r80.json", None),
+            ("Kodak, r = 0.8", r"Kodak, $r = 0.8$", "s24_dec_r80.json", "s33_dec_r80.json")):
         d = I.json(fn, required=False)
         if d is None:
             continue
+        if soft_fn is not None:            # the proposed reward's schedules, decoded on their own
+            d2 = I.json(soft_fn, required=False)
+            if d2 is None or not same_frames(d, d2):
+                continue
+            d = dict(d, entries=[e for e in d["entries"] if e.get("policy") == "lagrange"]
+                     + [e for e in d2["entries"] if e.get("policy") == "lagrange_soft"])
         tgt = d.get("target") or 30.0
         st = policy_stats(d, tgt)
         if "lagrange" not in st or "lagrange_soft" not in st:
@@ -1163,9 +1191,11 @@ def table02(I):
            r"\centering",
            r"\caption{Ablation of the calibration-aware reward, decoded by the codec (60 frames "
            r"of each schedule, 30 dB target): the Lagrangian index with a hard target and with "
-           r"the calibration-aware reward (proposed) on the same frames. Gain: paired by frame, "
-           r"95\% bootstrap interval. Missed: users the model put at 30 dB that decoded below "
-           r"it.}",
+           r"the calibration-aware reward (proposed) on the same frames. With outdated reports "
+           r"($r = 0.8$) the proposed reward's spread includes the error the reports leave "
+           r"(measured offline); ``curves' spread only'' is the reward without it. Gain: paired "
+           r"by frame, 95\% bootstrap interval. Missed: users the model put at 30 dB that "
+           r"decoded below it.}",
            r"\label{tab:calibration}", r"\begin{tabular}{lccccccccc}", r"\hline",
            r" & \multicolumn{2}{c}{Users at 30 dB (\%)} & Gain (points) & "
            r"\multicolumn{2}{c}{Missed (\%)} & \multicolumn{2}{c}{Mean PSNR (dB)} & "
@@ -1186,6 +1216,18 @@ def table02(I):
     return "\n".join(tex) + "\n", _text_table(head, text_rows)
 
 
+def same_frames(*specs):
+    """Do decoded files share their frames (each frame's users: the images and mean SNRs), as
+    tools/replay_report.py requires to pair them across files?"""
+    seen = {}
+    for d in specs:
+        for e in d["entries"]:
+            v = (e.get("image"), round(float(e.get("mean_snr", 0.0)), 6))
+            if seen.setdefault((e["frame"], e["user"]), v) != v:
+                return False
+    return True
+
+
 def _cell(x, nd, tex=False, ci=True, mark=""):
     """'+0.52 [0.48, 0.56]' of (value, (lo, hi)); tex: math mode, the interval in \\scriptsize;
     '-' ('--' in LaTeX) where there is none. mark: a footnote sign after the value."""
@@ -1204,18 +1246,35 @@ def _sim_gains(I, c, kind):
     PF (dB), or users at 30 dB over PADC (points; the indices calibration-aware where run)."""
     if kind == "mean":
         return first_rows(I, c["mean"], "mean", c["want"]) or {}
-    return first_rows(I, c["tgt"], "target", c["want"], "vs_padc") or {}
+    return merged_rows(I, c["tgt"], "target", c["want"], "vs_padc") or {}
 
 
 def _decoded(I, fn, kind, metric="psnr"):
     """{entity: (gain, (lo, hi))} of a decoded replay, paired by frame: over PF in `metric`
-    (mean), or users at the replay's target over PADC in points; {} without the file."""
-    d = I.json(fn, required=False) if fn else None
-    if d is None:
-        return {}
-    if kind == "mean":
-        return paired(d, "pf", metric=metric)
-    return prefer(paired(d, "padc", target=float(d.get("target") or 30.0), scale=100.0))
+    (mean), or users at the replay's target over PADC in points; {} without the file. fn: a
+    file, or several of the same frames (newer first): each policy from the first file that
+    has it, all paired against one baseline decode, the last file's (the reference decode of
+    those frames, as tools/replay_report.py pairs files); files of other frames each against
+    their own baseline."""
+    base = "pf" if kind == "mean" else "padc"
+    files = [f for f in (fn if isinstance(fn, (tuple, list)) else (fn,)) if f]
+    specs = [d for d in (I.json(f, required=False) for f in files) if d is not None]
+    if len(specs) > 1 and same_frames(*specs):
+        ref = [d for d in specs if any(e.get("policy") == base for e in d["entries"])]
+        if ref:
+            entries, have = [e for e in ref[-1]["entries"] if e.get("policy") == base], {base}
+            for d in specs:
+                pols = {e.get("policy") for e in d["entries"]} - have
+                entries += [e for e in d["entries"] if e.get("policy") in pols]
+                have |= pols
+            specs = [dict(specs[0], entries=entries)]
+    out = {}
+    for d in specs:
+        g = (paired(d, base, metric=metric) if kind == "mean" else
+             paired(d, base, target=float(d.get("target") or 30.0), scale=100.0))
+        for k, v in g.items():
+            out.setdefault(k, v)
+    return prefer(out) if kind == "target" else out
 
 
 def _proposed_of(g):
@@ -1250,7 +1309,8 @@ def table03(I):
            r"frames on the transmitter's calibrated curves; decoded: 60 frames of the schedules "
            r"decoded by the codec. Paired by frame; 95\% bootstrap intervals; --: not run. "
            r"$r$: the correlation between the reported and the served channel (the transmitter "
-           r"aware of it; the simulated target run stops with a 0.5~dB margin)."
+           r"aware of it). Under CQI errors and outdated reports the calibration-aware reward's "
+           r"spread includes the error the reports leave (measured offline), with no margin."
            + (r" $^\dagger$Hard target: no calibration-aware run." if hard else "") + "}",
            r"\label{tab:main}", r"\begin{tabular}{lcccccc}", r"\hline",
            r" & \multicolumn{4}{c}{Mean PSNR: index $-$ PF} & "
@@ -1315,7 +1375,10 @@ def table04(I):
            r"\caption{The schedulers built on the abstraction, compared: the gain over PF in mean "
            r"PSNR (dB) and over PADC in users at 30~dB (points), on the main frames ($K = 8$, "
            r"$T = 24$ unless noted); at the target the indices use the calibration-aware reward. "
-           r"Simulated: 500 frames; decoded: 60 frames decoded by the codec. Bold: the best per "
+           r"Simulated: 500 frames; decoded: 60 frames decoded by the codec. Under CQI errors and "
+           r"outdated reports the indices' reward includes the reports' measured error, with no "
+           r"margin; the planner stops with a 0.5~dB margin at $r = 0.8$, its better setting; "
+           r"each gain is over PADC in the same run. Bold: the best per "
            r"column; --: not run.}",
            r"\label{tab:schedulers}", r"\begin{tabular}{l" + "c" * len(cols) + "}", r"\hline",
            " & " + " & ".join(x for x in (
@@ -1436,8 +1499,8 @@ FIGS = (
      "s21_latency_mean.json and/or s26_latency_tgt.json (else s21_latency_tgt.json) and/or "
      "s24_main_soft.txt (its --delay table)"),
     ("fig14_digital", fig14, "JSCC with the proposed scheduler vs digital with IR-HARQ, CQI "
-     "errors and outdated reports", "s30_j_mean_f.txt s20_harq_mean.txt [s30_j_mean/tgt/tgtm_*"
-     ".txt s20_harq_tgt*.txt]"),
+     "errors and outdated reports", "s30_j_mean_f.txt s33_csi_f.txt s20_harq_mean.txt "
+     "[s30_j_mean_*.txt s33_csi_*.txt s20_harq_tgt*.txt]"),
     ("fig15_scheduler_channel", fig15, "SNR lift of the first phases vs report age and K",
      "bank_sa.json [bank_sa_cqi*.json bank_sa_k16.json bank_lift_k*.json]"),
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "
@@ -1447,12 +1510,14 @@ TABLES = (
     ("table01_abstraction", table01, "held-out MAE of each effective-SNR rule per code",
      "s13_abstractions.txt [s22_clic.txt]"),
     ("table02_calibration", table02, "ablation, decoded: hard target vs calibration-aware",
-     "s24_dec_auto.json [s24_dec_s15.json s24_dec_clic.json s24_dec_r80.json]"),
+     "s24_dec_auto.json [s24_dec_s15.json s24_dec_clic.json s24_dec_r80.json "
+     "s33_dec_r80.json]"),
     ("table03_main", table03, "main results: the proposed scheduler minus the baseline under "
      "each condition, simulated and decoded",
-     "any of s22_main_mean.txt s24_main_soft.txt [s24_main_soft_r80.txt s26_tgt_lost/t16/"
-     "clic.txt s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt s22_dec_mean.json "
-     "s22_dec_r80_mean.json s22_clic_dec_mean.json s24_dec_auto/r80/clic.json]"),
+     "any of s22_main_mean.txt s24_main_soft.txt [s24_main_soft_r80.txt s33_main_csi_e2/r80.txt "
+     "s26_tgt_lost/t16/clic.txt s21_lag_mean_more.txt s21_lag_t16.txt s22_clic.txt "
+     "s22_dec_mean.json s22_dec_r80_mean.json s22_clic_dec_mean.json s24_dec_auto/r80/clic.json "
+     "s30_dec_e2_mean/tgt.json s33_dec_e2/r80.json]"),
     ("table04_schedulers", table04, "appendix: every scheduler on the abstraction, gain over "
      "the baseline per condition", "the inputs of table03"),
     ("table05_variants", table05, "appendix: every variant tried on the 30 dB gap, K 8 / 32 / "

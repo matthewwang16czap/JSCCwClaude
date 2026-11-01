@@ -53,6 +53,20 @@ corrected to match:
 The check passed: 30.5 (2) printed `slope_adv` 31.424 / 31.274 / 30.902 and `greedy` 31.291 /
 30.146 / 29.359, so round 30's frames are those of 23.2 and 20.2.
 
+## Round 33: CLASP's reward under CSI errors (COMMANDS 33, returned 2026-11-01)
+
+From round 33 CLASP's target reward uses the measured error of its prediction, the curves'
+and the reports' (`--soft-sigma csi`, no margin). With exact reports nothing changes (the
+check `[f] measured spread - CLASP as run in 30` printed `a - b: +0.000 pts [+0.000, +0.000]`).
+Under CQI errors and aged reports its 30 dB numbers replace round 30's:
+
+| number in the outline | round 30 | round 33 | file |
+|---|---|---|---|
+| the reward's spread (paragraph 5) | the curves' only, 0.03-0.05 dB | also the reports': 0.18-0.68 dB under 1-3 dB CQI errors, 0.46-0.97 dB on aged reports | `s33_csi_*.txt`, first line |
+| decoded gain over PADC at 30 dB, 2 dB CQI error | +8.1 | **+13.3** [10.6, 16.0] | `s33_dec.txt` |
+| decoded gain over PADC at 30 dB, r = 0.8 | +4.4 (round 24) | **+12.5** [9.8, 15.2] | `s33_dec.txt` |
+| against digital at 30 dB, 2 dB CQI error / r = 0.8 | +8.1 / +12.0 points | **+12.7 / +15.8** points | `s33_csi.txt` |
+
 ## A. The codec (paragraph 4)
 
 | fact | source |
@@ -81,6 +95,7 @@ are equal weights / sensitivity weights.
 | (superseded) the free-model curves of rounds 8-16: 0.030-0.064 dB | `s8_calib.txt`, COMMANDS 8a (2026-10-11), wrote `belief_snrc4.json` | "all unused": 0.037 0.051 0.064 0.047 0.042 0.030 |
 | paragraph 5: the spread of the calibrated curves around the fitted ones, **0.03-0.05** dB per prefix length (the error the calibration-aware reward assumes; a different comparison from the two above) | `s24_soft_auto.txt` header, COMMANDS 24.1 (2026-10-26) | `sigma 0.031 0.044 0.047 0.040 0.033 0.028 dB, bias (truth - belief) +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB` |
 | trusting the curves at a hard target costs **1.7-2.0** points (K 16-128); simulated, 100 frames per K | `s24_soft_auto.txt`, per-K blocks | `lagrange_soft - lagrange: +2.000 pts [+1.375, +2.688]` (K 16); `+1.656` (K 32, 64, 128); `+0.750` (K 8) |
+| paragraph 5: the error the reports leave, **0.2-1 dB** (the measured spread with noisy or aged reports, per prefix length) | `s33_csi_e1.txt` ... `s33_csi_r0.txt`, first line; COMMANDS 33.1 (2026-11-01) | `... at CQI error 1 dB ... sigma 0.242 0.224 0.239 0.205 0.188 0.175 dB` (the smallest, 0.175); `... correlation 0.4, aware), sigma 0.968 ...` (the largest, 0.968) |
 
 **The model's error on scheduled deliveries, decoded.** The outline's "0.05-0.09 dB, bias within
 ±0.05 dB" comes from these replay files, not from the calibration files above. Each
@@ -113,25 +128,24 @@ CQI-error rows are new decodes (30.3).
 | mean PSNR over PF, 2 dB CQI error: +0.512 dB [0.445, 0.583] | `s30_dec_e2.txt`, report 1 (`s30_dec_e2_mean.json`), COMMANDS 30.3 | `lagrange  +0.512 dB [+0.445, +0.583]  (60 frames)` | decoded |
 | 30 dB over PADC, Kodak: **+14.8** points [11.7, 17.9] | `s30_direct.txt`, report 4 (`s24_dec_auto.json`) | `lagrange_soft  +14.792 pts [+11.667, +17.917]  (60 frames)` | decoded |
 | 30 dB over PADC, CLIC: **+8.1** points [5.8, 10.6] | `s30_direct.txt`, report 5 (`s24_dec_clic.json`) | `lagrange_soft  +8.125 pts [+5.833, +10.625]  (60 frames)` | decoded |
-| 30 dB over PADC, 2 dB CQI error: **+8.1** points [5.2, 10.8] | `s30_dec_e2.txt`, report 2 (`s30_dec_e2_tgt.json`) | `lagrange_soft  +8.125 pts [+5.208, +10.833]  (60 frames)` | decoded |
+| 30 dB over PADC, 2 dB CQI error: **+13.3** points [10.6, 16.0] | `s33_dec.txt`, report 3 (`s30_dec_e2_tgt.json` tagged `old`, `s33_dec_e2.json` tagged `csi`, base `old:padc`); COMMANDS 33.3 (2026-11-01) | `csi:lagrange_soft  +13.333 pts [+10.620, +16.042]  (60 frames)` | decoded |
+| 30 dB over PADC, r = 0.8: **+12.5** points [9.8, 15.2] | `s33_dec.txt`, report 1 (`s24_dec_r80.json` as `old`, `s33_dec_r80.json` as `csi`, base `old:padc`) | `csi:lagrange_soft  +12.500 pts [+9.792, +15.214]  (60 frames)` | decoded |
 | calibration-aware over hard: **+1.7** points; users missed **0.0% vs 1.2%** | `s24_replays.txt`; `s24_dec_auto.txt`; COMMANDS 24.3-24.4 (2026-10-26) | `lagrange_soft  +1.667 pts [+0.417, +2.917]`; `lagrange ... missed  1.2%`; `lagrange_soft ... missed  0.0%` | decoded |
 | gap to the bound, mean PSNR: **0.207 → 0.005** dB per user, K 8 → 128 (B = K/8) | `s22_scale_mean.txt`, summary table; COMMANDS 22.2e (2026-10-25) | the `lagrange` column: 0.207 0.090 0.039 0.009 0.005 | simulated, 100 frames per K |
 | gap to the bound, 30 dB: within **±0.3** points from K 16 | `s24_soft_auto.txt`, summary table; 24.1 | the `lagrange_soft` column: 0.841 -0.103 -0.296 0.011 -0.194 | simulated, 100 frames per K |
 
-The outline states the 8-15 points for fresh reports and 2 dB CQI errors. With aged reports
-(r = 0.8) the decoded gain over PADC is +4.4 points [0.8, 8.1] (`s24_dec_r80.json`, COMMANDS
-24.3; printed by `table03_main` in `s30_figs.txt`, row "reports r = 0.8").
+The 8-15 points over PADC cover all four decoded cases: Kodak with fresh reports (+14.8), CLIC
+(+8.1), 2 dB CQI errors (+13.3) and r = 0.8 (+12.5). Before the measured spread, CLASP's
+decoded gains there were +8.1 (`s30_dec_e2.txt`) and +4.4 [0.8, 8.1] (`s24_dec_r80.json`).
 
 ## D. Against digital (paragraphs 2, 5 and 6)
 
 All simulated, over the same 2000 frames, paired by frame (`tools/paired_runs.py`). Files:
 `s30_vs_digital.txt` (one JSON line per comparison in `s30_vs_digital.jsonl`) and
 `s30_loss.txt`, COMMANDS 30.2 and 30.5 (2026-10-31).
-- CLASP: `lagrange` for the mean, `lagrange_soft` for the 30 dB share; aware on aged reports,
-  where the target run takes the better of no margin and a 0.5 dB margin (`s30_j_tgtm_*`). The
-  margin is better at r <= 0.8. At r = 0.8 the quoted 66.8% is the margin run's
-  `lagrange_soft  66.8%` in `s30_j_tgtm_r80.txt`, against `lagrange_soft  66.2%` in
-  `s30_j_tgt_r80.txt` without it (every r: the grep in `s31_checks.txt`, COMMANDS 31.1).
+- CLASP: `lagrange` for the mean (`s30_vs_digital.txt`); for the 30 dB share `lagrange_soft`
+  with the measured spread and no margin (`s33_csi.txt`, COMMANDS 33, 2026-11-01, the same
+  2000 frames); aware on aged reports.
 - Digital: HEIC, the LTE CQI table, IR-HARQ, 6 slots; its best policy (`pf`, `greedy`; `padc`,
   `stop`, `online_pf`) and transmitter (naive or aware) at each point.
 
@@ -142,20 +156,22 @@ Each comparison prints a label line, the two sides (`a:` CLASP, `b:` digital), t
 | exact reports: **+0.20 dB** | `[f] mean PSNR: CLASP - digital` | `a - b: +0.196 dB [+0.174, +0.217]` (lagrange 31.487, greedy 31.291) |
 | exact reports: **+3.6** points | `[f] 30 dB: CLASP - digital` | `a - b: +3.612 pts [+3.137, +4.081]` (78.0% against online_pf 74.4%) |
 | 2 dB CQI error: **+1.19 dB** | `[e2] mean PSNR: CLASP - digital` | `a - b: +1.192 dB [+1.164, +1.221]` (31.339 against 30.146) |
-| 2 dB CQI error: **+8.1** points | `[e2] 30 dB: CLASP - digital` | `a - b: +8.106 pts [+7.500, +8.694]` (70.8% against 62.7%) |
+| 2 dB CQI error: **+12.7** points | `s33_csi.txt`: `[e2] 30 dB: CLASP (measured spread) - digital` | `a - b: +12.744 pts [+12.156, +13.300]` (75.5% against 62.7%) |
 | r = 0.8: **+1.56 dB** | `[r80] mean PSNR: CLASP - digital` | `a - b: +1.561 dB [+1.530, +1.591]` (30.921 against the naive digital 29.359) |
-| r = 0.8: **+12.0** points | `[r80] 30 dB: CLASP - digital` | `a - b: +11.969 pts [+11.350, +12.594]` (66.8%, 0.5 dB margin, against 54.8%) |
-| ahead at every CSI condition | the ten `CLASP - digital` blocks of each objective | the smallest leads: +0.196 dB and +3.612 pts, both `[f]` |
+| r = 0.8: **+15.8** points | `s33_csi.txt`: `[r80] 30 dB: CLASP (measured spread) - digital` | `a - b: +15.825 pts [+15.200, +16.425]` (70.6% against 54.8%) |
+| ahead at every CSI condition | the ten mean-PSNR `CLASP - digital` blocks of `s30_vs_digital.txt` and the ten `30 dB: CLASP (measured spread) - digital` blocks of `s33_csi.txt` | the smallest leads: +0.196 dB and +3.612 pts, both `[f]` |
 | fresh → r = 0.8: CLASP **-0.6 dB** | `s30_loss.txt`: `CLASP, mean PSNR: fresh - r 0.8` | `a - b: +0.567 dB [+0.555, +0.579]` |
 | fresh → r = 0.8: digital **-1.9 dB** | `s30_loss.txt`: `digital, mean PSNR: fresh - r 0.8 (its best of naive / aware)` | `a - b: +1.932 dB [+1.907, +1.957]` |
 
-The outline does not use the `best JSCC - digital (as C5)` rows. They take the best JSCC policy
-at each point, as C5 did. For the mean that is CLASP everywhere but r = 0.4 (the closed form, by
-0.004 dB). For the 30 dB share it is the planner `plan_adv` from 2 dB of CQI error and from
-r = 0.9, 1.1-4.6 points above CLASP (for example `[e2] 30 dB: best JSCC - digital (as C5)`:
-`a - b: +10.650 pts [+10.056, +11.225]`). Section VII reports them (C7). The planner minus
-CLASP, paired, is in `s31_checks.txt` (COMMANDS 31.1), under labels such as
-`[e2] 30 dB: planner - CLASP`: `a - b: +2.544 pts [+2.069, +2.987]`.
+With the measured spread CLASP is also the best JSCC policy at 30 dB at every condition
+(`s33_csi.txt`, `[c] measured spread - planner`: +1.4 to +3.6 points, every interval above
+zero). Round 30's CLASP, with the curves' spread only, was 1.1-4.6 points below the planner from
+2 dB of CQI error and from r = 0.9 (`s31_checks.txt`), and the `best JSCC - digital (as C5)`
+rows of `s30_vs_digital.txt` took the planner there. For the mean, CLASP is the best JSCC
+policy everywhere but r = 0.4 (the closed form, by 0.004 dB).
+
+Round 30's CLASP target rows (no longer quoted): +8.106 pts at 2 dB CQI error and +11.969 pts
+at r = 0.8 (`s30_vs_digital.txt`, with a 0.5 dB margin at r <= 0.8).
 
 Superseded: the old rows took the best JSCC policy from `s23_c5_single.txt` (COMMANDS 23.2):
 +0.13 dB / +0.3 points with fresh reports, +1.13 dB / +10.7 points at 2 dB CQI error, +1.54 dB
@@ -195,4 +211,7 @@ grep -A 7 "^summary" results/s22_scale_mean.txt results/s24_soft_auto.txt
 grep -A 3 "CLASP - digital" results/s30_vs_digital.txt
 cat results/s30_loss.txt
 grep -n "lag:lagrange \|lagb:lagrange \|lagblind:lagrange \|sa:slope_adv \|hf:slope_adv " results/s30_codesign.txt
+grep -h "calibration-aware" results/s33_csi_*.txt
+grep -A 3 "measured spread - CLASP as run in 30\|30 dB: CLASP (measured spread) - digital" results/s33_csi.txt
+grep -n "decoded histories\|csi:lagrange_soft \|old:plan_adv " results/s33_dec.txt
 ```

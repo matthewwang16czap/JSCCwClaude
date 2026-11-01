@@ -225,21 +225,22 @@ serves every user slot by slot up to the deadline."
        Brown20].
    - **Challenge (3), imperfect information.**
      - Each program rewards the probability of reaching the quality target given the measured
-       spread of the calibrated curves around the fitted ones (0.03-0.05 dB per prefix length),
-       rather than a hard threshold.
+       error of its own prediction, rather than a hard threshold. The error has two parts, both
+       measured offline: the spread of the calibrated curves around the fitted ones (0.03-0.05
+       dB per prefix length), and the error that noisy or aged channel reports leave (0.2-1 dB).
      - Each program decides on the posterior of the channel given an aged report, not on the
        report itself.
 4. Results:
-   - Decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair in all
-     four decoded cases (Kodak with fresh reports, 2 dB CQI errors or aged reports; CLIC with
-     fresh reports). With fresh reports or 2 dB CQI errors it brings 8-15 points more users to
-     30 dB than per-image rate selection [Zhang23].
+   - Decoded by the codec, in all four decoded cases (Kodak with fresh reports, 2 dB CQI errors
+     or aged reports; CLIC with fresh reports), CLASP gains 0.5-0.6 dB of mean PSNR over
+     proportional fair and brings 8-15 points more users to 30 dB than per-image rate selection
+     [Zhang23].
    - Simulated against the bound, its gap shrinks to 0.005 dB per user at 128 users for mean
      PSNR, and stays within ±0.3 points from 16 users on for the target.
    - Simulated on the same frames as a digital chain with CQI-table link adaptation and
      incremental-redundancy HARQ, CLASP beats it at every CSI condition tested: by 1.2-1.6 dB of
-     mean PSNR and 8-12 points at 30 dB with 2 dB CQI errors or aged reports (correlation 0.8),
-     and by 0.2 dB and 3.6 points with exact reports.
+     mean PSNR and 13-16 points at 30 dB with 2 dB CQI errors or aged reports (correlation
+     0.8), and by 0.2 dB and 3.6 points with exact reports.
    - Decoded on the same slots, training the code on the channel CLASP creates adds 0.21 dB (two
      seeds) over training it as long on the usual channel. Training on CLASP's prefix lengths
      with blindly taken slots gains nothing (-0.09 dB), so the gain comes from the slots CLASP
@@ -262,16 +263,17 @@ Overall, our main contributions are as follows.
      bandit with a two-number user state.
    - It solves that bandit with exact per-user dynamic programs, a Lagrangian bound on every
      causal scheduler, and an index policy.
-   - A calibration-aware reward makes it robust to the abstraction's error, and report-aware
-     programs let it decide on aged channel reports.
+   - A reward that knows the measured error of its own prediction, from the abstraction and
+     from the channel reports, makes it robust to both; report-aware programs decide on aged
+     reports.
 3. **Performance.**
    - Decoded, CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB
-     over per-image rate selection with fresh reports or 2 dB CQI errors.
+     over per-image rate selection, with fresh, noisy or aged reports.
    - Simulated, its gap to the bound vanishes as the cell grows:
      - for mean PSNR, from 0.21 to 0.005 dB per user between 8 and 128 users;
      - for the target, within ±0.3 points from 16 users on.
    - Simulated, CLASP outperforms a digital chain with link adaptation and HARQ at every CSI
-     condition tested: by 1.2-1.6 dB and 8-12 points with 2 dB CQI errors or reports aged to
+     condition tested: by 1.2-1.6 dB and 13-16 points with 2 dB CQI errors or reports aged to
      correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
    - Decoded, training the code on CLASP's channel adds 0.21 dB.
 
@@ -281,7 +283,7 @@ Overall, our main contributions are as follows.
 |---|---|---|
 | (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.05-0.09 dB with fresh reports or 2 dB CQI errors |
 | (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
-| (3) imperfect information | calibration-aware reward; programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +1.2-1.6 dB and +8-12 points over digital with 2 dB CQI errors or r = 0.8 (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
+| (3) imperfect information | a reward on the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +13.3 / +12.5 points over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and +13-16 points over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
 
