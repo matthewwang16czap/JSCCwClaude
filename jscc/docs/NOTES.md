@@ -1,4 +1,4 @@
-# Results notes (condensed 2026-10-15; later rounds added as sections 6b-6j, the last 2026-11-01)
+# Results notes (condensed 2026-10-15; later rounds added as sections 6b-6k, the last 2026-11-01)
 
 What the experiments established, by topic; the last section indexes every experiment round.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
@@ -935,6 +935,74 @@ rows: +10.5 [9.6, 11.4] / +10.3 [9.3, 11.2] points simulated, +13.3 [10.6, 16.0]
 30 dB policy in every column but 25% of slots lost and T 16, where the calibration-aware
 Whittle index is 0.4 / 0.1 points ahead with exact reports (as in 6g).
 
+## 6k. The proposed scheduler's channel; the 3 dB-gap code at 30 dB (COMMANDS 35, returned 2026-11-01)
+
+The runs the review of fig12-fig16 asked for (CPU only).
+
+**CLASP's channel** (`codesign.py bank --policy lagrange`, seed 1000, not the frames scored;
+aware on aged reports; `s35_banks.txt`): the served SNR of each phase minus the user's mean SNR.
+
+| r (K 8) | lift, phases 1 / 2 / 3 (dB) | kept of the lift over a blind slot | users with 2 / 3 / 4 phases (%) |
+|---|---|---|---|
+| 1 (round 30, 4000 frames) | +3.82 / +2.99 / +2.43 | 100% | 11.5 / 76.2 / 11.9 |
+| 0.95 | +3.42 / +2.56 / +2.06 | 92% | 11.6 / 76.1 / 11.9 |
+| 0.9 | +3.04 / +2.13 / +1.58 | 83% | 11.7 / 76.3 / 11.8 |
+| 0.8 | +2.10 / +1.33 / +0.67 | 65% | 8.7 / 82.5 / 8.6 |
+| 0.6 | +0.43 / -0.23 / -0.61 | 34% | 1.8 / 96.5 / 1.8 |
+| 0.4 | -0.80 / -1.13 / -1.35 | 14% | 0.7 / 98.5 / 0.7 |
+| 0 | -1.74 / -1.78 / -1.79 | 0 (the reference) | 0.3 / 99.3 / 0.3 |
+
+* With reports that carry nothing (r = 0) the served slots sit where blindly taken ones do
+  (-1.8 dB, round 30's blind bank). Over a blind slot the fresh lift is +5.6 / +4.8 / +4.2 dB
+  (the closed form +5.0 / +4.5 / +3.6, 6b). "Kept" is the mean over phases 1-3 of (lift at r -
+  lift at 0) / (lift at 1 - lift at 0): 92 / 83 / 65 / 34 / 14% at r = 0.95 / 0.9 / 0.8 / 0.6 /
+  0.4, close to r^2 (90 / 81 / 64 / 36 / 16%), as under the closed form (91 / 65 / 36%; 8% at
+  0.3). Under CLASP too the scheduler-made channel is a fresh-report effect (C8).
+* As reports age CLASP stops telling users apart: 3 phases to 76% of users with fresh reports,
+  83% at r = 0.8, 97-99% from r = 0.6.
+* Against K (fresh, T = 3K; 2000 / 1000 / 4000 / 300 / 150 frames at K 2 / 4 / 8 / 16 / 24):
+  phase 1 +0.70 / +2.39 / +3.82 / +4.92 / +5.39 dB, phase 2 -0.15 / +1.65 / +2.99 / +4.12 /
+  +4.71, phase 3 -0.50 / +1.14 / +2.43 / +3.41 / +3.96. Above the closed form's (phase 1 +0.6 /
+  +2.2 / +3.2 / +3.9 / +4.3, 6), by more as K grows: an order statistic (C11).
+* Predicted mean PSNR on these frames: 31.33 / 31.19 / 30.91 / 30.41 / 30.07 / 29.83 dB at
+  r = 0.95 / 0.9 / 0.8 / 0.6 / 0.4 / 0; 30.47 / 31.07 / 31.75 / 31.89 dB at K 2 / 4 / 16 / 24.
+
+**The 3 dB-gap code with IR-HARQ at 30 dB** (its best policy and transmitter at each point;
+paired with round 33's CLASP on the same 2000 frames; `s35_gap3.txt`):
+
+| condition | CLASP (%) | gap code (%) | CLASP - gap code (points) |
+|---|---|---|---|
+| exact reports | 78.0 | 80.4 | -2.4 [-2.9, -1.9] |
+| CQI error 1 dB | 77.3 | 71.9 | +5.3 [4.8, 5.8] |
+| CQI error 2 dB | 75.5 | 65.7 | +9.8 [9.2, 10.3] |
+| CQI error 3 dB | 72.8 | 60.9 | +11.9 [11.3, 12.5] |
+| r = 0.95 | 75.8 | 67.1 | +8.7 [8.2, 9.3] |
+| r = 0.9 | 74.0 | 62.5 | +11.5 [10.9, 12.1] |
+| r = 0.8 | 70.6 | 57.1 | +13.6 [12.9, 14.2] |
+| r = 0.6 | 65.7 | 51.9 | +13.7 [13.1, 14.3] |
+| r = 0.4 | 62.6 | 49.8 | +12.8 [12.2, 13.4] |
+| r = 0 | 61.2 | 48.9 | +12.2 [11.7, 12.8] |
+
+* With exact reports the idealised code (3 dB from capacity, with HARQ) reaches 2.4 points more
+  users than CLASP, as it gives 0.64 dB more mean PSNR (6h). From 1 dB of CQI error or r = 0.95
+  on, CLASP is ahead of it too: +5.3 to +11.9 points under CQI errors, +8.7 to +13.7 on aged
+  reports (against HEIC with the LTE CQI table: +8.8 to +15.8, 6j). Its 80.4% with exact
+  reports is section 5's number without HARQ: with exact reports no block fails.
+* The gap code's best policy is online_pf at every point. Its naive and aware transmitters are
+  within 0.2 points of each other down to r = 0.6; aware is ahead by 0.7 at r = 0.4 and by 2.8
+  at r = 0.
+
+**fig12(c)'s run** (the 500 main frames at 30 dB, every slot kept; `s35_delay_tgt.json`): its
+rows equal round 24's to the last digit, so the per-slot curve is drawn on the same frames. By
+slot 6 / 12 / 18 / 24 CLASP brings 29.3 / 53.1 / 70.2 / 77.2% of users to 30 dB, PADC 20.1 /
+48.4 / 60.8 / 64.6%. The mean slot to 30 dB (a miss counts as T + 1): 12.98 against 14.83,
+-1.85 [-1.98, -1.72] slots; on the users both bring there -1.04 [-1.26, -0.82]. A user's first
+decodable phase arrives later under CLASP (slot 7.75 against 6.54, on average), so its PSNR
+averaged over the frame is lower (24.19 against 25.04 dB): it waits for good slots.
+
+**Redrawn (`s35_figs.txt`).** fig12(c) every slot, fig14 with the gap code at 30 dB, fig15
+from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -1079,3 +1147,4 @@ Whittle index is 0.4 / 0.1 points ahead with exact reports (as in 6g).
 | The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
 | Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1 to +3.4 points) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
 | The measured spread (curves and reports) | 33, 34 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4 to +3.6 points over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7 / +15.8 points at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB; 34: fig14 and Tables II-IV redrawn with it (Table II at r 0.8: +8.75 [6.0, 11.3] over the hard target, missed 1.7% -> 0.4%) |
+| The figures' review: CLASP's channel, the 3 dB-gap code at 30 dB | 35 | 11-01 | under CLASP the lift over a blind slot is +5.6 / +4.8 / +4.2 dB (phases 1-3) and keeps 65% of itself at r = 0.8, close to r^2 as under the closed form; phase 1 +0.7 to +5.4 dB from K 2 to 24; the 3 dB-gap code with HARQ is 2.4 points ahead at 30 dB with exact reports and behind from 1 dB of CQI error or r = 0.95 (+5.3 to +13.7, paired); fig12(c) on round 24's frames |

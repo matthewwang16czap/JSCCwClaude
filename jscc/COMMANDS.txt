@@ -6,12 +6,11 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 35 (CPU only, ~1-1.5 h; no GPU): what the review of fig12-fig16 needs
-(the proposed scheduler's channel for fig15, the 3 dB-gap code at 30 dB for fig14, every slot
-of fig12(c)), then the redraw. Sections 0-34 are done (docs/NOTES.md 6d-6j; the figures:
-docs/FIGURES.md). Section 29 is optional: it reruns the code review's checks
-(docs/CORRECTNESS_REVIEW.md). Still to review: the Introduction outline from paragraph 2 on
-(docs/INTRO_OUTLINE.md; its numbers: docs/INTRO_NUMBERS.md).
+WHAT TO RUN: section 36 (CPU, ~2 min; no GPU): the redraw, then send fig12, fig14, fig15 and
+fig16 as PNG. Sections 0-35 are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md).
+Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
+to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
+docs/INTRO_NUMBERS.md).
 
   section                                     status
   0  environment                              valid; section 14 repeats what it needs
@@ -77,9 +76,10 @@ docs/FIGURES.md). Section 29 is optional: it reruns the code review's checks
   33 the measured spread (curves and reports):  done (docs/NOTES.md 6j): one target policy
      every condition, decoded checks            for every CSI condition
   34 redraw with round 33                       done 2026-11-01 (results/s34_figs.txt)
-  35 the figures under review: CLASP's          TO RUN (CPU only)
+  35 the figures under review: CLASP's          done (docs/NOTES.md 6k)
      channel (fig15), the 3 dB-gap code at
      30 dB (fig14), fig12(c) every slot
+  36 redraw (fig15's blind-slot line)           TO RUN (CPU, ~2 min)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3544,9 +3544,9 @@ ls figures/
 # points). After these, the figures to review are fig12-fig16 (fig14 now shows the new CLASP).
 
 ================================================================================
- 35. TO RUN NOW -- the figures under review: the proposed scheduler's channel (fig15), the
-     3 dB-gap code at 30 dB (fig14), every slot of fig12(c), fig16's intervals; then the redraw
-     (CPU only: 14 jobs at once, one core each, ~1-1.5 h; no GPU, no training)
+ 35. DONE 2026-11-01 (docs/NOTES.md 6k) -- the figures under review: the proposed scheduler's
+     channel (fig15), the 3 dB-gap code at 30 dB (fig14), every slot of fig12(c), fig16's
+     intervals; then the redraw (CPU only: 14 jobs at once, one core each, ~1-1.5 h)
 ================================================================================
 # Why: the review of fig12-fig16 (2026-11-01) found:
 #   - fig15 drew the closed form's channel (bank_sa*, bank_lift_k*: naive on aged reports), not
@@ -3651,3 +3651,27 @@ ls figures/
 #   (3) the two sets of rows equal: fig12(c) draws the same frames, every slot.
 #   (4) fig15 now from bank_lag*.json, fig14 with the gap code at 30 dB, fig12(c) every slot,
 #       fig16 with intervals over images. Send me fig12, fig14, fig15 and fig16 again.
+
+================================================================================
+ 36. TO RUN NOW -- redraw (CPU, ~2 min), then send me fig12, fig14, fig15 and fig16 (PNG)
+================================================================================
+# Why: round 35's runs are in (docs/NOTES.md 6k). One change since its redraw: fig15 draws a
+# dotted line where blindly taken slots sit (round 30's results/bank_lagblind.json, -1.8 dB).
+# With reports that carry nothing (r = 0) the proposed scheduler's curves fall onto it, so the
+# height above it is what scheduling adds. Nothing is simulated again.
+
+# 36.0 -- pull and checks (~5 min CPU) --------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+ls results/bank_lagblind.json > /dev/null     # send me any "No such file"
+
+# 36.1 -- the redraw (CPU, ~1 min; send back what it prints) ----------------------------------
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s36_figs.txt | grep "fig1[2-6]"
+ls figures/fig1[2-6]*.png
+
+# Reading: four "wrote fig12 ... fig16" lines; fig15's names bank_lagblind.json among its inputs.
+# Then send me figures/fig12_latency.png, figures/fig14_digital.png,
+# figures/fig15_scheduler_channel.png and figures/fig16_decoders.png.

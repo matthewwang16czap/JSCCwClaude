@@ -466,6 +466,7 @@ def write_banks(d):
               ("bank_lag_k4.json", {"users": 4, "slots": 12, "frames": 100}),
               ("bank_lag_k16.json", {"users": 16, "slots": 48, "frames": 24}),
               ("bank_lag_k24.json", {"users": 24, "slots": 72, "frames": 16})]
+    banks += [("bank_lagblind.json", {"blind": True})]
     for name, kw in banks:
         kw = dict({"users": 8, "slots": 24, "frames": 60}, **kw)
         bank = build_bank(u, "slope_adv", belief=b, **kw)

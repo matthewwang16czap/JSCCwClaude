@@ -235,8 +235,8 @@ template, Figure 1, the references and the source of every number.
   - Exact CQI: +0.20 dB and +3.6 points.
   - With HARQ, the single decoder: +1.19 dB / +12.7 points at σ = 2 dB and +1.56 dB / +15.8
     points at r = 0.8; ahead of HEIC at every σ and r run (+8.8 to +15.8 points at the target),
-    and of a 3 dB-gap code from σ = 1 dB or r = 0.95 (0.64 dB behind the gap code with exact
-    CSI). Fresh → r = 0.8 costs the proposed scheduler 0.57 dB, digital 1.93 dB.
+    and of a 3 dB-gap code with HARQ from σ = 1 dB or r = 0.95 (at 30 dB +9.8 / +13.6 points at
+    σ = 2 dB / r = 0.8, paired; with exact CSI the gap code is 0.64 dB and 2.4 points ahead). Fresh → r = 0.8 costs the proposed scheduler 0.57 dB, digital 1.93 dB.
   - Per-length decoders add 0.17-0.21 dB and 1.4-2.5 points to the closed form's leads.
   - On outdated reports the opportunistic gain fades, and stopping needs the posterior and a
     reward that knows the reports' error. A uniform 0.5 dB margin gains the index 0.6-1.9
@@ -248,7 +248,10 @@ template, Figure 1, the references and the source of every number.
     form; its lengths with blindly taken slots gain nothing (-0.09 dB); a code per scheduler,
     and after co-design the closed form ties the index for the mean; codes learn their
     scheduler.
-  - The lift keeps 65% of itself at r = 0.8 and 8% at 0.3.
+  - The proposed scheduler puts the first three phases 3.8 / 3.0 / 2.4 dB above the user's mean
+    SNR (5.6 / 4.8 / 4.2 above a blindly taken slot). The lift keeps 92 / 65 / 34 / 14% of itself
+    at r = 0.95 / 0.8 / 0.6 / 0.4, close to r², and grows with K (phase 1: +0.7 dB at K 2, +5.4
+    at K 24).
 - **F. System choice and ablations** (fig05 and Table II = table02: the calibration-aware
   reward; Table V (appendix) = table05: everything else tried on the 30 dB gap; fig16: what a
   decoder per length or a model per CBR adds, by prefix length).
