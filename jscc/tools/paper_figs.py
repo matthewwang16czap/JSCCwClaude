@@ -1065,7 +1065,8 @@ def fig15(I, plt):
     """The scheduler makes the code's channel (C8, C11): how much better than the user's mean
     SNR the first three phases' slots are under the proposed scheduler (the Lagrangian index;
     aware on outdated reports; COMMANDS 30 and 35), against report age and the number of
-    users."""
+    users; dotted: where blindly taken slots sit (round 30's blind bank), the level reports
+    that carry nothing fall to."""
     from tools.codesign import stats
     by_r = ("bank_lag.json",) + tuple(f"bank_lag_r{r}.json" for r in ("95", "90", "80", "60",
                                                                         "40", "0"))
@@ -1103,7 +1104,17 @@ def fig15(I, plt):
     if ka:
         k_axis(axes[1], [k for k, _ in ka], "users K (T = 3K slots)")
     axes[0].set_ylabel("served SNR minus the user's mean SNR (dB)")
-    fig_legend(fig, axes, 3)
+    extra = ()
+    blind = I.json("bank_lagblind.json", required=False)
+    if blind is not None and blind.get("blind"):
+        bl = [p["lift"] for p in stats(blind)["phase"][:3] if p["lift"] is not None]
+        if bl:
+            from matplotlib.lines import Line2D
+            kw = dict(color=MUTED, lw=0.9, ls=":")
+            for ax in axes:
+                ax.axhline(float(np.mean(bl)), zorder=2, **kw)
+            extra = (Line2D([], [], label="a slot taken blindly", **kw),)
+    fig_legend(fig, axes, 3 + len(extra), extra=extra)
     return fig
 
 
@@ -1563,7 +1574,8 @@ FIGS = (
      "errors and outdated reports", "s30_j_mean_f.txt s33_csi_f.txt s20_harq_mean.txt "
      "[s30_j_mean_*.txt s33_csi_*.txt s20_harq_tgt*.txt s35_g_tgt_*.txt]"),
     ("fig15_scheduler_channel", fig15, "SNR lift of the first phases under the proposed "
-     "scheduler vs report age and K", "bank_lag.json [bank_lag_r*.json bank_lag_k*.json]"),
+     "scheduler vs report age and K", "bank_lag.json [bank_lag_r*.json bank_lag_k*.json "
+     "bank_lagblind.json]"),
     ("fig16_decoders", fig16, "a decoder per length and one model per CBR over the single "
      "decoder, by length (95% intervals over images)",
      "p2_full_snrc4.json and p4_full_h*.json and/or p3_full_fix*.json"),
