@@ -205,8 +205,8 @@ seeds where it matters, digital with tuned backoff, HARQ and lost blocks counted
 
 ## Open
 
-1. Writing: the Introduction (paragraph 1 approved; paragraphs 2-7 under review), then Sections
-   II-VI (`docs/PAPER_OUTLINE.md`).
+1. Writing: the Introduction is drafted (`paper/sections/introduction.tex`, built into
+   `paper/main.pdf`); then Sections II-VI (`docs/PAPER_OUTLINE.md`).
 2. Optional, only if a referee asks: a two-layer superposition digital baseline with IR per layer
    (Steiner and Shamai) at report correlation r <= 0.6; a Jacobian probe of the mechanism behind
    the abstraction; a better codec (more data) for the absolute numbers.

@@ -1,0 +1,71 @@
+\documentclass[journal]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\raggedbottom
+
+\begin{document}
+
+\title{Scheduling Learned Image Codes over Fading Multi-User Downlinks: A Link Abstraction and a Calibration-Aware Restless-Bandit Scheduler}
+
+\author{}
+
+\maketitle
+
+\begin{abstract}
+Deep joint source-channel coding (JSCC) is designed and evaluated on single links, yet a cellular downlink serves many users slot by slot, through a scheduler, before a deadline. Scheduling needs each slot's value to each user; no model provides it for a learned code. We show that a progressive learned code trained under slot-varying SNR obeys a link abstraction: its distortion is the source distortion plus a sensitivity-weighted sum of per-slot minimum mean-square-error terms. On two test sets it predicts held-out decodes within 0.055--0.083~dB, against 0.16--0.19~dB for EESM and 0.29--0.34~dB for MIESM given the same weights; a constant-SNR-trained code obeys no such rule. Calibrated from 12 decodes per image, the abstraction reduces each user to a two-number state, and deadline scheduling becomes a finite-horizon restless bandit. We propose CLASP, a calibration-aware, link-abstraction-based scheduler that solves it with exact per-user dynamic programs, a Lagrangian bound on every causal scheduler and an index policy, and rewards the probability of reaching a quality target under the measured error of its own prediction, from the abstraction and reports. Decoded, CLASP gains 0.5--0.6~dB of mean PSNR over proportional fair and brings an extra 8--15\% of users to 30~dB over per-image rate selection, with fresh, noisy or aged reports. Against digital transmission with CQI-table link adaptation and HARQ it leads by 1.2--1.6~dB and 13--16\% of users at 30~dB under 2~dB CQI errors or aged reports. Training the code on the channel CLASP creates adds 0.21~dB.
+\end{abstract}
+
+\begin{IEEEkeywords}
+deep joint source-channel coding, link abstraction, multi-user scheduling, restless bandits, Lagrangian relaxation, index policies, imperfect CSI, HARQ, image transmission
+\end{IEEEkeywords}
+
+\input{sections/introduction}
+
+\section{Related Work}
+\label{sec:related}
+\subsection{Physical Link Design for Multi-User Media Delivery}
+\label{sec:related-link}
+\subsection{The JSCC Way}
+\label{sec:related-jscc}
+\subsection{Restless Bandits and Lagrangian Index Policies}
+\label{sec:related-rmab}
+
+\section{Preliminaries: System Model and Problem Statement}
+\label{sec:system}
+
+\section{Method}
+\label{sec:method}
+\subsection{Training the Progressive Code for Slot-Varying SNR}
+\label{sec:method-training}
+\subsection{The MMSE Link Abstraction}
+\label{sec:method-abstraction}
+\subsection{CLASP: Deadline Scheduling as a Finite-Horizon Restless Bandit}
+\label{sec:method-clasp}
+\subsection{Imperfect Information: The Calibration-Aware Reward and Aged Reports}
+\label{sec:method-csi}
+\subsection{Training the Code on the Channel CLASP Creates}
+\label{sec:method-codesign}
+
+\section{Experiments}
+\label{sec:eval}
+\subsection{Link Abstraction Accuracy}
+\label{sec:eval-abstraction}
+\subsection{Mean PSNR: Near the Bound, and over PF}
+\label{sec:eval-mean}
+\subsection{Quality Target and Latency}
+\label{sec:eval-target}
+\subsection{Imperfect CSI and the Digital Baseline}
+\label{sec:eval-csi}
+\subsection{Training the Code on CLASP's Channel}
+\label{sec:eval-codesign}
+\subsection{Ablations and System Choice}
+\label{sec:eval-ablation}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
