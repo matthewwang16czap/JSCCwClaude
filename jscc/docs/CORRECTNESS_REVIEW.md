@@ -42,7 +42,7 @@ used in fitting or calibration), broken pairing (a "paired" comparison that is n
 comparing the same underlying frames), common-random-numbers claims that do not hold (two
 policies, or two files, silently scored on different noise), seed/state reuse that would
 correlate results that should be independent, and sign or scale errors in the statistics
-(points vs. dB, a flipped inequality, an off-by-one in an index).
+(% of users vs. dB, a flipped inequality, an off-by-one in an index).
 
 ## What was checked, in detail
 

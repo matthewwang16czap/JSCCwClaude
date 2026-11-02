@@ -363,9 +363,9 @@ footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
     <div class="prose col"><p>Here the learned codec itself decodes the schedules. Kodak images, 8 users, 24 slots, mean SNRs from 0 to 15 dB, Rayleigh fading.</p></div>
     <div class="tiles">
       <div class="tile"><div class="v">+0.465 dB</div><div class="l">mean PSNR over PF</div><div class="s">decoded; 95% CI 0.39 to 0.53</div></div>
-      <div class="tile"><div class="v">+11.0 points</div><div class="l">users at 30 dB, over PADC's rule</div><div class="s">decoded; 95% CI 8.3 to 13.8</div></div>
+      <div class="tile"><div class="v">+11.0%</div><div class="l">of the users at 30 dB, over PADC's rule</div><div class="s">decoded; 95% CI 8.3 to 13.8</div></div>
       <div class="tile"><div class="v">≤ 0.23 dB</div><div class="l">below the best possible scheduler</div><div class="s">capped by the clairvoyant optimum; the Lagrangian bound gives 0.26</div></div>
-      <div class="tile"><div class="v">+1.64 dB</div><div class="l">over digital (HEVC intra) at 2 dB CQI error</div><div class="s">and +14.5 points at 30 dB; tuned link adaptation</div></div>
+      <div class="tile"><div class="v">+1.64 dB</div><div class="l">over digital (HEVC intra) at 2 dB CQI error</div><div class="s">and +14.5% of the users at 30 dB; tuned link adaptation</div></div>
     </div>
     <p class="note col">Still running (COMMANDS section 18): outdated channel reports, where the timing gain is expected to shrink with mobility, and many users per slot, the regime of the restless-bandit theory.</p>
     <div class="grid-2">
@@ -378,7 +378,7 @@ footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
       <figure class="panel">
         <div class="chart-title">JSCC's lead over digital grows with CQI error</div>
         <svg id="cDigital" viewBox="0 0 520 262" role="img" aria-label="JSCC lead over digital by CQI error" style="width:100%;height:auto"></svg>
-        <figcaption>Mean PSNR of our system (encode once, a decoder per length) minus HEVC intra with LTE CQI-table link adaptation and a tuned backoff, through the same schedulers. Users at 30 dB: +2.8, +9.2, +14.5, +18.9 points.</figcaption>
+        <figcaption>Mean PSNR of our system (encode once, a decoder per length) minus HEVC intra with LTE CQI-table link adaptation and a tuned backoff, through the same schedulers. Users at 30 dB: +2.8%, +9.2%, +14.5% and +18.9% of the users.</figcaption>
       </figure>
     </div>
   </section>
@@ -1057,8 +1057,8 @@ function drawMany() {
     { name: 'PF', v: sPF, cls: 'pf' }, { name: 'PADC', v: sPA, cls: 'padc' }, { name: 'Ours', v: sO, cls: 'ours', main: true },
   ]);
   const [dp, dph] = paired(acc.ours_target, acc.padc);
-  document.getElementById('cTgtT').textContent = `Ours brings ${(100 * dp).toFixed(0)} points more users to 30 dB than PADC`;
-  document.getElementById('cTgtCap').textContent = `Toy model · ${N.toLocaleString('en-US')} random frames · ours − PADC ${fmt(100 * dp, 1)} points (95% CI ±${(100 * dph).toFixed(1)}). On the codec: +11.0 points (section 6).`;
+  document.getElementById('cTgtT').textContent = `Ours brings an extra ${(100 * dp).toFixed(0)}% of the users to 30 dB over PADC`;
+  document.getElementById('cTgtCap').textContent = `Toy model · ${N.toLocaleString('en-US')} random frames · ours − PADC ${fmt(100 * dp, 1)}% of the users (95% CI ±${(100 * dph).toFixed(1)}). On the codec: +11.0% (section 6).`;
 }
 
 // ---------------------------------------------------------------- 6: measured charts
@@ -1105,7 +1105,7 @@ function drawDigital() {
   rows.forEach((r, i) => {
     const cx = x0 + 62 + i * ((x1 - x0 - 124) / 3), h = Y(0) - Y(r.v);
     const bar = sv('path', { d: barUp(cx - bw / 2, Y(0), bw, h), style: 'fill:var(--ours)' });
-    hover(bar, () => [`CQI error ${r.e} dB: +${r.v.toFixed(2)} dB`, `and +${r.p.toFixed(1)} points of users at 30 dB`], false);
+    hover(bar, () => [`CQI error ${r.e} dB: +${r.v.toFixed(2)} dB`, `and +${r.p.toFixed(1)}% of the users at 30 dB`], false);
     svg.appendChild(bar);
     svg.appendChild(sv('text', { x: cx, y: Y(r.v) - 8, 'font-size': 12.5, 'text-anchor': 'middle', class: 'tick', style: 'fill:var(--ink)' }, `+${r.v.toFixed(2)}`));
     svg.appendChild(sv('text', { x: cx, y: Y(0) + 18, 'font-size': 12, 'text-anchor': 'middle', style: 'fill:var(--ink-2)' }, `${r.e} dB`));

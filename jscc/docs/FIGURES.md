@@ -63,11 +63,16 @@ take those runs first and the other schedulers from the earlier runs of the same
 
 Terms used in the figures:
 
+* **share of users at 30 dB**: the percentage of users whose decoded PSNR reaches 30 dB by the
+  deadline. A difference between two shares (a gain over PADC, a gap to the bound) is the
+  difference of the two percentages, in % of all users; it is paired by frame and computed from
+  unrounded shares, so it can differ by 0.1 from the difference of the rounded shares.
+
 * **gap to the bound per user**: the Lagrangian bound caps what any causal scheduler can
   achieve; the gap is the bound minus the policy's quality, averaged over users (dB for the
-  mean, points of the share at 30 dB for the target). Near zero = near-optimal. It is per user
-  because the bound and the policies scale with K; the gap summed over the frame's users is
-  K times it.
+  mean; for the target, the bound's share of users at 30 dB minus the policy's, in %). Near
+  zero = near-optimal. It is per user because the bound and the policies scale with K; the gap
+  summed over the frame's users is K times it.
 * **true curves (oracle)**: the scheduler decides on each image's quality curves as the
   transmitter estimates them (calibrated from 12 decodes); the simulator scores users on the
   fitted curves. "True curves" gives the scheduler those exact curves instead: the best a
@@ -117,7 +122,7 @@ review so the comments can go on by number; retired names are listed below the t
 | table03_main | 2 col | **main results**: CLASP minus the baseline it replaces, under each condition of the main frames (fresh reports, CQI error 2 dB, r = 0.8, 25% of slots lost, T 16, CLIC): mean PSNR over PF (simulated; decoded with MS-SSIM and LPIPS) and users at 30 dB over PADC (simulated; decoded) | C3, C4, V-B, V-C | the main-frame runs (s22_main_mean.txt, s24_main_soft*.txt, s26_tgt_lost/t16/clic.txt, s21_lag_mean_more.txt, s21_lag_t16.txt, s22_clic.txt) and decoded replays (s22_dec_mean.json, s22_dec_r80_mean.json, s22_clic_dec_mean.json, s24_dec_auto/r80/clic.json, s30_dec_e2_mean/tgt.json: CQI error 2 dB); under CSI errors the measured spread's runs first (s33_main_csi_e2/r80.txt, s33_dec_e2/r80.json); any one is enough | Table III |
 | fig08_users | 2 col | what the scheduler does to the users, decoded (Kodak, K 8, T 24): the share of users whose decoded PSNR is at or above x, the baseline against the proposed scheduler, (a) scheduled for mean PSNR (PF), (b) for a 30 dB target (PADC); notes: the paired gain, the 5th-percentile user, the users below 30 dB, users sent nothing | C3, C4, V-B, V-C | s22_dec_mean.json and/or s24_dec_auto.json | main |
 | fig12_latency | 2 col | latency, the baseline against the proposed scheduler: (a) mean PSNR and (b) users at 30 dB against the frame length T, the arrow: the slots the baseline needs to match the index at T 24 (dashed: more than the longest frame run); (c) users at 30 dB by each slot of a 24-slot frame | C14, V-C | s21_latency_mean.json, s26_latency_tgt.json (else s21_latency_tgt.json), s35_delay_tgt.json (every slot; else s24_main_soft.txt's --delay table, every sixth slot); any one is enough | main |
-| fig14_digital | 2 col | JSCC with the proposed scheduler vs digital with IR-HARQ (its best policy and transmitter per point) and the 3 dB-gap code with IR-HARQ: mean PSNR and users at 30 dB against the CQI error and the report correlation, the same 2000 frames | C5, V-D | s30_j_mean_f.txt, s33_csi_f.txt, s20_harq_mean.txt [the other s30_j_mean_*.txt and s33_csi_*.txt, s20_harq_tgt*.txt, s35_g_tgt_*.txt: the 3 dB-gap code at 30 dB] | main |
+| fig14_digital | 2 col | JSCC with CLASP vs digital with IR-HARQ (its best policy and transmitter per point) and the 3 dB-gap code with IR-HARQ: mean PSNR and users at 30 dB against the CQI error and the report correlation, the same 2000 frames | C5, V-D | s30_j_mean_f.txt, s33_csi_f.txt, s20_harq_mean.txt [the other s30_j_mean_*.txt and s33_csi_*.txt, s20_harq_tgt*.txt, s35_g_tgt_*.txt: the 3 dB-gap code at 30 dB] | main |
 | fig15_scheduler_channel | 2 col | served SNR minus the user's mean for phases 1-3 under the proposed scheduler (the Lagrangian index; aware on outdated reports), against report age (K 8) and K (T = 3K) | C8, C11, V-E | bank_lag.json [bank_lag_r*.json, bank_lag_k*.json; bank_lagblind.json: the dotted level of a slot taken blindly] | main |
 | fig16_decoders | 1 col | what a decoder per length and one model per CBR add over the single decoder at each prefix length: each image's gain averaged over the constant SNRs, the mean over the 24 images with its 95% bootstrap interval over images | C6, V-F | p2_full_snrc4.json, p4_full_h*.json and/or p3_full_fix*.json | appendix |
 | table04_schedulers | 2 col | every scheduler built on the abstraction (PI, closed form, planner, Whittle, Lagrangian): gain over PF (mean) and over PADC (30 dB) under each condition, simulated and decoded; bold: the best per column | C7, V-B, V-C | the inputs of table03 | appendix |
@@ -141,7 +146,7 @@ the target) is fig12(c). A run deletes their old files.
   with (simulated) and the stale-report-aware transmitter (both).
 * table04 is where the policy facts live: the Lagrangian index is the best for the mean
   everywhere and for the target in every column but 25% of slots lost and T 16, where the
-  calibration-aware Whittle index is 0.4 / 0.1 points ahead (COMMANDS 34; under CQI errors and
+  calibration-aware Whittle index is 0.4% / 0.1% ahead (COMMANDS 34; under CQI errors and
   outdated reports with the measured spread, C7).
 * fig14 shows the proposed scheduler, not the best JSCC policy: the Lagrangian index for the
   mean (COMMANDS 30, docs/NOTES.md 6h) and the calibration-aware index for the target, with the

@@ -306,7 +306,7 @@ class Inputs:
 
 def rmab(d):
     """tools/rmab_scale.py --out: ({K: row}, scale): a target run's values are shares, x 100
-    gives points."""
+    gives % of the users."""
     rows = {int(k): v for k, v in d["per_K"].items()}
     return rows, (1.0 if d["args"].get("target") is None else 100.0)
 
@@ -747,10 +747,10 @@ def fig04(I, plt):
                 gap_line(a2, rows, sorted(rows), ents[e], sc, style(e))
         if "pf" in ents:                          # PF is an order of magnitude away: a note
             g = [sc * r["pf_gap"] for r in rows.values() if "pf_gap" in r]
-            a2.text(0.98, 0.97, f"PF: {min(g):.1f}-{max(g):.1f} points (off the axis)",
+            a2.text(0.98, 0.97, f"PF: {min(g):.1f}-{max(g):.1f}% (off the axis)",
                     transform=a2.transAxes, ha="right", va="top", color=INK2)
         k_axis(a2, sorted(rows))
-        a2.set_ylabel("gap to the bound per user (points)")
+        a2.set_ylabel("gap to the bound (% of users)")
         panel(a2, "b", "users at 30 dB")
     fig_legend(fig, axes, 6)
     return fig
@@ -784,7 +784,7 @@ def fig05(I, plt):
     if trow:
         gap_line(a1, trow, Ks, "lagrange", tsc, style("true"))
     k_axis(a1, Ks)
-    a1.set_ylabel("gap to the bound per user (points)")
+    a1.set_ylabel("gap to the bound (% of users)")
     panel(a1, "a", "against the number of users")
     runs = []
     for s, fn in ((0.05, "s24_soft_s05.json"), (0.1, "s24_soft_s10.json"),
@@ -811,7 +811,7 @@ def fig05(I, plt):
     a2.set_xticks(ticks)
     a2.set_xticklabels([f"{t:g}" for t in ticks])
     a2.set_xlabel(r"curve error the reward assumes, $\sigma$ (dB; 0: hard target)")
-    a2.set_ylabel("gap to the bound per user (points)")
+    a2.set_ylabel("gap to the bound (% of users)")
     panel(a2, "b", r"against the assumed $\sigma$")
     fig_legend(fig, [a1, a2], 3, rows=[
         ("hard target", "calibration-aware (proposed)", "true"),
@@ -894,7 +894,7 @@ def fig08(I, plt):
                         ha="left" if hi else "right", va="bottom" if hi else "top", color=INK2)
             g = paired(d, base, target=tgt, scale=100.0).get(ent)
             below = [float(np.mean(v[v < tgt])) if np.any(v < tgt) else np.nan for v in (vp, vb)]
-            note = [who, f"{g[0]:+.1f} points at {tgt:g} dB [{g[1][0]:.1f}, {g[1][1]:.1f}]"
+            note = [who, f"{g[0]:+.1f}% of users at {tgt:g} dB [{g[1][0]:.1f}, {g[1][1]:.1f}]"
                     if g else None, f"users below {tgt:g} dB: mean {below[0]:.1f} dB",
                     f"({ENT[base][0]}: {below[1]:.1f} dB)", sent]
             panel(ax, letter, f"scheduled for a {tgt:g} dB target")
@@ -1272,10 +1272,11 @@ def table02(I):
            r"the calibration-aware reward (proposed) on the same frames. With outdated reports "
            r"($r = 0.8$) the proposed reward's spread includes the error the reports leave "
            r"(measured offline); ``curves' spread only'' is the reward without it. Gain: paired "
-           r"by frame, 95\% bootstrap interval. Missed: users the model put at 30 dB that "
+           r"by frame, 95\% bootstrap interval; it is the difference of the two shares, in \% of the "
+           r"users. Missed: users the model put at 30 dB that "
            r"decoded below it.}",
            r"\label{tab:calibration}", r"\begin{tabular}{lccccccccc}", r"\hline",
-           r" & \multicolumn{2}{c}{Users at 30 dB (\%)} & Gain (points) & "
+           r" & \multicolumn{2}{c}{Users at 30 dB (\%)} & Gain (\%) & "
            r"\multicolumn{2}{c}{Missed (\%)} & \multicolumn{2}{c}{Mean PSNR (dB)} & "
            r"\multicolumn{2}{c}{LPIPS} \\",
            r"Schedules & hard & aware & aware $-$ hard & hard & aware & hard & aware & hard & "
@@ -1321,7 +1322,7 @@ def _cell(x, nd, tex=False, ci=True, mark=""):
 
 def _sim_gains(I, c, kind):
     """{entity: (gain, (lo, hi))} of one condition's simulated main-frame run: mean PSNR over
-    PF (dB), or users at 30 dB over PADC (points; the indices calibration-aware where run)."""
+    PF (dB), or users at 30 dB over PADC (% of users; the indices calibration-aware where run)."""
     if kind == "mean":
         return first_rows(I, c["mean"], "mean", c["want"]) or {}
     return merged_rows(I, c["tgt"], "target", c["want"], "vs_padc") or {}
@@ -1329,7 +1330,7 @@ def _sim_gains(I, c, kind):
 
 def _decoded(I, fn, kind, metric="psnr"):
     """{entity: (gain, (lo, hi))} of a decoded replay, paired by frame: over PF in `metric`
-    (mean), or users at the replay's target over PADC in points; {} without the file. fn: a
+    (mean), or users at the replay's target over PADC in % of users; {} without the file. fn: a
     file, or several of the same frames (newer first): each policy from the first file that
     has it, all paired against one baseline decode, the last file's (the reference decode of
     those frames, as tools/replay_report.py pairs files); files of other frames each against
@@ -1383,7 +1384,8 @@ def table03(I):
            r"\caption{CLASP against the baselines it replaces, on the main "
            r"frames ($K = 8$ users, $T = 24$ slots unless noted). Mean PSNR: CLASP (the Lagrangian "
            r"index) minus PF, in PSNR, MS-SSIM and LPIPS (lower is better); 30~dB target: CLASP "
-           r"(the calibration-aware Lagrangian index) minus PADC, in users at 30~dB. Simulated: 500 "
+           r"(the calibration-aware Lagrangian index) minus PADC, in the share of users at 30~dB (the "
+           r"difference of the two percentages, in \% of the users). Simulated: 500 "
            r"frames on the transmitter's calibrated curves; decoded: 60 frames of the schedules "
            r"decoded by the codec. Paired by frame; 95\% bootstrap intervals; --: not run. "
            r"$r$: the correlation between the reported and the served channel (the transmitter "
@@ -1393,8 +1395,8 @@ def table03(I):
            r"\label{tab:main}", r"\begin{tabular}{lcccccc}", r"\hline",
            r" & \multicolumn{4}{c}{Mean PSNR: index $-$ PF} & "
            r"\multicolumn{2}{c}{30~dB target: index $-$ PADC} \\",
-           r"Condition & simulated (dB) & decoded (dB) & MS-SSIM & LPIPS & simulated (points) & "
-           r"decoded (points) \\", r"\hline"]
+           r"Condition & simulated (dB) & decoded (dB) & MS-SSIM & LPIPS & simulated (\%) & "
+           r"decoded (\%) \\", r"\hline"]
     text = []
     for c, ms, dm, ts, ths, td, thd in rows:
         dag = r"\dagger"
@@ -1408,7 +1410,7 @@ def table03(I):
                      _cell(td, 1, mark=thd)])
     tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
     head = ["condition", "mean: sim (dB)", "decoded (dB)", "MS-SSIM", "LPIPS",
-            "30 dB: sim (points)", "decoded (points)"]
+            "30 dB: sim (%)", "decoded (%)"]
     note = ("CLASP minus the baseline it replaces: mean PSNR (CLASP - PF), 30 dB (CLASP - PADC); "
             "[95% CI]" + ("; * hard target" if hard else ""))
     return "\n".join(tex) + "\n", note + "\n" + _text_table(head, text)
@@ -1451,7 +1453,8 @@ def table04(I):
     tex = ["% tools/paper_figs.py table04: the main-frame runs and decoded replays of table03",
            r"\begin{table*}[t]", r"\centering",
            r"\caption{The schedulers built on the abstraction, compared: the gain over PF in mean "
-           r"PSNR (dB) and over PADC in users at 30~dB (points), on the main frames ($K = 8$, "
+           r"PSNR (dB) and over PADC in the share of users at 30~dB (\% of the users), on the main "
+           r"frames ($K = 8$, "
            r"$T = 24$ unless noted); at the target the indices use the calibration-aware reward. "
            r"Simulated: 500 frames; decoded: 60 frames decoded by the codec. Under CQI errors and "
            r"outdated reports the indices' reward includes the reports' measured error, with no "
@@ -1470,8 +1473,8 @@ def table04(I):
                                        for s, c in cols]
     for kind, title, tex_title in (("mean", "mean PSNR over PF (dB)",
                                     r"Mean PSNR over PF (dB)"),
-                                   ("target", "users at 30 dB over PADC (points)",
-                                    r"Users at 30~dB over PADC (points)")):
+                                   ("target", "users at 30 dB over PADC (%)",
+                                    r"Users at 30~dB over PADC (\%)")):
         block = [r for r in rows if r[0] == kind]
         if not block:
             continue
@@ -1538,12 +1541,12 @@ def table05(I):
     tex = ["% tools/paper_figs.py table05: results/s22_gap_*.json, s23_gap_*.json, "
            "s24_soft_auto.json", r"\begin{table*}[t]", r"\centering",
            r"\caption{Everything tried on the gap at a 30~dB target: the Lagrangian index's gap "
-           r"to the Lagrangian bound per user (points of users at 30~dB), $K$ users and "
+           r"to the Lagrangian bound in the share of users at 30~dB (\% of the users), $K$ users and "
            r"$B = K/8$ resource units per slot, 95\% intervals over frames. Every variant decides "
            r"on the transmitter's calibrated curves except the oracle, which is given the true "
-           r"ones. The bound is computed on the programs' grid, 0.15--0.17 points below its "
+           r"ones. The bound is computed on the programs' grid, 0.15--0.17\% below its "
            r"limit: values just below zero are within that and the sampling error. Finer grids "
-           r"raise the bound by that much and leave the hard-target index 0.3--1.4 points worse "
+           r"raise the bound by that much and leave the hard-target index 0.3--1.4\% worse "
            r"in absolute terms: a sharper threshold stops more users exactly at 30~dB.}",
            r"\label{tab:variants}", r"\begin{tabular}{l" + "c" * len(Ks) + "}", r"\hline",
            "Variant & " + " & ".join(f"$K = {k}$" for k in Ks) + r" \\", r"\hline"]
@@ -1553,8 +1556,8 @@ def table05(I):
                    + " & ".join(cell(gap(rows, sc, p, k), True) for k in Ks) + r" \\")
         text.append([label] + [cell(gap(rows, sc, p, k), False) for k in Ks])
     tex += [r"\hline", r"\end{tabular}", r"\end{table*}"]
-    return ("\n".join(tex) + "\n", "gap to the bound per user (points at 30 dB) [95% CI]; the "
-            "bound on the programs' grid is 0.15-0.17 points low (below zero: within that)\n"
+    return ("\n".join(tex) + "\n", "gap to the bound in the share of users at 30 dB (%) [95% CI]; "
+            "the bound on the programs' grid is 0.15-0.17% low (below zero: within that)\n"
             + _text_table(["variant"] + [f"K = {k}" for k in Ks], text))
 
 

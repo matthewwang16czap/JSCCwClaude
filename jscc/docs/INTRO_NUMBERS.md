@@ -11,6 +11,12 @@ listed where they first appear.
 - **Simulated**: schedules scored on the fitted quality curves (`tools/schedule_sim.py`,
   `tools/rmab_scale.py`), paired by frame where two runs are compared.
 - **Decoded**: the codec itself decoded the schedules (`tools/replay_report.py`).
+- **Shares of users**: a share is the percentage of users whose decoded PSNR is at or above the
+  target at the deadline. The outline gives a difference between two shares in % of all users,
+  the difference of the two percentages. The tools print that difference with the unit `pts`
+  (percentage points). Example, entry 38: CLASP 78.0% of the users at 30 dB, the 3 dB-gap
+  code 80.4%; printed difference -2.394 pts, i.e. the gap code brings an extra 2.4% of the users
+  to 30 dB.
 - **Setup**, unless an entry says otherwise: Kodak (24 images), the snrc4 code, K = 8 users,
   T = 24 slots, mean SNRs U[0, 15] dB, i.i.d. Rayleigh block fading.
 
@@ -198,8 +204,8 @@ with it by COMMANDS 30.3 and 33.1).
 
 **19. "correlation 0.8"** (item 4): as entry 1.
 
-**20. "1.7-2.0 points"** (item 4: what a scheduler that takes the calibrated curves as exact
-loses at 30 dB). Simulated, 100 frames per K, B = K/8 units per slot. The calibration-aware
+**20. "an extra 1.7-2.0% of the users"** (item 4: the users a scheduler that takes the
+calibrated curves as exact leaves below 30 dB). Simulated, 100 frames per K, B = K/8 units per slot. The calibration-aware
 index minus the hard-target one, paired, at each cell size. `results/s24_soft_auto.txt`,
 COMMANDS 24.1 (printed by 24.4, sent back 2026-10-26):
 ```
@@ -288,7 +294,7 @@ and `results/s30_dec_e2.txt` report 1 (Kodak, 2 dB CQI error; COMMANDS 30.5 (5),
 ```
 From 0.512 to 0.631, i.e. 0.5-0.6.
 
-**30. "8-15 points more users to 30 dB than per-image rate selection"** (item 4, decoded, 60
+**30. "an extra 8-15% of the users to 30 dB over per-image rate selection"** (item 4, decoded, 60
 frames, paired by frame; PADC is the per-image rate selection [Zhang23]). `results/s30_direct.txt`
 reports 4 (Kodak fresh) and 5 (CLIC fresh), the `lagrange_soft` line against `padc`
 (sent back 2026-10-31):
@@ -318,7 +324,7 @@ summary: gap to the Lagrangian bound per user (dB)
     128  16      0.515      0.155      1.063      0.016      0.005      0.005
 ```
 
-**32. "within ±0.3 points from 16 users on"** (item 4: the gap to the bound at 30 dB).
+**32. "within ±0.3% of the bound from 16 users on"** (item 4: the gap to the bound at 30 dB).
 Simulated, 100 frames per K. `results/s24_soft_auto.txt`, the summary table (sent back 2026-10-26); the
 `lagrange_soft` column, K = 16 to 128:
 ```
@@ -396,7 +402,7 @@ paired. `results/s30_vs_digital.txt`, COMMANDS 30.5 (3), sent back 2026-10-31:
 ```
 +1.192 and +1.561: 1.2-1.6.
 
-**35. "13-16 points at 30 dB"** (item 4). `results/s33_csi.txt`, COMMANDS 33.3 (2)-(3), sent
+**35. "an extra 13-16% of the users at 30 dB"** (item 4). `results/s33_csi.txt`, COMMANDS 33.3 (2)-(3), sent
 back 2026-11-01:
 ```
 [e2] 30 dB: CLASP (measured spread) - digital  (share at 30 dB, 2000 frames, paired by frame)
@@ -410,7 +416,7 @@ back 2026-11-01:
 ```
 +12.744 and +15.825: 13-16.
 
-**36. "0.2 dB and 3.6 points with exact reports"** (item 4). `results/s30_vs_digital.txt`
+**36. "0.2 dB and 3.6% with exact reports"** (item 4). `results/s30_vs_digital.txt`
 (sent back 2026-10-31):
 ```
 [f] mean PSNR: CLASP - digital  (mean PSNR (dB), 2000 frames, paired by frame)
@@ -425,7 +431,7 @@ same, entry 33).
 Shannon capacity minus 3 dB (`--link shannon --gap-db 3 --harq ir`; COMMANDS 35.1). Its line
 prints `digital shannon + HARQ ir` (entry 38).
 
-**38. "2.4 points more users at 30 dB than CLASP with exact reports"** (item 4). Simulated, the
+**38. "an extra 2.4% of the users to 30 dB over CLASP with exact reports"** (item 4). Simulated, the
 same 2000 frames as CLASP, paired. `results/s35_gap3.txt`, COMMANDS 35.2 (2), sent back 2026-11-01:
 ```
 [f] 30 dB: CLASP - 3 dB-gap code + IR-HARQ  (share at 30 dB, 2000 frames, paired by frame)
@@ -433,12 +439,13 @@ same 2000 frames as CLASP, paired. `results/s35_gap3.txt`, COMMANDS 35.2 (2), se
   b: online_pf        80.4%   digital shannon + HARQ ir, fresh, exact reports   [s35_g_tgt_f.json] (best of padc, stop, online_pf)
   a - b: -2.394 pts [-2.856, -1.919]
 ```
--2.394, i.e. the gap code 2.4 points ahead.
+CLASP 78.0%, the gap code 80.4%; the paired difference -2.394: the gap code brings an extra 2.4%
+of the users to 30 dB.
 
 **39. "from 1 dB CQI errors or correlation 0.95 on"** (item 4): the conditions `[e1]` and
 `[r95]` of entry 40, the mildest of each kind.
 
-**40. "5-14 points"** (item 4). Same file (sent back 2026-11-01):
+**40. "an extra 5-14% of the users"** (item 4). Same file (sent back 2026-11-01):
 ```
 [e1] 30 dB: CLASP - 3 dB-gap code + IR-HARQ  (share at 30 dB, 2000 frames, paired by frame)
   a - b: +5.319 pts [+4.800, +5.844]
@@ -495,7 +502,7 @@ decoded, paired by frame: mean PSNR minus hf:lagrange's, 95% CI over frames
 
 **48. "0.5-0.6 dB over proportional fair"** (item 3): entry 29.
 
-**49. "8-15 points of users at 30 dB"** (item 3): entry 30.
+**49. "an extra 8-15% of the users at 30 dB"** (item 3): entry 30.
 
 **50. "from 0.21 to 0.005 dB per user between 8 and 128 users"** (item 3).
 `results/s22_scale_mean.txt`, the summary table (sent back 2026-10-25), the `lagrange` column at K 8 and
@@ -508,14 +515,16 @@ summary: gap to the Lagrangian bound per user (dB)
 ```
 0.207, rounded to 0.21; 0.005.
 
-**51. "within ±0.3 points from 16 users on"** (item 3): entry 32.
+**51. "within ±0.3% of the bound from 16 users on"** (item 3): entry 32.
 
-**52. "1.2-1.6 dB and 13-16 points with 2 dB CQI errors or reports aged to correlation 0.8"**
+**52. "1.2-1.6 dB and an extra 13-16% of the users at 30 dB with 2 dB CQI errors or reports aged
+to correlation 0.8"**
 (item 3): entries 34, 35; the settings, entries 18 and 1.
 
 **53. "Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB"** (item 3): entries 2 and 3.
 
-**54. "from 1 dB CQI errors or correlation 0.95 on ... by 5-14 points"** (item 3): entries 39
+**54. "from 1 dB CQI errors or correlation 0.95 on ... with an extra 5-14% of the users at 30 dB"**
+(item 3): entries 39
 and 40.
 
 **55. "0.21 dB"** (item 3): entry 41.
@@ -527,7 +536,7 @@ MIESM 0.29-0.34": entries 6, 9, 7, 10; "0.06-0.09 dB, bias within ±0.03 dB": en
 
 **57. Row (2):** "0.21 → 0.005 dB, 8 → 128 users": entry 50; "+0.5-0.6 dB over PF": entry 29.
 
-**58. Row (3), "+1.7 points over the hard target"** (decoded, 60 frames, paired by frame,
+**58. Row (3), "an extra 1.7% of the users at 30 dB over the hard target"** (decoded, 60 frames, paired by frame,
 Kodak with fresh reports). `results/s24_replays.txt`, the report of `s24_dec_auto.json` against
 the hard-target index `lagrange`, COMMANDS 24.4, sent back 2026-10-26:
 ```
@@ -547,10 +556,10 @@ results/s24_dec_auto.txt-  lagrange_soft users   480  actual  80.4%  predicted  
 ```
 `lagrange` (the hard target) 1.2%, `lagrange_soft` (calibration-aware) 0.0%.
 
-**60. Row (3), "+13.3 / +12.5 points over PADC at 2 dB CQI errors / r = 0.8 (decoded)"**:
+**60. Row (3), "an extra 13.3% / 12.5% over PADC at 2 dB CQI errors / r = 0.8 (decoded)"**:
 entry 30.
 
-**61. Row (3), "+1.2-1.6 dB and +13-16 points over digital (simulated)"**: entries 34 and 35.
+**61. Row (3), "+1.2-1.6 dB and an extra 13-16% over digital (simulated)"**: entries 34 and 35.
 
 **62. Row (3), "aged reports cost CLASP 0.6 dB, digital 1.9 dB"**: entries 2 and 3.
 
@@ -563,15 +572,15 @@ grep -n "levels\|averaging rule\|MMSE, kappa\|exponential (EESM)\|capacity (MIES
 grep -n "levels\|averaging rule\|MMSE, kappa\|exponential (EESM)\|capacity (MIESM-like)" results/s22_clic.txt          # 8-10
 grep -n -A 8 "12 decodes" results/s13_nested.txt results/s22_clic.txt     # 13-15
 grep -n "decoded histories" results/s30_direct.txt results/s30_dec_e2.txt results/s33_dec.txt   # 16-17
-grep -n "^K \|lagrange_soft - lagrange\|share at 30 dB\|sigma" results/s24_soft_auto.txt    # 20-21, 24
-grep -h "calibration-aware" results/s33_csi_*.txt                          # 24-25
-grep -n "minus pf's\|minus padc's\|^  lagrange \|^  lagrange_soft " results/s30_direct.txt results/s30_dec_e2.txt   # 27-28
-grep -n "minus old:padc's\|csi:lagrange_soft " results/s33_dec.txt          # 28
-grep -A 7 "^summary" results/s22_scale_mean.txt results/s24_soft_auto.txt  # 29-30, 47
-grep -A 3 "CLASP - digital" results/s30_vs_digital.txt                     # 31, 33-34
-grep -A 3 "CLASP (measured spread) - digital" results/s33_csi.txt          # 32-33
-grep -A 3 "3 dB-gap code" results/s35_gap3.txt                             # 35-38
-grep -n "minus hf:lagrange's\|lag:lagrange \|lagb:lagrange \|lagblind:lagrange " results/s30_codesign.txt   # 39-40
-grep -n "decoded histories\|minus lagrange's\|^  lagrange_soft " results/s24_replays.txt      # 55
-grep -A 8 "target 30 dB: share" results/s24_dec_auto.txt                   # 56
+grep -n "^K \|lagrange_soft - lagrange\|share at 30 dB\|sigma" results/s24_soft_auto.txt    # 20-21, 26
+grep -h "calibration-aware" results/s33_csi_*.txt                          # 26-27
+grep -n "minus pf's\|minus padc's\|^  lagrange \|^  lagrange_soft " results/s30_direct.txt results/s30_dec_e2.txt   # 29-30
+grep -n "minus old:padc's\|csi:lagrange_soft " results/s33_dec.txt          # 30
+grep -A 7 "^summary" results/s22_scale_mean.txt results/s24_soft_auto.txt  # 31-32, 50
+grep -A 3 "CLASP - digital" results/s30_vs_digital.txt                     # 33, 34, 36
+grep -A 3 "CLASP (measured spread) - digital" results/s33_csi.txt          # 33, 35
+grep -A 3 "3 dB-gap code" results/s35_gap3.txt                             # 38, 40
+grep -n "minus hf:lagrange's\|lag:lagrange \|lagb:lagrange \|lagblind:lagrange " results/s30_codesign.txt   # 41-42
+grep -n "decoded histories\|minus lagrange's\|^  lagrange_soft " results/s24_replays.txt      # 58
+grep -A 8 "target 30 dB: share" results/s24_dec_auto.txt                   # 59
 ```

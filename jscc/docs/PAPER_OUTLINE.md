@@ -21,23 +21,23 @@ Alternatives:
 
 ## Abstract (TWC: one paragraph, at most 250 words, no citations)
 
-Deep joint source-channel coding (JSCC) is designed and evaluated on single links, yet a
-cellular downlink serves many users slot by slot, through a scheduler, before a deadline.
-Scheduling needs the value of each slot to each user, which no model provides for a learned
-code. We show that a progressive learned code trained under slot-varying SNR
-obeys a link abstraction: its distortion is the source distortion plus a sensitivity-weighted
-sum of per-slot minimum mean-square-error terms. On two test sets it predicts held-out decodes
-within 0.055-0.083 dB, against 0.16-0.19 dB for EESM and 0.29-0.34 dB for MIESM given the same
-weights; a code trained at constant SNR obeys no such rule. Calibrated from 12 decodes per
-image, the abstraction reduces each user to a two-number state, and deadline scheduling becomes
-a finite-horizon restless bandit. We propose CLASP, a calibration-aware, link-abstraction-based
-scheduler that solves it with exact per-user dynamic programs, a Lagrangian bound on every
-causal scheduler and an index policy, and rewards the probability of reaching a quality target
-under the measured error of its own prediction, from the abstraction and the channel reports. Decoded, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair and brings
-8-15 points more users to 30 dB than per-image rate selection, with fresh, noisy or aged
-reports. Against digital transmission with CQI-table link adaptation and HARQ it leads by
-1.2-1.6 dB and 13-16 points under 2 dB CQI errors or aged reports. Training the code
-on the channel CLASP creates adds 0.21 dB.
+Deep joint source-channel coding (JSCC) is designed and evaluated on single links, yet a cellular
+downlink serves many users slot by slot, through a scheduler, before a deadline. Scheduling needs
+each slot's value to each user; no model provides it for a learned code. We show that a progressive
+learned code trained under slot-varying SNR obeys a link abstraction: its distortion is the source
+distortion plus a sensitivity-weighted sum of per-slot minimum mean-square-error terms. On two test
+sets it predicts held-out decodes within 0.055-0.083 dB, against 0.16-0.19 dB for EESM and 0.29-0.34
+dB for MIESM given the same weights; a constant-SNR-trained code obeys no such rule. Calibrated from
+12 decodes per image, the abstraction reduces each user to a two-number state, and deadline
+scheduling becomes a finite-horizon restless bandit. We propose CLASP, a calibration-aware,
+link-abstraction-based scheduler that solves it with exact per-user dynamic programs, a Lagrangian
+bound on every causal scheduler and an index policy, and rewards the probability of reaching a
+quality target under the measured error of its own prediction, from the abstraction and reports.
+Decoded, CLASP gains 0.5-0.6 dB of mean PSNR over proportional fair and brings an extra 8-15% of
+users to 30 dB over per-image rate selection, with fresh, noisy or aged reports. Against digital
+transmission with CQI-table link adaptation and HARQ it leads by 1.2-1.6 dB and 13-16% of users at
+30 dB under 2 dB CQI errors or aged reports. Training the code on the channel CLASP creates adds
+0.21 dB.
 
 **Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
 restless bandits, Lagrangian relaxation, index policies, imperfect CSI, HARQ, image
@@ -212,12 +212,12 @@ builds on.
 - **C. Quality target and latency** (fig04b: the gap per user against K; Table III: users at
   30 dB over PADC; fig08b: the share over 30 dB and the quality of the users below it, decoded;
   fig12: the frame length each needs (a, b) and users at 30 dB by each slot (c)).
-  - Table III, simulated: +12.7 points over PADC with fresh reports, +10.5 at 2 dB CQI error,
-    +10.3 at r = 0.8, +11.2 with 25% of slots lost, +11.5 at T 16, +9.5 on CLIC. Decoded:
-    +14.8 (Kodak), +13.3 (2 dB), +12.5 (r = 0.8), +8.1 (CLIC).
-  - Gap to the bound (fig04b): 0.84 points per user at K 8 and within ±0.3 from K 16 to 128,
-    inside the bound's own discretisation error (0.15-0.17); the calibration-aware Whittle index
-    stays 1.1-4.3 points away.
+  - Table III, users at 30 dB over PADC, simulated: +12.7% with fresh reports, +10.5% at 2 dB
+    CQI error, +10.3% at r = 0.8, +11.2% with 25% of slots lost, +11.5% at T 16, +9.5% on CLIC.
+    Decoded: +14.8% (Kodak), +13.3% (2 dB), +12.5% (r = 0.8), +8.1% (CLIC).
+  - Gap to the bound (fig04b): CLASP's share at 30 dB is 0.84% below the bound at K 8 and within
+    ±0.3% of it from K 16 to 128, inside the bound's own discretisation error (0.15-0.17%); the
+    calibration-aware Whittle index stays 1.1-4.3% below it.
   - Decoded, CLASP's schedules land on their prediction (80.4% decoded and predicted at 30 dB,
     0.0% of users predicted to reach it missed).
   - The share has a price for the users who miss: 0.26 dB of mean PSNR and +0.013 LPIPS
@@ -230,18 +230,19 @@ builds on.
     first decodable phase comes later (slot 7.75 against 6.54): CLASP waits for good slots.
 - **D. Imperfect CSI and the digital baseline** (fig14: CLASP, HEIC and the 3 dB-gap code, mean
   PSNR and users at 30 dB against σ and r; 2000 frames, paired).
-  - Against HEIC with IR-HARQ (its best policy and transmitter at each point): +0.20 dB and
-    +3.6 points with exact reports; +1.19 dB / +12.7 points at σ = 2 dB; +1.56 dB / +15.8 points
-    at r = 0.8; ahead at every σ and r run. Fresh → r = 0.8 costs CLASP 0.57 dB, digital
-    1.93 dB.
-  - Against the 3 dB-gap code with the same HARQ: it leads with exact reports (2.4 points at 30
-    dB; 0.64 dB of mean PSNR, unpaired); from σ = 1 dB or r = 0.95 on, CLASP leads it by +5.3 to
-    +13.7 points at 30 dB.
+  - Against HEIC with IR-HARQ (its best policy and transmitter at each point), mean PSNR and the
+    share of users at 30 dB: +0.20 dB and 78.0% against 74.4% with exact reports; +1.19 dB and
+    75.5% against 62.7% at σ = 2 dB; +1.56 dB and 70.6% against 54.8% at r = 0.8; ahead at every
+    σ and r run. Fresh → r = 0.8 costs CLASP 0.57 dB, digital 1.93 dB.
+  - Against the 3 dB-gap code with the same HARQ: it leads with exact reports (80.4% of the users
+    at 30 dB against CLASP's 78.0%; 0.64 dB of mean PSNR, unpaired); from σ = 1 dB or r = 0.95
+    on, CLASP leads it by 5.3-13.7% of the users at 30 dB.
   - With the reward's measured spread CLASP is the best JSCC target policy at every CSI
-    condition (+1.4 to +3.6 points over the planner, every interval above zero; decoded +3.3
-    [1.7, 5.2] at 2 dB). On aged reports the measured spread gains 1.9-5.7 points over the
+    condition (+1.4% to +3.6% of the users over the planner, every interval above zero; decoded
+    +3.3% [1.7, 5.2] at 2 dB). On aged reports the measured spread gains 1.9-5.7% over the
     curves' spread alone (with its better of no margin and a 0.5 dB margin).
-  - A decoder per length adds about 0.2 dB and 1.4-2.5 points to the JSCC leads (closed form).
+  - A decoder per length adds about 0.2 dB and 1.4-2.5% of the users to the JSCC leads (closed
+    form).
 - **E. Training the code on CLASP's channel** (fig15: the lift of the first phases against
   report age and K; the trained codes' κ and ρ: a table).
   - +0.21 dB on the same slots over the same-budget control, two seeds (+0.211, +0.206); CLASP's
@@ -254,21 +255,22 @@ builds on.
   appendix: everything else tried on the 30 dB gap; fig16, appendix: what a decoder per length or
   a model per CBR adds, by prefix length, with the length known in advance).
   - The calibration-aware reward (fig05a): CLASP's index with a hard target on the same
-    calibrated curves reaches 1.7-2.0 points fewer users at 30 dB from K 16 to 128 (0.75 at
-    K 8); with the calibration-aware reward it lands on what a hard target achieves on the true
-    curves (0.84, -0.10, -0.30, +0.01, -0.19 points from the bound against 0.84, -0.23, -0.27,
-    +0.06, -0.19) with the measured spread; with an assumed spread of 0.05, 0.1 or 0.2 dB it is
-    within ±0.3 points too at K 32 and 128 (fig05b).
-  - Decoded (Table II): +1.67 [0.42, 2.92] points on Kodak with 0.0% of users missed against
-    1.2%; at r = 0.8 with the reports' error in the spread +8.75 [6.04, 11.25] (the curves'
-    spread alone +0.62).
-  - Ruled out (Table V): margins (0.25 / 0.5 dB widen the gap to 2.97 / 6.47 points at K 8),
-    the relaxation's tie rule, the price solver, re-solving, finer grids.
-  - Decoders (fig16, Table I): one model per CBR is 0.175 dB / 3.3 points ahead of the single
-    decoder with known slots (decoded), but its length is fixed at encoding: with 25% of slots
-    lost the single decoder leads it by 0.53 dB (simulated), and a decoder per length by 0.78 dB / 1.9
-    points (decoded). A decoder per length adds 0.23 dB and 2.5-3 points at 6x the decoder
-    memory.
+    calibrated curves leaves an extra 1.7-2.0% of the users below 30 dB from K 16 to 128 (0.75%
+    at K 8). With the calibration-aware reward and the measured spread it lands on what a hard
+    target achieves on the true curves: gaps to the bound of 0.84%, -0.10%, -0.30%, +0.01% and
+    -0.19% at K 8 to 128, against 0.84%, -0.23%, -0.27%, +0.06% and -0.19%. With an assumed
+    spread of 0.05, 0.1 or 0.2 dB it is within ±0.3% too at K 32 and 128 (fig05b).
+  - Decoded (Table II): on Kodak 80.4% of the users at 30 dB against the hard target's 78.8%
+    (+1.67% [0.42, 2.92]), with 0.0% of the users missed against 1.2%; at r = 0.8, with the
+    reports' error in the spread, 72.1% against 63.3% (+8.75% [6.04, 11.25]; with the curves'
+    spread alone 64.0%, +0.62%).
+  - Ruled out (Table V): margins (0.25 / 0.5 dB widen the gap to the bound to 2.97% / 6.47% at
+    K 8), the relaxation's tie rule, the price solver, re-solving, finer grids.
+  - Decoders (fig16, Table I): one model per CBR is 0.175 dB and 3.3% of the users at 30 dB ahead
+    of the single decoder with known slots (decoded), but its length is fixed at encoding: with
+    25% of slots lost the single decoder leads it by 0.53 dB (simulated), and a decoder per length
+    by 0.78 dB and 1.9% of the users (decoded). A decoder per length adds 0.23 dB and 2.5-3.1% of
+    the users at 6x the decoder memory.
 
 ## VI. Conclusion (~0.3 page)
 
@@ -280,8 +282,8 @@ builds on.
 - Under the CSI real systems have, scheduled JSCC is ahead of digital with link adaptation and
   HARQ, and of an idealised 3 dB-gap code once reports are imperfect.
 - **Limitations.**
-  - With exact reports an idealised digital code 3 dB from capacity is ahead (2.4 points at 30
-    dB).
+  - With exact reports an idealised digital code 3 dB from capacity is ahead (80.4% of the users
+    at 30 dB against CLASP's 78.0%).
   - At a hard target CLASP buys the share with the quality of the users who miss (0.26 dB of
     mean PSNR, +0.013 LPIPS against the hard-target index).
   - The reward's spread is measured offline for a given CSI condition: the transmitter must know

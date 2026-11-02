@@ -6,9 +6,10 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 38 (CPU, ~2 min; no GPU): the redraw with the method's name, CLASP, in the
-legends; nothing to send back but a "skip" line, if any. Sections 0-36 are done (docs/NOTES.md
-6d-6k; the figures: docs/FIGURES.md, all reviewed); section 38 replaces 37.
+WHAT TO RUN: section 39 (CPU, ~2 min; no GPU): the redraw with CLASP in the legends and the
+shares of users in % (no "points"); nothing to send back but a "skip" line, if any. Sections 0-36
+are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md, all reviewed); section 39 replaces
+37 and 38.
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
 docs/INTRO_NUMBERS.md).
@@ -83,8 +84,10 @@ docs/INTRO_NUMBERS.md).
   36 redraw (fig15's blind-slot line)           done 2026-11-01 (fig12-fig16 reviewed)
   37 redraw: "proposed scheduler" in the       replaced by 38 (the same redraw)
      legends of fig08 and fig12
-  38 redraw: the method's name, CLASP, in      TO RUN (CPU, ~2 min)
+  38 redraw: the method's name, CLASP, in      replaced by 39 (the same redraw)
      the legends and Table III's caption
+  39 redraw: CLASP, and the shares of users     TO RUN (CPU, ~2 min)
+     in % instead of "points"
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -274,7 +277,7 @@ cat results/sched.txt results/replay.txt
 #     fixed_uni (equal shares, PF timing) checks whether online lengths matter at all.
 #   * --target Q: the share of users that reach Q dB. padc = PADC's per-image length at the
 #     mean SNR (plus shortest-first admission and PF timing); online = admission by remaining
-#     need + advantage timing + stopping on the realised SNRs; stand-in: +10-15 points.
+#     need + advantage timing + stopping on the realised SNRs; stand-in: +10-15%.
 # Then schedules of both are DECODED by the codec, with paired differences per frame.
 
 export JSCC_DATA_ROOT=$HOME
@@ -343,8 +346,8 @@ cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
 # Decision (docs/PROBLEM.md, section 5):
 #   P-C1  s7_mean, main case: slope_adv - pf >= +0.3 dB, AND decoded (s7_dec, first file,
 #         "minus pf's" block) >= +0.3 dB          -> the mean-quality claim is the index
-#   P-C2  s7_tgt, 30 dB: online - padc >= +5 points, AND decoded (the margin 0.2 file,
-#         "minus padc's" block) >= +5 points with 'missed' <= ~3% -> the QoS claim, the
+#   P-C2  s7_tgt, 30 dB: online - padc >= +5%, AND decoded (the margin 0.2 file,
+#         "minus padc's" block) >= +5% with 'missed' <= ~3% -> the QoS claim, the
 #         paper's lead
 #   both fail                                      -> the scheduling paper is off; I re-plan
 #         around the codec-side results (docs/ASSESSMENT.md)
@@ -355,7 +358,7 @@ cat results/s7_mean.txt results/s7_tgt.txt results/s7_dec.txt
     (except 8d, which did not run: replaced in section 10)
     (docs/NOTES.md "P1, step 3"; docs/PROBLEM.md gates P-C3 and P-D)
 --------------------------------------------------------------------------------
-# Section 7: the advantage index +0.465 dB over PF and online +10.0 points over PADC's rule,
+# Section 7: the advantage index +0.465 dB over PF and online +10.0% over PADC's rule,
 # both decoded. But the schedulers knew each image's fitted curves exactly, and 10% curve
 # errors halved the target lead. Here the transmitter knows only what it can measure itself:
 # kappa and rho from OTHER images, each image from 12 constant-SNR decodes of its own. Then
@@ -437,7 +440,7 @@ cat results/s8_calib.txt results/s8_belief.txt results/s8_corr.txt results/s8_di
 # and, if you have them: section 4b-4d's output, 7e's compare_runs table
 
 # Decision (docs/PROBLEM.md, section 5):
-#   P-C3  with the belief: slope_adv - pf >= +0.3 dB and online - padc >= +5 points, in the
+#   P-C3  with the belief: slope_adv - pf >= +0.3 dB and online - padc >= +5%, in the
 #         simulator (8b) and decoded (8e)  -> the schedulers need only what a base station
 #         can measure; else the paper needs a better transmitter-side estimate
 #   fading: the leads under --fade-corr 0.9 / 0.98 (8c) -- report whatever they are
@@ -914,7 +917,7 @@ cat results/s12_heads.txt results/s12_hd_fit.txt results/s12_hd_sched.txt     # 
      (docs/NOTES.md "P1, step 7"; docs/PAPER.md C5-C7)
 ================================================================================
 # Section 12: with the same slot planner, one model per CBR still leads the prefix code by
-# 1-4 points at the target when the slots are known; a decoder per received length behind the
+# 1-4% at the target when the slots are known; a decoder per received length behind the
 # one encoder recovers 79-101% of the nesting penalty at 2-4 phases and makes encode-once the
 # best JSCC system on mean PSNR and when slots are lost; at an equal 6-slot cap JSCC is ahead of
 # HEIC with ideal link adaptation, by small margins. Left:
@@ -1135,15 +1138,15 @@ cat results/s13_budget.txt results/s13_hf.txt                                  #
 
 # Decision (docs/PAPER.md C5-C7):
 #   C5  under 1-3 dB CQI errors: if JSCC's lead over HEIC (each at its best policy, digital at
-#       its tuned backoff) grows to >= 0.3 dB mean PSNR or >= 3 points at 30 dB at 2 dB, the
+#       its tuned backoff) grows to >= 0.3 dB mean PSNR or >= 3% at 30 dB at 2 dB, the
 #       separation claim becomes "ahead under realistic CSI"; else it stays "small margins"
 #   C6  FS - H at 1/24-1/12 (equal start, equal budget): <= ~0.05 dB -> a decoder per length
 #       closes the penalty where schedules live; larger -> that is the encoder's share, stated.
 #       HF's schedules against hd's: what the per-length decoders buy at equal training
 #   C7  which QoS policy holds up when the CQI is noisy (replan_adv expected)
-#   RL  rollout - base < ~0.1 dB and < ~2 points in every setting -> our rules are close to
+#   RL  rollout - base < ~0.1 dB and < ~2% in every setting -> our rules are close to
 #       the best causal policy for this model: say so (and a small RL check is a footnote,
-#       not the method). >= ~0.3 dB or >= ~5 points somewhere (noisy CQI, slow fading, lost
+#       not the method). >= ~0.3 dB or >= ~5% somewhere (noisy CQI, slow fading, lost
 #       slots, tight frames are the likely places) -> build an RL scheduler for those settings,
 #       trained on this model, with our rules as its baselines. optimum - base is what even
 #       perfect foresight adds (no causal policy reaches it); "bound - optimum" near 0
@@ -1351,10 +1354,10 @@ cat results/s14_pred.txt results/s14_loop.txt              # 14.4
 grep -A 26 "test on" logs_s14/gpu*.out | grep "snr  *7.0"   # each run's constant-SNR test at 7 dB
 
 # Decision (docs/PAPER.md C8-C10; docs/PROBLEM.md, section 7) -- 14.3a, decoded, same slots:
-#   CD1  sa - hf under slope_adv >= +0.3 dB, or sat - hf >= +3 points at 30 dB under replan_adv,
+#   CD1  sa - hf under slope_adv >= +0.3 dB, or sat - hf >= +3% at 30 dB under replan_adv,
 #        CI clear of 0: the code trained for the scheduler's channel carries the paper (the story
-#        of docs/PAPER.md). +0.1-0.3 dB / +1-3 points: a supporting result, not the headline.
-#        < +0.1 dB and < +1 point: the idea is dead; say so and fall back (docs/ASSESSMENT.md, 13)
+#        of docs/PAPER.md). +0.1-0.3 dB / +1-3%: a supporting result, not the headline.
+#        < +0.1 dB and < +1%: the idea is dead; say so and fall back (docs/ASSESSMENT.md, 13)
 #   CD2  sa - blind >= half of sa - hf: it is the scheduler's slot SELECTION the code adapts to
 #        (the endogenous-channel claim). blind ~ sa: it is the deployment's lengths and SNR
 #        range -- matched training, a weaker and older idea
@@ -1373,7 +1376,7 @@ grep -A 26 "test on" logs_s14/gpu*.out | grep "snr  *7.0"   # each run's constan
 # Section 14, decoded on the same slots: the code trained on slope_adv's channel (sa) beats the
 # same-budget control (hf) by +0.28 dB [0.27, 0.28] and the code trained on the physical channel
 # at the same lengths (blind) by +0.32; under PF slots its lead is +0.09; with its own scheduler
-# it is +0.35 dB over the original system. At 30 dB nothing: sat - hf +0.2 points. But slope_adv
+# it is +0.35 dB over the original system. At 30 dB nothing: sat - hf +0.2%. But slope_adv
 # gives 99.9% of users exactly 3 phases, so sa is also a 3-phase (1/16) specialist -- and
 # specialists beat a prefix code anyway (the nesting penalty, C6). Four fine-tunes, the same
 # recipe and budget as section 14, decide what the +0.28 is:
@@ -2096,8 +2099,8 @@ cat results/s19_stream.txt                                         # 19.3
      MARGINS -- DONE (docs/NOTES.md 5, 6b, 6c)
 ================================================================================
 # Why (sections 18-19 are recorded in docs/NOTES.md 5, 6b, 6c and docs/PAPER.md):
-# (1) C5 on stale reports is now the paper's strongest system result (JSCC +2.5 dB and +19
-#     points over HEIC at r = 0.8), but its digital side drops a block the slot could not
+# (1) C5 on stale reports is now the paper's strongest system result (JSCC +2.5 dB and +19%
+#     over HEIC at r = 0.8), but its digital side drops a block the slot could not
 #     carry. NR retransmits it and combines (HARQ), which is exactly what stale reports call
 #     for. tools/schedule_sim.py --harq does it: the user's next slot retransmits the block,
 #     and the receiver combines (ir: the transmissions' efficiency adds, ideal incremental
@@ -2244,7 +2247,7 @@ cat results/s20_margin.txt                                                      
 #         stale schedules serve slots where the curves are less accurate (deep fades); the
 #         stale-report table is then restated from the decodes.
 #   20.2  JSCC's lead over the best digital system with HARQ (naive or aware, its best policy)
-#         at r = 0.8 and at 2 dB of CQI error: if it stays at ~1 dB / 10 points or more, C5 is
+#         at r = 0.8 and at 2 dB of CQI error: if it stays at ~1 dB / 10% or more, C5 is
 #         stated with HARQ, the baseline NR would actually run (the old numbers become "without
 #         HARQ"). If HARQ closes most of it, C5 is restated: JSCC matches digital with HARQ
 #         without retransmissions or rate selection, and the abstract changes. Chase below IR
@@ -2401,7 +2404,7 @@ cat results/s21_latency_mean.txt results/s21_latency_tgt.txt                    
 ================================================================================
 # Why (docs/PAPER.md, "Owed before submission", items 2, 9 and 10). Without these the paper
 # cannot be written as planned:
-#   item 9   at 30 dB the Lagrangian index stays ~1.5 points per user below the bound at every
+#   item 9   at 30 dB the Lagrangian index stays ~1.5% below the bound at every
 #            K (section 18.3). The theory says a policy that follows the relaxation loses
 #            O(1 / sqrt(K)) per user, so either our policy does not follow it or the bound is
 #            loose. New code tests the four candidates on the same frames as 18.3:
@@ -2731,7 +2734,7 @@ cat results/s23_c5_single.txt
      (CPU: six background chains, ~1-3.5 h; GPUs 1-4: four decodes, ~20 min each)
 ================================================================================
 # Why (docs/NOTES.md 6e): at a hard 30 dB target the transmitter's calibration error costs
-# ~1.6 points per user at every K, and a uniform margin makes it worse. New: whittle_soft and
+# ~1.6% at every K, and a uniform margin makes it worse. New: whittle_soft and
 # lagrange_soft, the same indices on programs whose terminal reward is the probability that a
 # user's TRUE PSNR reaches 30 dB when the transmitter's curves are off by N(bias, sigma^2) dB,
 # instead of 1 if its PREDICTED PSNR does (alloc/whittle.soft_spread, Arm(soft=...)). sigma and
@@ -2739,7 +2742,7 @@ cat results/s23_c5_single.txt
 # fitted curves against the calibrated ones, which a transmitter learns by cross-validating its
 # calibration; or a number in dB). Unlike a margin, the hedge buys a phase only where success is
 # uncertain and cheap to secure. The bound and the score keep the hard target, so the gap to the
-# bound is directly comparable with 22.2a (hard, calibrated curves: 1.4-1.9 points per user) and
+# bound is directly comparable with 22.2a (hard, calibrated curves: 1.4-1.9%) and
 # 23.1a (hard, true curves: ~0 from K 16 on). The soft policies run beside the hard ones in every
 # run: the paired difference is the gain of the hedge.
 #   24.1  at scale (B = K/8): the measured sigma at K 8 ... 128, and a sweep of sigma (0.05, 0.1,
@@ -2849,7 +2852,7 @@ cat results/s24_main_soft.txt results/s24_main_soft_r80.txt
 
 # Decision (docs/PAPER.md C13, C7; owed item 13):
 #   24.1  lagrange_soft's gap to the bound (calibrated curves) against lagrange's: the share of
-#         the ~1.6 points per user it recovers, at the measured sigma and across the sweep. A
+#         the ~1.6% it recovers, at the measured sigma and across the sweep. A
 #         clear recovery (most of it, at every K) makes the calibration-aware Lagrangian index the
 #         paper's target scheduler, and the finding becomes "hard targets make the abstraction's
 #         calibration first-order, and a program that knows the calibration error recovers it".
@@ -2858,7 +2861,7 @@ cat results/s24_main_soft.txt results/s24_main_soft_r80.txt
 #         hard index was fragile; a soft index at or above plan_adv there would make it the one
 #         target policy for every condition (C7 simplified).
 #   24.3  decoded against the codec: lagrange_soft's share minus lagrange's (paired by frame),
-#         and how far each decodes below its prediction (the hard index: 1.3 points on Kodak).
+#         and how far each decodes below its prediction (the hard index: 1.3% on Kodak).
 #         The simulation's truth is the fitted curves; the decodes test the hedge against the
 #         codec itself, whose error the measured sigma does not include (hence sigma 0.15 too).
 
@@ -2902,7 +2905,7 @@ cat results/s25_figs.txt
 ================================================================================
 # Why: after the first review (figures 1-5) the calibration-aware Lagrangian index is the
 # proposed scheduler for a quality target and the hard-target index moves to an ablation
-# (docs/NOTES.md 6f: never worse on the share at 30 dB in any condition run, +1.7 points [0.4,
+# (docs/NOTES.md 6f: never worse on the share at 30 dB in any condition run, +1.7% [0.4,
 # 2.9] decoded on Kodak, 0.0% of users missed against 1.2%, the same computation; its price:
 # 0.22-0.25 dB lower mean PSNR, from the users who miss 30 dB anyway). The target figures now
 # show the indices in that form. Changes (docs/FIGURES.md has the list):
@@ -2972,7 +2975,7 @@ cat results/s26_tgt_lost.txt results/s26_tgt_t16.txt results/s26_tgt_clic.txt re
  27. DONE -- redraw the figures (CPU, ~1 min; no GPU)
 ================================================================================
 # Why: section 26 is recorded (docs/NOTES.md 6g: the calibration-aware index is best or tied
-# with exact reports in every condition; +2.1 / +2.3 / +0.7 points over the hard index with lost
+# with exact reports in every condition; +2.1% / +2.3% / +0.7% over the hard index with lost
 # slots / T 16 / CLIC; 24% fewer slots than online at T 16). Two drawing fixes: fig02 came out
 # 7.36 in wide (its panel (b) title was too long; (b) is now one line: the cost of piecewise
 # training against SNR at CBR 1/8), and fig12(b) now shows an arrow when PADC never reaches the
@@ -3275,7 +3278,7 @@ python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s3
 # Why: round 30 is in (docs/NOTES.md 6h; the Introduction's numbers: docs/INTRO_NUMBERS.md).
 # Three of its findings rest on differences of two means, without an interval of their own:
 #   - at the 30 dB target the planner (plan_adv) beats CLASP from 2 dB of CQI error and from
-#     r = 0.9, by 1.1-4.6 points (the "best JSCC" rows of 30.5 minus the "CLASP" rows);
+#     r = 0.9, by 1.1-4.6% (the "best JSCC" rows of 30.5 minus the "CLASP" rows);
 #   - on aged reports CLASP took a 0.5 dB stopping margin at r <= 0.8 and none at r >= 0.9
 #     (paired_runs printed only the better one);
 #   - after co-design the closed form with its own code (sa) ties CLASP with its own (lag):
@@ -3328,7 +3331,7 @@ ls figures/
 #   (4) co-design: sa:slope_adv minus lag:lagrange (the closed form with its own code against
 #       CLASP with its own; round 30: +0.012 dB from the means) with its interval.
 #   (5) the figures: fig14 is now CLASP against digital; table03 prints a decoded CQI 2 dB row
-#       (round 30.3: +0.51 dB over PF, +8.1 points over PADC), table04 a "dec CQI 2 dB" column.
+#       (round 30.3: +0.51 dB over PF, +8.1% over PADC), table04 a "dec CQI 2 dB" column.
 #       After these, the figures to review are fig12-fig16.
 
 ================================================================================
@@ -3336,8 +3339,8 @@ ls figures/
      (CPU only: 27 runs, 14 at a time, ~3 h; no GPU; no new code)
 ================================================================================
 # Why: round 31 confirmed with paired intervals (2000 frames) that at the 30 dB target the
-# planner (plan_adv) beats CLASP by 2.5 / 4.6 points at 2 / 3 dB CQI error and by 1.1-3.0
-# points at r <= 0.9, while CLASP leads with exact reports (+3.3), at 1 dB (+1.4) and at
+# planner (plan_adv) beats CLASP by 2.5% / 4.6% at 2 / 3 dB CQI error and by 1.1-3.0%
+# at r <= 0.9, while CLASP leads with exact reports (+3.3%), at 1 dB (+1.4%) and at
 # r = 0.95 (+0.6). The likely cause is the one behind the 30 dB gap of rounds 22-24 (NOTES 6e,
 # 6f): CLASP's programs stop a user once its PREDICTED PSNR reaches the target, and the
 # reward's spread is the curves' calibration error (0.03-0.05 dB), while noisy or aged reports
@@ -3407,7 +3410,7 @@ rm -f results/s32_soft.jsonl
 ================================================================================
 # Why: round 32 (NOTES 6i) found that the planner's lead at 30 dB under CSI errors came from
 # CLASP's reward spread being too narrow. With 0.5 dB CLASP beats the planner at every CSI
-# condition (+1.1 to +3.4 points), and any spread from 0.25 to 1 dB does nearly everywhere. But
+# condition (+1.1% to +3.4%), and any spread from 0.25 to 1 dB does nearly everywhere. But
 # a spread chosen on the test frames is a tuned number. New in the code: --soft-sigma csi, the
 # spread MEASURED offline the way --soft-sigma auto measures the curves' (random slot histories
 # over the image pool), with the transmitter's curves read at the SNRs it decides on under the
@@ -3542,11 +3545,11 @@ python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: Tables
 python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s34_figs.txt
 ls figures/
 
-# Reading: Table III's CQI 2 dB and r = 0.8 rows should now read about +10.5 / +10.3 points
+# Reading: Table III's CQI 2 dB and r = 0.8 rows should now read about +10.5% / +10.3%
 # simulated and +13.3 / +12.5 decoded at 30 dB (NOTES 6j); Table IV's Lagrangian index the best
 # in every 30 dB column but 25% of slots lost and T 16 (the calibration-aware Whittle index
-# 0.4 / 0.1 points ahead there, as in 6g); Table II's new row about 63.3 -> 72.1% (+8.75
-# points). After these, the figures to review are fig12-fig16 (fig14 now shows the new CLASP).
+# 0.4% / 0.1% ahead there, as in 6g); Table II's new row about 63.3 -> 72.1% (+8.75%).
+# After these, the figures to review are fig12-fig16 (fig14 now shows the new CLASP).
 
 ================================================================================
  35. DONE 2026-11-01 (docs/NOTES.md 6k) -- the figures under review: the proposed scheduler's
@@ -3705,7 +3708,7 @@ grep "skip" results/s37_figs.txt              # nothing; send me any line it pri
 # Reading: "14" (the figures and tables written) and no "skip" line.
 
 ================================================================================
- 38. TO RUN NOW -- redraw with the method's name, CLASP (CPU, ~2 min; nothing to send back)
+ 38. REPLACED BY 39 -- redraw with the method's name, CLASP (nothing to run: 39 repeats it)
 ================================================================================
 # Why: the method is named CLASP (Calibration-aware, Link-Abstraction-based Scheduling of
 # Progressive codes; docs/PAPER.md). The legends now read "CLASP (proposed)" (fig08, fig12),
@@ -3726,3 +3729,27 @@ python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s3
 grep "skip" results/s38_figs.txt              # nothing; send me any line it prints
 
 # Reading: "14" (the figures and tables written) and no "skip" line.
+
+================================================================================
+ 39. TO RUN NOW -- redraw: CLASP, and the shares of users in % (CPU, ~2 min; nothing to send back)
+================================================================================
+# Why: the figures and tables wrote a difference between two shares of users (a gain over PADC,
+# a gap to the bound) in "points" (percentage points). They now write it in %, the difference of
+# the two percentages: fig04(b) and fig05's axes read "gap to the bound (% of users)", fig08(b)'s
+# note "+14.8% of users at 30 dB [...]", and Tables II-V's headers and captions "(%)" with the
+# definition. The legends name CLASP (section 38). Nothing is simulated again; the numbers are
+# the same. It replaces sections 37 and 38 (the same redraw).
+
+# 39.0 -- pull and checks (~5 min CPU) --------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed"
+
+# 39.1 -- the redraw (CPU, ~1 min) -------------------------------------------------------------
+python tools/paper_figs.py --results results --out figures 2>&1 | tee results/s39_figs.txt | grep -c "wrote"
+grep "skip" results/s39_figs.txt              # nothing; send me any line it prints
+
+# Reading: "14" (the figures and tables written) and no "skip" line. To look at the new labels:
+# figures/fig04_scaling.png, figures/fig05_ablation_calibration.png, figures/fig08_users.png.
