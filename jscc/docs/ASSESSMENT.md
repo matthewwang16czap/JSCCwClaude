@@ -54,7 +54,7 @@ IEEE Transactions on Wireless Communications (TWC).
    on a stand-in utility; COMMANDS.txt section 7 decides them on the real utility and by
    decoding. If both fail, the scheduling paper is off.
 10. **Both pass, decoded by the codec (section 7):** the advantage index +0.465 dB mean PSNR
-   over PF; online admission + stopping +10.0 points of users at a 30 dB target over PADC's
+   over PF; online admission + stopping +10.0% of users at a 30 dB target over PADC's
    per-image rule. The paper: a link-to-system abstraction for prefix DeepJSCC under
    slot-varying SNR (piecewise training + the additive utility, 0.06-0.09 dB on real
    schedules) and the two schedulers it enables. Still owed before writing: a realistic
@@ -62,8 +62,8 @@ IEEE Transactions on Wireless Communications (TWC).
    nesting penalty (section 4's results), correlated fading, and the codec gap.
 11. **After the baselines (sections 10-12, `docs/NOTES.md` P1 steps 5-7):** P-C3 passes; against
    HEVC intra with ideal link adaptation at an equal per-user cap JSCC is ahead by small
-   margins (+0.14 to +0.34 dB mean, +0.5 to +10.5 points at the target), not by a clear one;
-   one model per CBR beats the prefix code with known slots (+1.0 to +4.4 points with the same
+   margins (+0.14 to +0.34 dB mean, +0.5% to +10.5% at the target), not by a clear one;
+   one model per CBR beats the prefix code with known slots (+1.0% to +4.4% with the same
    planner) and loses when slots can be lost. A decoder per received length behind the one
    encoder recovers most of the penalty at 2-4 phases and makes encode-once the best JSCC
    system on mean PSNR and under lost slots. The paper is framing B: the abstraction and the
@@ -72,7 +72,7 @@ IEEE Transactions on Wireless Communications (TWC).
    the codec comparison, theory for the schedulers.
 12. **Is it research or engineering? (2026-10-13)** As packaged so far it reads as engineering:
    a codec trick, a fitted curve, heuristic schedulers, many baselines. Each part is a modest
-   "first X for Y"; the gains are moderate (+0.46 dB, +11 points); digital is beaten only by
+   "first X for Y"; the gains are moderate (+0.46 dB, +11%); digital is beaten only by
    small margins; and our own bounds now say the heuristic is near-optimal, so there is no new
    algorithm that wins big. A TWC reviewer would likely call it incremental. What is new and
    could carry a story is one finding with consequences: a learned JSCC code admits a link
@@ -106,7 +106,7 @@ IEEE Transactions on Wireless Communications (TWC).
    found trains a learned code on a scheduler-induced channel (docs/SURVEY.md, F3); our
    abstraction is what makes each round cheap. It is a claim about learned codes in networks,
    not a component, and it is falsifiable in one GPU round (COMMANDS.txt section 14: hf / blind
-   / sa / sat, decoded on the same slots). Pre-registered: >= +0.3 dB or >= +3 points over
+   / sa / sat, decoded on the same slots). Pre-registered: >= +0.3 dB or >= +3% over
    the same-budget control carries the paper; +0.1-0.3 dB supports it; < +0.1 dB kills it.
    The main risk: wide-SNR training is known to land close to matched training, so the gain
    may be small; and if blind ~ sa the effect is matched training (an older idea), not the
@@ -118,7 +118,7 @@ IEEE Transactions on Wireless Communications (TWC).
    code trained on the channel slope_adv makes is +0.28 dB over the same-budget control and
    +0.32 over the code trained on the physical channel at the same lengths (which is even below
    generic training); its lead shrinks to +0.09 under PF slots; with its own scheduler it is
-   +0.35 dB over the original system. The QoS half fails (+0.2 points at 30 dB), and one round
+   +0.35 dB over the original system. The QoS half fails (+0.2% at 30 dB), and one round
    reaches the fixed point (the scheduler's channel barely moves after retraining), so the
    "co-design game" is shallow: what survives is MAC-aware training. One confound decides it:
    slope_adv gives every user exactly 3 phases, so the winning code is also a 3-phase
@@ -146,7 +146,7 @@ IEEE Transactions on Wireless Communications (TWC).
    piecewise-trained learned code admits its own link abstraction -- slots add as
    sensitivity-weighted MMSEs, 0.055 dB held-out, ~9x more accurate than MIESM -- across three
    code families, and a constant-SNR-trained code obeys none (C12). Under realistic CSI the
-   separation comparison turns decisive: with 2 dB CQI errors JSCC is +1.6 dB and +15 points
+   separation comparison turns decisive: with 2 dB CQI errors JSCC is +1.6 dB and +15%
    ahead of HEIC with tuned link adaptation, ahead of a 3 dB-gap code from 1 dB of error on
    (C5). The scheduler is certified within 0.26 dB of the best causal policy for the mean, with
    a clean Whittle/restless-bandit account (C13); per-length decoders tie per-CBR codes at the
@@ -192,8 +192,7 @@ IEEE Transactions on Wireless Communications (TWC).
    stronger. (a) The theory's regime: with B = K/8 units per slot the programs' Lagrangian
    index closes on the bound, 0.21 dB at 8 users to 0.005 at 128, and stays the best policy on
    stale reports; C13 gains its asymptotic claim, measured. (b) The physical axis of C5: JSCC's
-   lead over digital grows with report age, +0.3 dB with fresh reports to +2.5 dB and +19
-   points at r = 0.8 (about 10 km/h with 5 ms-old reports at 3.5 GHz): the paper's strongest
+   lead over digital grows with report age, +0.3 dB with fresh reports to +2.5 dB and +19% at r = 0.8 (about 10 km/h with 5 ms-old reports at 3.5 GHz): the paper's strongest
    system result. (c) The latency budget: 9-19% fewer slots than PF for the same mean PSNR,
    39% fewer than PADC for the same share at 30 dB. The corrections: our closed form is not
    the scheduler to recommend at scale (it plateaus 0.15 dB from the bound; the programs'
@@ -221,13 +220,12 @@ IEEE Transactions on Wireless Communications (TWC).
    paper's spine (C12, C13, C14) does not depend on it, but "why JSCC in a downlink" does.
 20. **Section 20 measured (2026-10-20): C5 survives HARQ, and the scheduler question is settled.**
    With incremental-redundancy HARQ, tuned for it, digital recovers 0.3 dB at 2 dB CQI error and
-   0.75 dB at r = 0.8, far less than the toy codec suggested: JSCC still leads by +1.3 dB / +13
-   points and +1.7 dB / +15.5 points, and leads a 3 dB-gap code with HARQ from r = 0.95. The
+   0.75 dB at r = 0.8, far less than the toy codec suggested: JSCC still leads by +1.3 dB / +13% and +1.7 dB / +15.5%, and leads a 3 dB-gap code with HARQ from r = 0.95. The
    reason is clean: JSCC loses 0.5 dB from fresh reports to r = 0.8, digital 1.9 dB even with
    HARQ. Those are now the numbers to quote; the +2.5 dB of entry 19 becomes "without HARQ". The
    stale-report schedules decode as simulated (decoded slope_adv - PF +0.50 dB at r = 0.8,
    model error unbiased, MAE 0.08-0.12 dB), so C5's physical axis rests on the codec. The
-   Lagrangian index brings the most users to 30 dB (+2.8 points over the Whittle index) and is
+   Lagrangian index brings the most users to 30 dB (+2.8% over the Whittle index) and is
    ahead of PADC at every slot; the Whittle index is earlier. That makes the Lagrangian index
    the paper's scheduler, with the closed form as its approximation and the Whittle index as
    the earliness option; section 21 runs it on the main frames and decodes it. On stale
@@ -298,7 +296,7 @@ IEEE Transactions on Wireless Communications (TWC).
    30 dB gap is a total gap linear in K, which no LP-compatible policy has, and the likely cause
    is our tie rule among users indifferent at the bound's prices (a priority order, where the
    theory needs the relaxation's own fractions); a stand-in check puts the price-solver slack at
-   only ~0.15 points per user. Final verdict: the method is imported, the arm and the evidence
+   only ~0.15%. Final verdict: the method is imported, the arm and the evidence
    for it are new, and four claims rest on abstracts (Fu and van der Schaar 0903.0207, the two
    EESM preprints, Mohajer et al.); they are worded "to our knowledge" or conceded
    (docs/PAPER.md, owed item 12). Next technical step: the 30 dB diagnosis (owed item 9).
@@ -322,9 +320,9 @@ IEEE Transactions on Wireless Communications (TWC).
    columns in the main tables.
 28. **All of it measured (2026-10-25, COMMANDS 21-23; docs/NOTES.md 6d, 6e).** The Lagrangian
    index is the paper's scheduler: best for the mean in every main-frame setting, decoded +0.06 /
-   +0.12 dB over our closed form (Kodak / CLIC), +11.5-12.3 points over PADC at 30 dB. The flat
+   +0.12 dB over our closed form (Kodak / CLIC), +11.5-12.3% over PADC at 30 dB. The flat
    30 dB gap was not the policy: given its own curves the index meets the bound from K 16 on, and
-   the gap was the cost of the transmitter's calibration error, ~1.6 points per user at a hard
+   the gap was the cost of the transmitter's calibration error, ~1.6% at a hard
    target at every K (nothing for the mean), which uniform margins worsen. That turns a weakness
    into a finding the paper can state: hard QoS targets make link-abstraction calibration
    first-order. CLIC repeats the abstraction (MMSE 0.083 dB vs MIESM 0.44) and the decoded gains;
@@ -335,10 +333,10 @@ IEEE Transactions on Wireless Communications (TWC).
    optional.
 29. **The calibration-aware reward closes the target gap (2026-10-26, COMMANDS 24; NOTES 6f).**
    Rewarding the probability of success under the curves' measured 0.03-0.05 dB error, instead
-   of 1 at the predicted threshold, recovers 100% of the cost at K 8 and 99% pooled over K 16-128 (~1.6 points per user): on
+   of 1 at the predicted threshold, recovers 100% of the cost at K 8 and 99% pooled over K 16-128 (~1.6%): on
    the transmitter's calibrated curves the Lagrangian index is now as close to the bound as the
    hard index given the true curves; an assumed spread of 0.05-0.2 dB does as well at K 32 and 128. Decoded it
-   adds +1.7 points over the hard index (+14.8 over PADC on Kodak) and its schedules decode
+   adds +1.7% over the hard index (+14.8 over PADC on Kodak) and its schedules decode
    exactly as predicted (0.0% missed). C13 holds for both objectives on the transmitter's own
    information; the finding the paper keeps is that a hard target makes the abstraction's
    calibration first-order, and that knowing its spread is enough. Under CQI errors and stale

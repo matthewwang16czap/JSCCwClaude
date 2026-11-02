@@ -1,6 +1,9 @@
 # Results notes (condensed 2026-10-15; later rounds added as sections 6b-6k, the last 2026-11-01)
 
 What the experiments established, by topic; the last section indexes every experiment round.
+At a quality target a result is a share: the percentage of users whose decoded PSNR reaches the
+target. A difference between two shares (a gain over PADC, a gap to the bound) is the difference
+of the two percentages, in % of all users; the tools print it as `pts`.
 The full, chronological notes (970 lines, every table) are in git: `git show ec9cc68:jscc/docs/NOTES.md`.
 
 Unless stated: Kodak (24 images); the snrc4 ViT (below); K = 8 users, T = 24 slots (3 phases
@@ -67,7 +70,7 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
   +0.05 dB: the gain is in valuing slots in quality (users near saturation take bad slots) and
   by position (sensitive head phases wait for peaks).
 * **Quality target** (share of users reaching 30 dB): `online` (admission by remaining need,
-  stopping on the realised slot SNRs, index timing) **+11.0 points [8.3, 13.8] decoded** over
+  stopping on the realised slot SNRs, index timing) **+11.0% [8.3, 13.8] decoded** over
   PADC's per-image rule (+14 over PF). Parts: per-image sizing +5, stopping +4, timing +3,
   admission +2 (+11 in tight frames). Slot planners: `plan_adv` (plan the spare slots before
   the frame) best with known slots and under CQI errors; `replan_adv` best with lost slots.
@@ -75,16 +78,16 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 
   | | mean PSNR | share at 30 dB |
   |---|---|---|
-  | one rollout step on our rule (achievable, causal) | +0.04 dB | +0.7 to +2.0 points |
-  | Lagrangian upper bound on ANY causal scheduler | +0.26 dB | +5.5 points |
-  | clairvoyant optimum (all SNRs known; certified, bound - optimum <= 0.001 dB) | +0.23 dB | +4.7 to +5.9 points |
-  | the same slots with phases mapped by sensitivity (ex post) | +0.13 dB | +3.0 to +4.3 points |
+  | one rollout step on our rule (achievable, causal) | +0.04 dB | +0.7% to +2.0% |
+  | Lagrangian upper bound on ANY causal scheduler | +0.26 dB | +5.5% |
+  | clairvoyant optimum (all SNRs known; certified, bound - optimum <= 0.001 dB) | +0.23 dB | +4.7% to +5.9% |
+  | the same slots with phases mapped by sensitivity (ex post) | +0.13 dB | +3.0% to +4.3% |
 
   With the nested model a user's state is two numbers and the frame is a finite-horizon
   restless bandit; the Whittle index policy equals our rule (+0.005 dB; +0.15 dB with 25% lost
   slots). Slot counts: the greedy quotas equal the exact DP in 100% of frames. So: for the mean,
   our rule is certified within 0.26 dB of the best causal scheduler; for the target the gap is
-  2-5.5 points, and the largest piece a causal rule could still take is the phase-to-slot
+  2-5.5%, and the largest piece a causal rule could still take is the phase-to-slot
   mapping (a sequential-assignment rule, owed).
 
 ## 4. Prefix code, a decoder per length, one model per CBR
@@ -100,7 +103,7 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
   | mean PSNR, decoded | 31.59 | **31.82** | 31.76 |
   | 30 dB, decoded (best policy) | 77.7% | 80.2-80.8% | **81.0%** (tie with hd) |
   | 25% of slots lost: mean / 30 dB | 30.16 / 69.4% | **30.35 / 71.7%** | 29.62 / 68.9% |
-  | 25% lost, decoded, hd minus per-CBR | | **+0.78 dB, +1.9 points** | |
+  | 25% lost, decoded, hd minus per-CBR | | **+0.78 dB, +1.9%** | |
 
   Encode once with a decoder per length is the best JSCC system on mean PSNR and when slots can
   be lost (a fixed-length code cut short decodes nothing); per-CBR codes only tie it at the
@@ -109,7 +112,7 @@ decides the abstraction. The nested form (one master rho for all lengths) costs 
 ## 5. Against digital (HEVC intra / HEIC + link adaptation, same schedulers, 6-slot cap)
 
 The JSCC numbers in this section are the per-length decoders' (hd). With the single decoder, the
-paper's main system, see section 6e: every lead is about 0.2 dB (0.16-0.21) and 1.4-2.5 points smaller, and
+paper's main system, see section 6e: every lead is about 0.2 dB (0.16-0.21) and 1.4-2.5% smaller, and
 the verdict is the same.
 
 | CQI error sd (dB) | 0 | 1 | 2 | 3 |
@@ -117,14 +120,14 @@ the verdict is the same.
 | mean PSNR, hd / HEIC + CQI table / 3 dB-gap code | 31.63 / 31.29 / 32.13 | 31.59 / 30.59 / 31.12 | 31.48 / 29.84 / 30.26 | 31.33 / 29.02 / 29.44 |
 | hd minus HEIC (dB) | +0.34 | +1.00 | **+1.64** | +2.31 |
 | at 30 dB, hd / HEIC / gap-3 | 77.2 / 74.4 / 80.4 | 76.9 / 67.7 / 71.7 | 75.6 / 61.1 / 63.9 | 73.2 / 54.3 / 56.7 |
-| hd minus HEIC (points) | +2.8 | +9.2 | **+14.5** | +18.9 |
+| hd minus HEIC (%) | +2.8 | +9.2 | **+14.5** | +18.9 |
 
 With error-free CQI JSCC is on par (a code 3 dB from capacity is 0.5 dB ahead). With errors
 (decisions on the reports; JSCC decodes at the true SNR, digital backs off 1-6 dB at its best,
 tuned per policy, and still loses 2-17% of its blocks) JSCC loses 0.3 dB from 0 to 3 dB, digital
 2.3 dB: from 1 dB of CQI error on, JSCC is ahead even of the 3 dB-gap code. These digital
 numbers have no HARQ (a lost block's slot is wasted); with it see below (the stale-report
-paragraph): the lead at 2 dB is +1.33 dB / +12.9 points.
+paragraph): the lead at 2 dB is +1.33 dB / +12.9%.
 
 **Stale reports: the physical axis (COMMANDS 18.1, 2026-10-19).** A report taken tau before its
 slot has correlation r = |J0(2 pi f_D tau)| with it (3.5 GHz, 5 ms-old reports: r 0.98 at 3 km/h,
@@ -141,9 +144,9 @@ the slot cannot carry is lost):
 | hd minus HEIC (dB) | +0.34 | +1.44 | +1.89 | **+2.48** | +3.27 | +3.96 | +3.48 |
 | hd minus the 3 dB-gap code (dB) | -0.50 | +0.99 | +1.44 | +2.06 | +2.88 | +3.57 | +4.07 |
 | at 30 dB, hd / HEIC (%) | 77.2 / 74.4 | 75.4 / 63.0 | 73.9 / 58.2 | 70.3 / 51.2 | 64.0 / 43.7 | 59.4 / 41.0 | 56.7 / 40.9 |
-| hd minus HEIC (points) | +2.8 | +12.4 | +15.7 | **+19.1** | +20.3 | +18.4 | +15.8 |
+| hd minus HEIC (%) | +2.8 | +12.4 | +15.7 | **+19.1** | +20.3 | +18.4 | +15.8 |
 
-Without HARQ (the table above) JSCC leads by ~2.6 dB and ~19 points at 10 km/h with 5 ms-old
+Without HARQ (the table above) JSCC leads by ~2.6 dB and ~19% at 10 km/h with 5 ms-old
 reports (r ~0.76). From r = 1 to 0 JSCC loses 1.6 dB, HEIC 4.8 (its backoff grows to 2-7 dB and it
 still loses 7-50% of its blocks).
 
@@ -160,19 +163,19 @@ and transmitter at each point; the JSCC numbers are those above (a prefix has no
 | hd minus HEIC + HARQ (dB) | +0.34 | +1.32 | +1.56 | **+1.73** | +1.69 | +1.49 | +1.25 |
 | hd minus the gap code + HARQ (dB) | -0.50 | +0.86 | +1.19 | +1.38 | +1.42 | +1.31 | +1.13 |
 | at 30 dB, HEIC + HARQ (%) | 74.4 | 63.6 | 59.5 | 54.8 | 49.8 | 46.8 | 47.0 |
-| hd minus HEIC + HARQ (points) | +2.8 | +11.8 | +14.4 | **+15.5** | +14.2 | +12.6 | +9.7 |
+| hd minus HEIC + HARQ (%) | +2.8 | +11.8 | +14.4 | **+15.5** | +14.2 | +12.6 | +9.7 |
 
 | CQI error sd (dB) | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
 | mean PSNR, HEIC + HARQ / gap code + HARQ | 31.29 / 32.13 | 30.68 / 31.15 | 30.15 / 30.53 | 29.73 / 30.04 |
 | hd minus HEIC + HARQ (dB) | +0.34 | +0.91 | **+1.33** | +1.60 |
 | hd minus the gap code + HARQ (dB) | -0.50 | +0.44 | +0.96 | +1.29 |
-| at 30 dB, HEIC + HARQ (%) / hd minus it (points) | 74.4 / +2.8 | 68.4 / +8.5 | 62.7 / **+12.9** | 58.1 / +15.1 |
+| at 30 dB, HEIC + HARQ (%) / hd minus it (%) | 74.4 / +2.8 | 68.4 / +8.5 | 62.7 / **+12.9** | 58.1 / +15.1 |
 
 HARQ takes 0.3 dB off the CQI-error lead at 2 dB and 0.75 dB off the stale-report lead at
 r = 0.8, far less than a toy codec suggested (it recovered half of digital's loss there): even
 with IR, HEIC loses 1.9 dB from fresh reports to r = 0.8, JSCC 0.5. So at 10 km/h with 5 ms-old
-reports JSCC leads HEIC with HARQ by ~1.7 dB and ~15 points, at 3 km/h by ~0.7 dB, and a code
+reports JSCC leads HEIC with HARQ by ~1.7 dB and ~15%, at 3 km/h by ~0.7 dB, and a code
 3 dB from capacity with HARQ from r = 0.95 (+0.9 dB) and from 2 dB of CQI error (+1.0). The
 tuned digital transmitter turns bold with HARQ (greedy's aware rate up to 7 dB above its
 single-transmission goodput optimum at r = 0.4; 30-60% of its slots then decode no block).
@@ -209,7 +212,7 @@ side of the stale-report axis holds as decoded.
   constant SNR. The slots' order is a third of it (a bank with each user's phases shuffled over
   its own slots keeps +0.08). With 16 users +0.15.
   A PF-trained code wins under PF slots (+0.18 over hf; sa +0.09): a code per scheduler. At the
-  30 dB target nothing (+0.2 points): that scheduler's channel is close to the usual one.
+  30 dB target nothing (+0.2%): that scheduler's channel is close to the usual one.
   Re-planning for the retrained code barely moves the channel (99.7% of users keep their
   length): one round is the fixed point.
 * **The codes learn their scheduler** (fits of eight codes): kappa rises as deep fades get rarer
@@ -255,16 +258,16 @@ random-order baseline.
   | PADC, naive / aware | 67.8 | 66.5 / 66.1 | 65.0 / 64.8 | 62.9 / 62.1 | 59.3 / 58.8 | 57.3 / 57.5 | 56.1 / 56.7 |
 
   A user served at a reported peak looks done although its true slot was worse: naive online
-  loses 7 points already at r = 0.95 and falls below PADC by r = 0.8 (replan_adv, which also
+  loses 7% already at r = 0.95 and falls below PADC by r = 0.8 (replan_adv, which also
   stops on the reports, the same). Deciding on the posterior and planning the spare slots
-  before the frame (plan_adv, aware) keeps +8 points over PADC to r = 0.8 and +5 at r = 0.6; at
+  before the frame (plan_adv, aware) keeps +8% over PADC to r = 0.8 and +5 at r = 0.6; at
   r = 0 PADC is best. At r = 0 with an aware transmitter every advantage index tied and the
   first user took every spare slot (padc_adv mean PSNR 26.4 dB); ties now go to PF.
   Rerun after the fix (COMMANDS 20.4b): padc_adv = padc (56.7%), online 51.9% (53.0 before),
   plan_adv 54.4% unchanged, every mean-PSNR policy 30.00 dB; PADC stays best at r = 0.
 * **Decoded at r = 0.8 / 0.6** (COMMANDS 20.1, aware, 60 frames): PADC 62.1 / 60.2%, online 68.5
   / 60.0%, plan_adv 72.7 / 65.4% at 30 dB decoded (predicted 63.3 / 67.9 / 72.7 and 61.9 / 59.8 /
-  66.0); plan_adv - PADC +10.6 points [7.5, 14.0] and +5.2 [1.7, 8.8], online - PADC +6.5 [3.1,
+  66.0); plan_adv - PADC +10.6% [7.5, 14.0] and +5.2 [1.7, 8.8], online - PADC +6.5 [3.1,
   10.2] and -0.2 [-3.8, +3.5]. As simulated: plan the spare slots, decide on the posterior.
 * **Margins** (COMMANDS 20.4a, 2000 frames; every policy aims at 30 + m dB):
 
@@ -279,9 +282,9 @@ random-order baseline.
   A margin is what stale reports call for: the reported SNRs of the slots a user was served in
   are biased up (it was served at its reported peaks), so the model's stopping point is early.
   1 dB brings naive online back above PADC at r = 0.8 (66.1 vs 63.0; not at 0.6), and the best
-  rule gains +0.5 / +0.8 / +2.6 points over margin 0 (best JSCC 75.9 / 71.1 / 66.6%, against
-  PADC's best +9.4 / +8.1 / +6.4 points; the margin is chosen on the evaluation frames, a mild
-  optimism). PADC gains at most 0.9 points from a margin. The rule: decide on the posterior, plan the
+  rule gains +0.5% / +0.8% / +2.6% over margin 0 (best JSCC 75.9 / 71.1 / 66.6%, against
+  PADC's best +9.4% / +8.1% / +6.4%; the margin is chosen on the evaluation frames, a mild
+  optimism). PADC gains at most 0.9% from a margin. The rule: decide on the posterior, plan the
   spare slots, aim 0.5-1 dB above the target.
 * **The bound and the indices on stale reports** (K 8, nested utility, 300 frames, mean): the
   bound falls with r (31.68 / 31.43 / 30.85 / 30.18 dB at r = 1 / 0.9 / 0.7 / 0.4) and our rule's
@@ -299,14 +302,14 @@ random-order baseline.
   |---|---|---|---|---|---|
   | gap to the bound, mean PSNR (dB): Lagrangian / Whittle / ours / PF | 0.207 / 0.265 / 0.267 / 0.710 | 0.090 / 0.130 / 0.211 / 0.610 | 0.039 / 0.066 / 0.178 / 0.571 | 0.009 / 0.029 / 0.152 / 0.529 | 0.005 / 0.016 / 0.155 / 0.515 |
   | the same, ID / random guided (dB) | 0.580 / 0.564 | 0.389 / 0.358 | 0.245 / 0.243 | 0.160 / 0.137 | 0.110 / 0.090 |
-  | gap at 30 dB (points): Lagrangian / Whittle / ID / random / PF | 1.6 / 5.7 / 4.3 / 5.1 / 14.7 | 1.9 / 4.1 / 3.5 / 4.2 / 14.1 | 1.4 / 3.0 / 3.0 / 3.6 / 14.4 | 1.7 / 2.9 / 3.0 / 3.1 / 13.8 | 1.5 / 2.4 / 2.6 / 3.1 / 13.2 |
+  | gap at 30 dB (%): Lagrangian / Whittle / ID / random / PF | 1.6 / 5.7 / 4.3 / 5.1 / 14.7 | 1.9 / 4.1 / 3.5 / 4.2 / 14.1 | 1.4 / 3.0 / 3.0 / 3.6 / 14.4 | 1.7 / 2.9 / 3.0 / 3.1 / 13.8 | 1.5 / 2.4 / 2.6 / 3.1 / 13.2 |
 
   The index policies converge to the bound faster than 1/sqrt(K) (Lagrangian gap x sqrt(K):
   0.59 -> 0.06): with 16 units per slot the Lagrangian index is within 0.005 dB of the best
   possible scheduler. Our closed form plateaus 0.15 dB below the bound, so at scale the
   programs' indices are worth +0.14 dB over it (+0.19 dB already at K 8 with 25% of units lost;
   there the Lagrangian index is 0.000 from the bound at K 128). At 30 dB the Lagrangian index
-  stays ~1.5 points from the bound at every K; ID beats random by +0.5 to +0.7 points
+  stays ~1.5% from the bound at every K; ID beats random by +0.5% to +0.7%
   (persistency, the blog's lesson, modest here), and for the mean value ranking beats both
   guided policies. Grid states where the decision flips back as the price rises: 1-1.7% (mean),
   6-13% (target).
@@ -350,7 +353,7 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
   (nested, 10000 slots, D 24, 0.3 / 0.4 requests per slot): 68.3 / 68.8% at 30 dB (online 70.5 /
   69.3, PADC 45.0 / 45.2), 57.3 / 54.1% within D/4 (online 39.2 / 27.3, PADC 38.4 / 34.9), mean
   delay 4.2 / 4.8 slots (online 8.0 / 11.1), and 0.6 / 1.0 slots FASTER than PADC on the same
-  requests; D 16 alike. With 4 units per slot the ordering is the same (online +21 to +30 points
+  requests; D 16 alike. With 4 units per slot the ordering is the same (online +21% to +30%
   over PADC).
 * **The Lagrangian index's time to 30 dB** (COMMANDS 20.3, `rmab_scale.py --delay`, nested
   utility; % of users at 30 dB by slots 6 / 12 / 18 / 24, mean slot with misses at 25):
@@ -361,10 +364,10 @@ nested utility (500 frames; it ties our rule on the mean there, 31.33 dB both).
   | Whittle | **38.2 / 61.4** / 70.9 / 73.8, **11.95** | **41.0 / 63.8** / 72.8 / 75.4, **11.47** | 28.2 / 48.6 / 58.0 / 63.4, 14.61 |
   | ID-guided | 25.4 / 50.7 / 68.0 / 74.5, 13.66 | 26.1 / 52.5 / 69.8 / 75.5, 13.37 | 9.8 / 19.5 / 28.7 / 36.4, 19.96 |
   | PF | 16.5 / 34.5 / 55.2 / 63.9, 16.37 | 16.8 / 34.3 / 54.3 / 64.1, 16.34 | 13.8 / 30.0 / 48.6 / 59.0, 17.36 |
-  | gap to the bound at the deadline (points): Lagrangian / Whittle | 2.2 / 5.1 | 1.4 / 3.0 | 10.0 / 10.3 |
+  | gap to the bound at the deadline (%): Lagrangian / Whittle | 2.2 / 5.1 | 1.4 / 3.0 | 10.0 / 10.3 |
 
   A trade-off between the two indices: the Lagrangian index brings the most users to 30 dB by
-  the deadline (+2.8 points [1.9, 3.8] over the Whittle index at K 8, +1.7 at K 32) but later:
+  the deadline (+2.8% [1.9, 3.8] over the Whittle index at K 8, +1.7 at K 32) but later:
   0.7 slots later on average (1.25 [1.05, 1.47] on the users both bring there), behind until
   about slot 18. Its prices hold a slot back for the user it is worth most to at the deadline;
   the Whittle index's private prices serve the shortest remaining need first. Both are ahead of
@@ -407,7 +410,7 @@ later than PF (7.1 vs 4.5).
 
 | decoded, Kodak | mean, fresh | mean, r 0.8 | 30 dB, fresh | 30 dB, r 0.8 |
 |---|---|---|---|---|
-| lagrange minus slope_adv / padc | **+0.060** [0.021, 0.100] dB | +0.004 [-0.07, 0.08] | **+12.3** [9.6, 15.4] pts (22.1: +11.5) | +3.1-4.0 |
+| lagrange minus slope_adv / padc | **+0.060** [0.021, 0.100] dB | +0.004 [-0.07, 0.08] | **+12.3%** [9.6, 15.4] (22.1: +11.5%) | +3.1-4.0 |
 | online / plan_adv minus padc | | | online +8.3-9.6 | **plan_adv +9.4-10.4** |
 | whittle minus the same base | -0.002 | -0.10 | +8.3-9.0 | +6.3 |
 | pf minus slope_adv | -0.468 | -0.512 | | |
@@ -429,10 +432,9 @@ difference form (C3) is the right certainty-equivalent rule.
 **Perceptual metrics (22.1, 22.4).** Mean PSNR gains carry over: our closed form vs PF +0.0057
 MS-SSIM, -0.0115 LPIPS (Kodak); the Lagrangian index vs our closed form +0.0009 MS-SSIM, +0.0025
 LPIPS (slightly worse; CLIC -0.0010, not significant). At the target the share costs the users
-who miss: the Lagrangian index's +11.5 points come with -0.0013 MS-SSIM (n.s.) and +0.011 LPIPS
+who miss: the Lagrangian index's +11.5% come with -0.0013 MS-SSIM (n.s.) and +0.011 LPIPS
 against PADC (its mean PSNR 30.53 vs 30.75), and on stale reports it gives up 44 of 480 users
-entirely (+0.085 LPIPS; plan_adv 32 users, +0.053). Online is the balanced target policy: +8.3
-points with +0.0073 MS-SSIM and unchanged LPIPS.
+entirely (+0.085 LPIPS; plan_adv 32 users, +0.053). Online is the balanced target policy: +8.3% with +0.0073 MS-SSIM and unchanged LPIPS.
 
 **CLIC (22.1, 22.3; the first 60 test images).**
 * The abstraction holds: nested fit held-out MAE 0.05-0.11 dB per CBR (free fit the same), the
@@ -442,12 +444,12 @@ points with +0.0073 MS-SSIM and unchanged LPIPS.
   0.439. The constant-SNR control s1 again obeys no rule (noise best at 0.147, MMSE 0.203, its
   additive fit 2x worse: 0.13-0.24). Piecewise training costs 0.05-0.09 dB at constant SNR.
 * Decoded: model error bias -0.029 / -0.000, MAE 0.076 / 0.087 dB. Mean: our closed form +0.51
-  over PF, the Lagrangian index +0.12 [0.08, 0.17] over ours. 30 dB: the Lagrangian index +7.7
-  [5.4, 10.0] points over PADC, online +5.2 (PADC already at 83.5%: CLIC images reach 30 dB more
+  over PF, the Lagrangian index +0.12 [0.08, 0.17] over ours. 30 dB: the Lagrangian index +7.7%
+  [5.4, 10.0] over PADC, online +5.2% (PADC already at 83.5%: CLIC images reach 30 dB more
   easily). Simulated (500 frames): mean +0.60 / +0.55 / +0.50 dB over PF (Lagrangian / Whittle /
-  ours); 30 dB +8.8 / +8.0 / +6.8 points over PADC (Lagrangian / plan_adv / online).
+  ours); 30 dB +8.8% / +8.0% / +6.8% over PADC (Lagrangian / plan_adv / online).
 
-**The 30 dB gap at scale (22.2, B = K/8, 100 frames).** Per-user gap to the bound (points):
+**The 30 dB gap at scale (22.2, B = K/8, 100 frames).** Per-user gap to the bound (%):
 
 | K | 8 | 16 | 32 | 64 | 128 |
 |---|---|---|---|---|---|
@@ -458,7 +460,7 @@ points with +0.0073 MS-SSIM and unchanged LPIPS.
 | lagrange_relax, Y grid 256 / 32 bins | 3.61 | | 1.68 | | 1.71 |
 
 * Indifferent users at lambda*: 1.9% of the supply at K 8, 0.0% from K 16 on (sure demand 76-79%).
-  The tie rule has almost no one to act on; it costs 1.75 points at one unit per slot (the
+  The tie rule has almost no one to act on; it costs 1.75% at one unit per slot (the
   Whittle-index order among equal gains is the better one there) and gains 0.27 [0.07, 0.50] at
   K 128. Caveat: the band (half the smallest grid price) is narrower than the golden-section
   precision of lambda*, so users exactly at the kink may show gains just outside it.
@@ -467,15 +469,15 @@ points with +0.0073 MS-SSIM and unchanged LPIPS.
   the bound by 0.007-0.008 dB per user, policies unchanged.
 * LP-update (re-solving every 6 slots) schedules exactly as lagrange_relax at K 32 and 128 (the
   re-solved prices move, 0.33 -> 0.36 on the stand-in, but a price common to all users in a slot
-  does not change their ranking) and -0.6 points against lagrange at K 8.
-* Finer grids raise the bound by 0.15-0.17 points and make both policies worse by 0.3-1.4.
+  does not change their ranking) and -0.6% against lagrange at K 8.
+* Finer grids raise the bound by 0.15-0.17% and make both policies worse by 0.3-1.4.
 * So none of the four closes it. The suspect left (COMMANDS 23.1): every one of these runs, and
   18.3, scores and bounds on the fitted curves while the policies decide on the calibrated
   belief. For the mean that costs nothing measurable (gap 0.005 dB at K 128, -0.004 with the new
   prices); at a 0/1 target a user stopped at its predicted 30 dB is a miss whenever the belief
   is a little optimistic, at every K. Finer grids (a sharper threshold, more users stopped right
   at it) making the policies worse fits. A stand-in check with a 0.025 dB belief error showed no
-  flat component (7.3 vs 6.9 points at K 8, 3.1 vs 3.2 at K 32), which neither confirms nor rules
+  flat component (7.3 vs 6.9% at K 8, 3.1 vs 3.2 at K 32), which neither confirms nor rules
   it out (the stand-in's gaps are 2-4x the real ones).
 
 **Mean at scale with the new prices (22.2e).** Unchanged: the Lagrangian index 0.207 -> 0.005 dB
@@ -487,7 +489,7 @@ identical for the mean.
 **The 30 dB gap was the transmitter's curve errors (23.1).** Every earlier scaling run bounded
 and scored on the fitted curves while the policies decided on the calibrated belief. Given the
 fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the frames of 18.3 and
-22.2; per-user gap in points, 95% CI):
+22.2; per-user gap in %, 95% CI):
 
 | K | 8 | 16 | 32 | 64 | 128 |
 |---|---|---|---|---|---|
@@ -501,17 +503,17 @@ fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the fr
 | lagrange, true curves, Y grid 256 / 32 bins (its own bound +0.15) | +1.24 | | -0.07 [-0.42, 0.27] | | |
 
 * On its own model the index is near-optimal at the target too: from K 16 on its per-user gap is
-  within +-0.3 points of 0, i.e. a bounded total gap (the non-degenerate O(1) regime of Zhang
+  within +-0.3% of 0, i.e. a bounded total gap (the non-degenerate O(1) regime of Zhang
   and Frazier), as for the mean. The small negative gaps are the coarse bound's own
-  discretisation error: finer grids raise the bound by 0.15-0.17 points, and with them the gap at
+  discretisation error: finer grids raise the bound by 0.15-0.17%, and with them the gap at
   K 32 is -0.07.
-* The curve errors cost ~1.6 points per user from K 16 on (0.75 at one unit per slot), at every
+* The curve errors cost ~1.6% from K 16 on (0.75 at one unit per slot), at every
   K: a hard target makes the abstraction's calibration error first-order, while for the mean the
   same errors cost nothing measurable (gap 0.005 dB per user at K 128 with them). The decodes show
   the same effect against the codec: at 30 dB the policies that stop users closest to the
   threshold decode furthest below their predicted share (Lagrangian index 77.7% vs 79.0%, Whittle
   74.6 vs 75.4, online 74.6 vs 75.2, PADC 66.2 vs 66.5), while every mean decodes within 0.02 dB.
-* A uniform margin makes it worse (0.25 dB: +0.25 to +1.4 points more gap; 0.5 dB: +3.8 to
+* A uniform margin makes it worse (0.25 dB: +0.25% to +1.4% more gap; 0.5 dB: +3.8 to
   +4.9): the errors are per image and go both ways, so a margin spends slots on every user to
   protect the few whose curves are optimistic, and admits fewer users. On stale reports, where
   the error is several dB, a margin helped (section 6b); here it is a few hundredths.
@@ -519,13 +521,13 @@ fitted curves, the Lagrangian index meets the bound (B = K/8, 100 frames, the fr
   nothing (77.0 vs 77.25 at K 8, 78.69 vs 78.72 at K 32): the coarse grid's smoothing of the 0/1
   reward was a hedge against the curve errors.
 * The Whittle index's gap falls with K given the true curves too (4.8 -> 1.3) but stays above
-  the Lagrangian index's; the curve errors cost it ~1 point.
+  the Lagrangian index's; the curve errors cost it ~1%.
 * Built 2026-10-25, run in COMMANDS 24: programs whose terminal reward is the calibrated
   success probability Phi((q + bias - Q) / sigma), sigma and bias per prefix length pooled over
   the images, in place of 1{q >= Q} (a soft target; the hedge a margin cannot be):
   `whittle_soft` / `lagrange_soft` (docs/PAPER.md, owed item 13). Smoke stand-in (T 10, 29 dB,
   60 frames; curves perturbed to a measured error of sigma ~0.10 dB, bias +0.03, close to the
-  real calibration's): the curve errors cost the hard Lagrangian index 0.21 / 1.41 points per
+  real calibration's): the curve errors cost the hard Lagrangian index 0.21% / 1.41% per
   user at K 8 / 32 (gap 7.07 / 4.59 against 6.86 / 3.18 with the true curves); the soft index
   recovers +0.63 [-0.21, +1.41] at K 32 (about 45%) and -0.42 [-1.88, +1.04] at K 8 (nothing to
   recover); the soft Whittle index gains nothing (0.00 / -0.42). Suggestive, not significant:
@@ -544,20 +546,19 @@ decoders' lead (section 5).
 | minus HEIC + HARQ (dB) | +0.13 (+0.34) | +1.11 (+1.32) | +1.35 (+1.56) | **+1.54** (+1.73) | +1.49 (+1.69) | +1.31 (+1.49) | +1.09 (+1.25) |
 | minus the 3 dB-gap code + HARQ (dB) | -0.71 | +0.65 | +0.98 | +1.19 | +1.23 | +1.13 | +0.96 |
 | at 30 dB, single decoder (%) | 74.7 | 73.3 | 71.7 | 68.3 | 61.9 | 56.9 | 55.3 |
-| minus HEIC + HARQ (points) | +0.3 (+2.8) | +9.7 (+11.8) | +12.2 (+14.4) | **+13.5** (+15.5) | +12.1 (+14.2) | +10.1 (+12.6) | +8.3 (+9.7) |
+| minus HEIC + HARQ (%) | +0.3 (+2.8) | +9.7 (+11.8) | +12.2 (+14.4) | **+13.5** (+15.5) | +12.1 (+14.2) | +10.1 (+12.6) | +8.3 (+9.7) |
 
 | CQI error sd (dB) | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
 | mean PSNR, single decoder | 31.42 | 31.39 | 31.27 | 31.13 |
 | minus HEIC + HARQ (dB) | +0.13 (+0.34) | +0.71 (+0.91) | **+1.12** (+1.33) | +1.40 (+1.60) |
 | minus the 3 dB-gap code + HARQ (dB) | -0.71 | +0.24 | +0.74 | +1.09 |
-| at 30 dB (%) / minus HEIC + HARQ (points) | 74.7 / +0.3 (+2.8) | 74.6 / +6.2 (+8.5) | 73.4 / **+10.7** (+12.9) | 70.9 / +12.8 (+15.1) |
+| at 30 dB (%) / minus HEIC + HARQ (%) | 74.7 / +0.3 (+2.8) | 74.6 / +6.2 (+8.5) | 73.4 / **+10.7** (+12.9) | 70.9 / +12.8 (+15.1) |
 
-The verdict stands with the single decoder: on par with exact CSI (+0.13 dB, +0.3 points; a
+The verdict stands with the single decoder: on par with exact CSI (+0.13 dB, +0.3%; a
 3 dB-gap code is 0.7 dB ahead), ahead of HEIC with HARQ from 1 dB of CQI error or r = 0.95, and of
-the 3 dB-gap code from 1 dB / r = 0.95. Per-length decoders add about 0.2 dB (0.16-0.21) and 1.4-2.5
-points to every lead. On stale reports the naive target policies break as in section 6b (online
--4.0 points under PADC at r = 0.8 naive, +3.3 aware); plan_adv aware is the best target policy
+the 3 dB-gap code from 1 dB / r = 0.95. Per-length decoders add about 0.2 dB (0.16-0.21) and 1.4-2.5% to every lead. On stale reports the naive target policies break as in section 6b (online
+-4.0% under PADC at r = 0.8 naive, +3.3 aware); plan_adv aware is the best target policy
 from r = 0.95 to 0.4, PADC at r = 0. The JSCC side holds decoded at r = 0.8 with this decoder
 (section 6d: model error MAE 0.076-0.095 dB, bias -0.012 / +0.013).
 
@@ -570,7 +571,7 @@ by N(bias, sigma^2), Phi((q + bias - Q) / sigma), not 1{q >= Q}. Measured on the
 bias +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB at 1-6 phases.
 
 **At scale (24.1, calibrated curves, B = K/8, the frames of 18.3-23).** Per-user gap to the bound
-(points):
+(%):
 
 | K | 8 | 16 | 32 | 64 | 128 |
 |---|---|---|---|---|---|
@@ -583,16 +584,15 @@ bias +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB at 1-6 phases.
 
 * The calibration-aware Lagrangian index, deciding on the calibrated curves, is exactly as close
   to the bound as the hard index given the true curves: it recovers 100% of the curve errors'
-  cost at K 8 and 99% pooled over K 16-128 (identical values at K 8 and 128). The flat ~1.6
-  points were a decision artefact of trusting the curves at a hard threshold, not an information
+  cost at K 8 and 99% pooled over K 16-128 (identical values at K 8 and 128). The flat ~1.6% were a decision artefact of trusting the curves at a hard threshold, not an information
   limit: the curves' error is 0.03-0.05 dB, and a program that knows it hedges by a fraction of
   a phase where that is cheap.
 * Insensitive to sigma: anything from the measured 0.03-0.05 dB up to 0.2 dB recovers it (at
-  K >= 32 every sigma lands within +-0.3 points of the bound; 0.2 dB slightly over-hedges). No
+  K >= 32 every sigma lands within +-0.3% of the bound; 0.2 dB slightly over-hedges). No
   tuning is needed beyond the offline calibration statistics.
-* The soft Whittle index gains 1.3-1.6 points too and ends above even the hard Whittle index
+* The soft Whittle index gains 1.3-1.6% too and ends above even the hard Whittle index
   with the true curves (the smooth reward also helps the index itself, whose 0/1 programs are
-  6-13% non-indexable), but stays 1.3-3.5 points behind the soft Lagrangian index.
+  6-13% non-indexable), but stays 1.3-3.5% behind the soft Lagrangian index.
 
 **Main frames (24.2, K 8, T 24, 500 frames; share at 30 dB, gain over PADC):**
 
@@ -604,8 +604,8 @@ bias +0.021 +0.012 -0.009 -0.008 +0.000 +0.010 dB at 1-6 phases.
 | plan_adv | +8.8 | **+8.3** | **+9.7** |
 | online | +8.0 | +1.7 | |
 
-With fresh reports the soft index is the best target policy (+1.5 points over the hard one). It
-also hedges part of the CQI errors' damage (+4.5 points over the hard index), though the planner
+With fresh reports the soft index is the best target policy (+1.5% over the hard one). It
+also hedges part of the CQI errors' damage (+4.5% over the hard index), though the planner
 plan_adv stays best under CQI errors and stale reports, whose errors are dB, not hundredths.
 Time to 30 dB: like the hard index (-1.85 slots vs PADC over all users, -1.04 on the same users;
 the Whittle indices remain earliest). Its mean PSNR is 0.22 dB below the hard index's: the share
@@ -635,7 +635,7 @@ After the first figure review the calibration-aware Lagrangian index is the prop
 scheduler (docs/PAPER.md). 26.2 ran it where only the hard index had run: the main frames
 with 25% of slots lost, at T 16 and on CLIC (500 frames, the frames of 21.2 and 22.3: PADC,
 online and the planner reproduce exactly), and the latency budget (300 frames per length, as
-21.3). Share at 30 dB, gain over PADC (points; 95% CIs within about +-1):
+21.3). Share at 30 dB, gain over PADC (%; 95% CIs within about +-1):
 
 | setting | lagrange, hard (6d) | **lagrange_soft** | whittle, hard | whittle_soft | planner | online |
 |---|---|---|---|---|---|---|
@@ -646,12 +646,12 @@ online and the planner reproduce exactly), and the latency budget (300 frames pe
 | 2 dB CQI error (24.2) | +1.6 | +6.1 | +1.2 | +5.1 | **+8.3** | +1.7 |
 | r = 0.8 aware, 0.5 dB margin (24.2) | +6.1 | +7.1 | +5.4 | +6.3 | **+9.7** | |
 
-* The calibration-aware reward raises the Lagrangian index by +2.1, +2.3 and +0.7 points with
+* The calibration-aware reward raises the Lagrangian index by +2.1%, +2.3% and +0.7% with
   lost slots, at T 16 and on CLIC (the Whittle index by +0.9 and +0.8): never lower, in every
   condition run (6f, 6g).
 * With exact reports the calibration-aware Lagrangian index is now best or tied-best
-  everywhere: alone with fresh reports and on CLIC, within 0.4 points of the calibration-aware
-  Whittle index with lost slots and at T 16, both ~2 points above the planner. The hard index's
+  everywhere: alone with fresh reports and on CLIC, within 0.4% of the calibration-aware
+  Whittle index with lost slots and at T 16, both ~2% above the planner. The hard index's
   shortfall there (6d: the Whittle index led) was the curve errors' cost too. With CSI errors
   (CQI errors, stale reports) the planner stays best: C7 has two cases.
 * The price for the users who miss stays: with lost slots mean PSNR 28.25 dB (the index)
@@ -694,8 +694,8 @@ by frame):**
 | Kodak, mean PSNR, over PF | **+0.524 [0.464, 0.585] dB** | 0.062, -0.022 |
 | CLIC, mean PSNR, over PF | **+0.631 [0.558, 0.703] dB** | 0.076, -0.029 |
 | Kodak, r = 0.8, mean PSNR, over PF | +0.514 [0.406, 0.625] dB | 0.076, -0.012 |
-| Kodak, 30 dB, over PADC | **+14.8 [11.7, 17.9] points** | 0.070, -0.006 |
-| CLIC, 30 dB, over PADC | **+8.1 [5.8, 10.6] points** | 0.083, -0.005 |
+| Kodak, 30 dB, over PADC | **+14.8% [11.7, 17.9]** | 0.070, -0.006 |
+| CLIC, 30 dB, over PADC | **+8.1% [5.8, 10.6]** | 0.083, -0.005 |
 
 **CLASP against the digital chain (30.2; 2000 frames, paired by frame,
 `tools/paired_runs.py`).** Digital: HEIC, the LTE CQI table, IR-HARQ, 6 slots, its best policy
@@ -704,7 +704,7 @@ the better of no margin and section 20's 0.5 dB margin at the target (the files 
 at r >= 0.9, the margin at r <= 0.8). "Best JSCC" is C5's rule, the best of PF, the closed form
 and CLASP for the mean, and of PADC, online, the planners and CLASP for the target:
 
-| condition | mean PSNR: CLASP / digital (dB) | CLASP - digital (dB) | 30 dB: CLASP / digital (%) | CLASP - digital (points) | best JSCC - digital (points) |
+| condition | mean PSNR: CLASP / digital (dB) | CLASP - digital (dB) | 30 dB: CLASP / digital (%) | CLASP - digital (%) | best JSCC - digital (%) |
 |---|---|---|---|---|---|
 | fresh, exact reports | 31.487 / 31.291 | **+0.196 [0.174, 0.217]** | 78.0 / 74.4 | **+3.6 [3.1, 4.1]** | CLASP |
 | CQI error 1 dB | 31.449 / 30.679 | +0.770 [0.743, 0.794] | 75.9 / 68.4 | +7.5 [7.0, 8.0] | CLASP |
@@ -718,13 +718,13 @@ and CLASP for the mean, and of PADC, online, the planners and CLASP for the targ
 | r = 0 | 29.846 / 28.748 | +1.099 [1.064, 1.135] | 55.5 / 47.0 | +8.5 [7.9, 9.1] | +10.6 (plan_adv 57.5%) |
 
 * CLASP beats the digital chain at every CSI condition, on both objectives. With exact reports
-  the lead is small but not zero: +0.20 dB and +3.6 points, where C5's best-policy rows said
-  on par (+0.13 dB, +0.3 points; the calibration-aware index is the new part at the target).
+  the lead is small but not zero: +0.20 dB and +3.6%, where C5's best-policy rows said
+  on par (+0.13 dB, +0.3%; the calibration-aware index is the new part at the target).
 * For the mean, CLASP is the best JSCC policy at every condition but r = 0.4 (the closed form,
   by 0.004 dB), so its leads are C5's, slightly larger: +1.19 vs +1.13 dB at 2 dB CQI error,
   +1.56 vs +1.54 at r = 0.8.
 * At the target, the planner on the same abstraction reaches more users than CLASP once CSI
-  errors are large: 2.5 / 4.6 points more at 2 / 3 dB CQI error and 1.1-3.0 points more at
+  errors are large: 2.5% / 4.6% more at 2 / 3 dB CQI error and 1.1-3.0% more at
   r <= 0.9 (paired intervals: COMMANDS 31, below). CLASP is the best target policy with exact
   reports, at 1 dB CQI error and at r = 0.95. This is C7's second case, now over the whole CSI
   axis (open item 10).
@@ -741,12 +741,12 @@ with MS-SSIM and LPIPS):**
 | decoded | model error: MAE, bias (dB) | over the baseline (decoded) | simulated (main frames) |
 |---|---|---|---|
 | mean PSNR: `lagrange` - `pf` | 0.068, -0.009 (1440 histories) | **+0.512 [0.445, 0.583] dB** (closed form +0.434) | +0.48 [0.46, 0.51] |
-| 30 dB: `lagrange_soft` - `padc` | 0.070, +0.003 (1415 histories) | **+8.1 [5.2, 10.8] points** | +6.1 [5.1, 7.1] |
-| 30 dB: `plan_adv` - `padc` | | +10.0 [7.3, 12.7] points | +8.3 |
+| 30 dB: `lagrange_soft` - `padc` | 0.070, +0.003 (1415 histories) | **+8.1% [5.2, 10.8]** | +6.1 [5.1, 7.1] |
+| 30 dB: `plan_adv` - `padc` | | +10.0% [7.3, 12.7] | +8.3 |
 
 Decoded shares: PADC 64.0%, the planner 74.0%, CLASP 72.1% (predicted 64.6, 74.8, 71.9). The
 model's error under CQI errors is within that of fresh reports (0.05-0.09 dB). Decoded, the
-planner minus CLASP is +1.9 [-0.6, +4.6] points (COMMANDS 31): consistent with the simulated
+planner minus CLASP is +1.9% [-0.6, +4.6] (COMMANDS 31): consistent with the simulated
 +2.5, not significant over 60 frames.
 
 **Scheduler-aware training under CLASP (30.4).** Section 14's design under CLASP's index: the
@@ -786,7 +786,7 @@ same slots (snrc4 + 400 epochs each; mean PSNR, dB):
 **Paired checks (COMMANDS 31, returned 2026-10-31; `results/s31_checks.txt`).** Round 30's
 differences of means, with paired 95% intervals:
 
-The planner minus CLASP at 30 dB (points; 2000 frames; on aged reports each takes its better
+The planner minus CLASP at 30 dB (%; 2000 frames; on aged reports each takes its better
 margin):
 
 | f | e1 | e2 | e3 | r 0.95 | r 0.9 | r 0.8 | r 0.6 | r 0.4 | r 0 |
@@ -803,9 +803,9 @@ The margin on aged reports (share at 30 dB, %, no margin / 0.5 dB margin):
 | CLASP | **73.9** / 72.9 | **70.8** / 70.7 | 66.2 / **66.8** | 60.2 / **61.3** | 56.9 / **58.8** | 54.1 / **55.5** |
 | planner | **73.3** / 73.2 | 71.7 / **71.9** | 68.3 / **69.1** | 61.9 / **64.3** | 56.9 / **60.7** | 52.5 / **57.5** |
 
-* The margin pays from r = 0.8 down, and much more for the planner (+0.8 to +5.0 points) than
+* The margin pays from r = 0.8 down, and much more for the planner (+0.8% to +5.0%) than
   for CLASP (+0.6 to +1.9). CLASP's rule on aged reports: a 0.5 dB margin when r <= 0.8.
-* Decoded at 2 dB CQI error: the planner minus CLASP +1.9 [-0.6, +4.6] points (60 frames).
+* Decoded at 2 dB CQI error: the planner minus CLASP +1.9% [-0.6, +4.6] (60 frames).
 * Co-design: sa + the closed form minus lag + CLASP +0.013 [-0.013, +0.037] dB, a tie; the
   second seed is 0.005 [0.004, 0.007] dB below the first.
 
@@ -831,7 +831,7 @@ prediction. Round 32 reran CLASP (`lagrange_soft`, no margin) with the spread se
 | r = 0.4 | 58.8 | 61.2 | **62.6** | 62.1 | 60.7 |
 | r = 0 | 55.5 | 58.8 | 61.0 | **61.1** | 57.5 |
 
-With 0.5 dB, CLASP minus the planner (points, paired): +2.0 [1.8, 2.3], +1.8 [1.5, 2.1],
+With 0.5 dB, CLASP minus the planner (%, paired): +2.0 [1.8, 2.3], +1.8 [1.5, 2.1],
 +1.4 [1.0, 1.8] at 1 / 2 / 3 dB CQI error; +2.5 [2.2, 2.8], +2.0 [1.7, 2.4], +1.5 [1.1, 1.9],
 +1.1 [0.7, 1.5], +1.9 [1.4, 2.3], +3.4 [2.8, 4.0] at r = 0.95 / 0.9 / 0.8 / 0.6 / 0.4 / 0. Against
 CLASP as run in round 30: +0.7 [0.4, 1.0] at 1 dB, +4.3 [3.9, 4.8] at 2 dB, +6.0 [5.5, 6.5] at
@@ -839,14 +839,13 @@ CLASP as run in round 30: +0.7 [0.4, 1.0] at 1 dB, +4.3 [3.9, 4.8] at 2 dB, +6.0
 
 * The diagnosis holds. With a spread that covers the reports' error, CLASP beats the planner at
   every CSI condition tested, every interval above zero, and without a margin (it also beats
-  CLASP with the margin by 3.8 points at r = 0.8). C7's second case was the reward's spread,
+  CLASP with the margin by 3.8% at r = 0.8). C7's second case was the reward's spread,
   not the index.
 * Insensitive, as the curves' spread was (6f): every spread from 0.25 to 1 dB beats the planner
   at every condition but one (0.25 dB at r = 0.6: +0.0 [-0.4, +0.5], a tie). The best spread
   grows with the CSI error: 0.25 dB at 1 dB CQI error and r = 0.95, 0.5 dB from 2 dB and
   r = 0.9, 0.5-1 dB at r = 0.
-* Too wide where the error is small costs a little: 1 dB at 1 dB CQI error is 0.7 [0.4, 1.0]
-  points below CLASP as run in round 30.
+* Too wide where the error is small costs a little: 1 dB at 1 dB CQI error is 0.7% [0.4, 1.0] below CLASP as run in round 30.
 * No price in mean PSNR on aged reports: CLASP's users average 28.87 dB at r = 0.8 with the
   0.5 dB spread, against 27.92 with the margin (PADC 30.10).
 * A spread chosen on the test frames is a tuned number. Built 2026-10-31 for COMMANDS 33:
@@ -893,10 +892,10 @@ transmitter, as in round 30):**
 | r = 0 | 61.2 | +5.7 [5.2, 6.1] | +3.6 [3.1, 4.2] | +0.2 [-0.2, 0.6] | +14.2 [13.6, 14.8] |
 
 * One policy. With the measured spread CLASP is the best target policy at every CSI condition,
-  +1.4 to +3.6 points over the planner, every interval above zero. C7's two cases are gone.
-* Measuring loses nothing against the best fixed spread of round 32: +0.3 to +0.6 points under
+  +1.4% to +3.6% over the planner, every interval above zero. C7's two cases are gone.
+* Measuring loses nothing against the best fixed spread of round 32: +0.3% to +0.6% under
   CQI errors, a tie on aged reports. With exact reports it is round 30's CLASP exactly.
-* Against digital (the Introduction's comparison): +3.6 points with exact reports, +8.8 / +12.7
+* Against digital (the Introduction's comparison): +3.6% with exact reports, +8.8 / +12.7
   / +14.7 at 1 / 2 / 3 dB CQI error, +12.2 to +15.8 on aged reports (round 30's CLASP: +7.5 /
   +8.1 / +8.2 and +8.5 to +12.0).
 * Over PADC in its own runs: +12.4 with exact reports, +11.8 / +10.4 / +8.6 at 1 / 2 / 3 dB,
@@ -904,7 +903,7 @@ transmitter, as in round 30):**
 * The price stays with the users who miss: they average 29.17 dB at 2 dB CQI error and 28.71 dB
   at r = 0.8 (PADC 30.44 / 30.10; round 30's CLASP with its margin 27.92 at r = 0.8).
 
-**Decoded (the 60 frames of rounds 24 and 30, paired by frame across the files; points at 30 dB):**
+**Decoded (the 60 frames of rounds 24 and 30, paired by frame across the files; % of the users at 30 dB):**
 
 | decoded | CLASP - PADC | the planner - PADC | CLASP - the planner | CLASP - round 30's CLASP | CLASP decoded / predicted (%) |
 |---|---|---|---|---|---|
@@ -927,13 +926,13 @@ From here CLASP's target reward under CQI errors and aged reports uses the measu
 curves' and the reports'), with no margin; with exact reports nothing changes.
 
 **Redrawn (COMMANDS 34, 2026-11-01; `results/s34_figs.txt`).** Table II, r = 0.8, decoded on
-the same 60 frames: the hard target 63.3% of users at 30 dB, the measured spread 72.1%, +8.75
-[6.04, 11.25] points; users missed 1.7% -> 0.4%; mean PSNR 28.66 -> 28.85 dB; LPIPS 0.211 ->
-0.213 (the curves' spread alone: 64.0%, +0.62 [-1.67, 2.92]). Table III's CQI 2 dB and r = 0.8
-rows: +10.5 [9.6, 11.4] / +10.3 [9.3, 11.2] points simulated, +13.3 [10.6, 16.0] / +12.5
+the same 60 frames: the hard target 63.3% of users at 30 dB, the measured spread 72.1%, +8.75%
+[6.04, 11.25]; users missed 1.7% -> 0.4%; mean PSNR 28.66 -> 28.85 dB; LPIPS 0.211 ->
+0.213 (the curves' spread alone: 64.0%, +0.62% [-1.67, 2.92]). Table III's CQI 2 dB and r = 0.8
+rows: +10.5 [9.6, 11.4] / +10.3% [9.3, 11.2] simulated, +13.3 [10.6, 16.0] / +12.5
 [9.8, 15.2] decoded (the Introduction's numbers). Table IV: the Lagrangian index is the best
 30 dB policy in every column but 25% of slots lost and T 16, where the calibration-aware
-Whittle index is 0.4 / 0.1 points ahead with exact reports (as in 6g).
+Whittle index is 0.4% / 0.1% ahead with exact reports (as in 6g).
 
 ## 6k. The proposed scheduler's channel; the 3 dB-gap code at 30 dB (COMMANDS 35, returned 2026-11-01)
 
@@ -970,7 +969,7 @@ aware on aged reports; `s35_banks.txt`): the served SNR of each phase minus the 
 **The 3 dB-gap code with IR-HARQ at 30 dB** (its best policy and transmitter at each point;
 paired with round 33's CLASP on the same 2000 frames; `s35_gap3.txt`):
 
-| condition | CLASP (%) | gap code (%) | CLASP - gap code (points) |
+| condition | CLASP (%) | gap code (%) | CLASP - gap code (%) |
 |---|---|---|---|
 | exact reports | 78.0 | 80.4 | -2.4 [-2.9, -1.9] |
 | CQI error 1 dB | 77.3 | 71.9 | +5.3 [4.8, 5.8] |
@@ -983,13 +982,13 @@ paired with round 33's CLASP on the same 2000 frames; `s35_gap3.txt`):
 | r = 0.4 | 62.6 | 49.8 | +12.8 [12.2, 13.4] |
 | r = 0 | 61.2 | 48.9 | +12.2 [11.7, 12.8] |
 
-* With exact reports the idealised code (3 dB from capacity, with HARQ) reaches 2.4 points more
+* With exact reports the idealised code (3 dB from capacity, with HARQ) reaches 2.4% more
   users than CLASP, as it gives 0.64 dB more mean PSNR (6h). From 1 dB of CQI error or r = 0.95
-  on, CLASP is ahead of it too: +5.3 to +11.9 points under CQI errors, +8.7 to +13.7 on aged
+  on, CLASP is ahead of it too: +5.3% to +11.9% under CQI errors, +8.7 to +13.7 on aged
   reports (against HEIC with the LTE CQI table: +8.8 to +15.8, 6j). Its 80.4% with exact
   reports is section 5's number without HARQ: with exact reports no block fails.
 * The gap code's best policy is online_pf at every point. Its naive and aware transmitters are
-  within 0.2 points of each other down to r = 0.6; aware is ahead by 0.7 at r = 0.4 and by 2.8
+  within 0.2% of each other down to r = 0.6; aware is ahead by 0.7 at r = 0.4 and by 2.8
   at r = 0.
 
 **fig12(c)'s run** (the 500 main frames at 30 dB, every slot kept; `s35_delay_tgt.json`): its
@@ -1007,7 +1006,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
    Derman-Lieberman-Ross; exact per user because distortion is linear in the per-phase noise
-   terms): up to +0.13 dB / +3-4 points ex post. CPU.
+   terms): up to +0.13 dB / +3-4% ex post. CPU.
 2. Review robustness: a second test set (CLIC), a perceptual metric (MS-SSIM, LPIPS) at the
    target. GPU.
 3. Optional: a Jacobian probe (the decoder's per-chunk Jacobian energy against the fitted C rho:
@@ -1019,8 +1018,8 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    lost slots, the latency budget) and decodes its schedules.
 5. Done 2026-10-20: margins on stale reports (aware + plan_adv + 0.5-1 dB), the decoded
    stale-report schedules, digital with HARQ (C5 restated: +1.3 dB at 2 dB CQI error, +1.7 dB /
-   +15.5 points at r = 0.8).
-6. The 30 dB gap of the Lagrangian index (~1.5 points below the bound at every K, B = K/8;
+   +15.5% at r = 0.8).
+6. The 30 dB gap of the Lagrangian index (~1.5% below the bound at every K, B = K/8;
    section 6b). Two leads from 2026-10-20: Hao, Xu and Tong (IEEE TAC, read in full) get the
    same flat gap when ties are not broken by the relaxation's randomized policy (ours go to the
    Whittle index); and `alloc/whittle.lagrangian_bound`'s subgradient step is not divided by B.
@@ -1039,7 +1038,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    indifferent users) is LP-compatible when several users are mixed in the relaxation. Price
    check on the stand-in with a binding target (T 10, 29 dB, 60 supply-scaled steps): bound per
    user 0.7826 -> 0.7819 at K 8 (B 1) and 0.7043 -> 0.7028 at K 32 (B 4), prices within +-4% of
-   the constant price except the last slot (0.84 of it): prices explain at most ~0.15 points.
+   the constant price except the last slot (0.84 of it): prices explain at most ~0.15%.
    Order of the diagnosis: tie rule, then the 0/1 reward's discretisation, then prices, then
    LP-update (docs/PAPER.md, owed item 9).
    Built 2026-10-22, run in COMMANDS 22.2a-d: `lagrange_relax` (tools/rmab_scale.py and
@@ -1050,16 +1049,15 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    is interior), `--ny` / `--ng`; every run prints the sure demand and the indifferent mass at
    lambda* as shares of the supply. The defaults reproduce every earlier bound and schedule bit
    for bit. Stand-in, T 10, 29 dB, 30 frames: the indifferent users hold 38% / 44% of the supply
-   at K 8 / 32 and the sure demand 92% / 95%; `lagrange_relax` - `lagrange` +0.00 / -0.10
-   points; the gap 6.7 -> 3.9 points per user already falls like 1/sqrt(K); a 4x finer grid
+   at K 8 / 32 and the sure demand 92% / 95%; `lagrange_relax` - `lagrange` +0.00% / -0.10%; the gap 6.7 -> 3.9% already falls like 1/sqrt(K); a 4x finer grid
    moves the bound by 0.004 per user. The stand-in does not show the flat gap, so only the real
    utility's runs can decide.
    Run 2026-10-25 (COMMANDS 22.2, section 6d): none of the four closes it (the indifferent mass
-   at lambda* is ~0; the tie rule costs 1.75 points at one unit and gains 0.27 at K 128; prices
+   at lambda* is ~0; the tie rule costs 1.75% at one unit and gains 0.27 at K 128; prices
    and re-solving change nothing; finer grids make the policies worse). Last suspect: the
    transmitter's curve errors, which the bound does not have (COMMANDS 23.1).
    Resolved 2026-10-25 (COMMANDS 23.1, section 6e): with the true curves the index meets the
-   bound from K 16 on (within +-0.3 points); the curve errors cost ~1.6 points per user at the
+   bound from K 16 on (within +-0.3%); the curve errors cost ~1.6% at the
    target and nothing measurable for the mean; uniform margins make it worse. And recovered
    2026-10-26 (COMMANDS 24, section 6f): calibration-aware programs (the success probability
    under the curves' measured error) bring the index on the calibrated curves to the bound
@@ -1100,7 +1098,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    (r = 0.8: PADC, plan_adv and the two Lagrangian indices; CLIC: no Whittle index) and 0.0%
    bars of zero height. Each run of the script now deletes the outputs of the previous one.
 10. Open (2026-10-27): can the calibration-aware reward cover CSI errors too? With CSI errors
-   the planner beats the index at the target (2 dB CQI error: +8.3 vs +6.1 points over PADC;
+   the planner beats the index at the target (2 dB CQI error: +8.3 vs +6.1% over PADC;
    r = 0.8: +9.7 vs +7.1 simulated, +10.4 vs +4.4 decoded), plausibly for the reason the hard
    target lost to the curve errors: the programs stop users at the predicted threshold, and with
    CSI errors the prediction is off by tenths of a dB or more while the reward hedges 0.03-0.05
@@ -1110,7 +1108,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    CSI-induced spread per prefix length (as `--soft-sigma auto` does for the curves), and C7
    becomes one policy; if none does, C7 keeps its two cases.
    Round 30 (section 6h, 2000 frames) maps the whole axis: the planner is ahead of CLASP at the
-   target by 2.6 / 4.6 points at 2 / 3 dB CQI error and by 1.1-3.0 points at r <= 0.9; CLASP is
+   target by 2.6% / 4.6% at 2 / 3 dB CQI error and by 1.1-3.0% at r <= 0.9; CLASP is
    the best target policy with exact reports, at 1 dB CQI error and at r = 0.95; decoded at 2 dB
    CQI error the planner is ahead too (74.0 vs 72.1%). Round 31 confirms each with a paired
    interval (section 6h). COMMANDS 32 runs the spread test above: --soft-sigma 0.25 / 0.5 /
@@ -1118,7 +1116,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
    30's planner and CLASP. Resolved in principle 2026-10-31 (section 6i): a spread of 0.5 dB
    makes CLASP the best target policy at every CSI condition. Resolved 2026-11-01 (section 6j):
    the measured spread (`--soft-sigma csi`), which chooses nothing on the test frames, does the
-   same (+1.4 to +3.6 points over the planner everywhere; decoded +3.3 [1.7, 5.2] at 2 dB CQI
+   same (+1.4% to +3.6% over the planner everywhere; decoded +3.3 [1.7, 5.2] at 2 dB CQI
    error). C7 is one policy.
 
 ## 8. Experiment index
@@ -1128,7 +1126,7 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 | wave 1, tail probes, cascade c1 | 1-4 (retired) | to 10-08 | the codec (section 1): ViT vs Swin, nesting empties the tail, cascade exits negligible |
 | P1 (step 1) | 5 | 10-10 | piecewise training makes distortion additive; symmetric rules fail |
 | P1, step 2 | 6 | 10-10 | per-phase model 0.03-0.07 dB; content-aware lengths +0.05 only |
-| P1, step 3 | 7 | 10-10 | advantage index +0.465 dB, online +10 points, decoded |
+| P1, step 3 | 7 | 10-10 | advantage index +0.465 dB, online +10%, decoded |
 | P1, step 4 | 8 | 10-11 | calibration from 12 decodes; correlated fading |
 | P1, step 5 | 10 | 10-11 | nesting penalty per length; per-CBR codes through the schedulers |
 | P1, step 6 | 11 | 10-11 | digital on par at ideal CQI; lost slots favour the prefix code; LoRA heads nothing |
@@ -1136,16 +1134,16 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 | P2, round 1 | 14 | 10-14 | scheduler-trained code +0.28 dB on the same slots; nothing at the target; one round suffices |
 | P2, round 2 | 15, 16 | 10-14 | +0.16 is the length, +0.08-0.12 the channel (two seeds); codes learn their scheduler |
 | P1, step 8 | 17 (= 13) | 10-14 | MMSE abstraction ~9x MIESM; CQI errors: JSCC clearly ahead; scheduler certified; equal budget |
-| RMAB re-examined | 18 | 10-19 | stale reports: JSCC over digital +0.3 -> +2.5 dB / +19 points at r 0.8; the opportunistic part and the lift fade; aware + plan_adv for the target; with many units the indices reach the bound (0.005 dB at K 128), our closed form plateaus at 0.15 |
-| Delay | 19 | 10-19 | latency budget 9-19% (mean, vs PF) and 39% (30 dB, vs PADC) shorter; the Whittle index reaches 30 dB first (2.9 slots before PADC, same users) at online's share; traffic: online +25 points over PADC, the Whittle index with half its delay |
-| HARQ, decoded stale, Lagrangian delay, margins | 20 | 10-20 | C5 with HARQ: +1.3 dB at 2 dB CQI error, +1.7 dB / +15.5 points at r 0.8 (HARQ took 0.3 / 0.75 dB off); stale-report schedules decoded as simulated; the Lagrangian index has the best share at 30 dB, the Whittle index the earliest; margins of 0.5-1 dB on stale reports |
+| RMAB re-examined | 18 | 10-19 | stale reports: JSCC over digital +0.3 -> +2.5 dB / +19% at r 0.8; the opportunistic part and the lift fade; aware + plan_adv for the target; with many units the indices reach the bound (0.005 dB at K 128), our closed form plateaus at 0.15 |
+| Delay | 19 | 10-19 | latency budget 9-19% (mean, vs PF) and 39% (30 dB, vs PADC) shorter; the Whittle index reaches 30 dB first (2.9 slots before PADC, same users) at online's share; traffic: online +25% over PADC, the Whittle index with half its delay |
+| HARQ, decoded stale, Lagrangian delay, margins | 20 | 10-20 | C5 with HARQ: +1.3 dB at 2 dB CQI error, +1.7 dB / +15.5% at r 0.8 (HARQ took 0.3 / 0.75 dB off); stale-report schedules decoded as simulated; the Lagrangian index has the best share at 30 dB, the Whittle index the earliest; margins of 0.5-1 dB on stale reports |
 | Before writing | 21, 22 | 10-23 to 10-25 | the Lagrangian index best for the mean everywhere and at 30 dB with fresh reports; the PI index loses to PF; CLIC, MS-SSIM and LPIPS hold; the 30 dB gap survives the tie rule, prices, LP update, grids |
 | The 30 dB gap; C5 with one decoder | 23 | 10-25 | the gap is the curve errors' cost (true curves meet the bound), margins worse; the single decoder leads digital by +1.1 / +1.5 dB at 2 dB CQI error / r 0.8 |
-| Calibration-aware programs | 24 | 10-26 | the curve errors' cost recovered (100% at K 8, 99% pooled over K 16-128, with the measured sigma; an assumed 0.05-0.2 dB within +-0.3 points of the bound at K 32 and 128); decoded +1.7 points, 0.0% missed |
+| Calibration-aware programs | 24 | 10-26 | the curve errors' cost recovered (100% at K 8, 99% pooled over K 16-128, with the measured sigma; an assumed 0.05-0.2 dB within +-0.3% of the bound at K 32 and 128); decoded +1.7%, 0.0% missed |
 | Figures | 25, 27, 28 | 10-26 to 10-27 | tools/paper_figs.py; first review: the calibration-aware index proposed, the hard target an ablation; second: figures for contributions only, the policy comparison one appendix table |
-| Calibration-aware everywhere | 26 | 10-27 | +2.1 / +2.3 / +0.7 points with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
+| Calibration-aware everywhere | 26 | 10-27 | +2.1% / +2.3% / +0.7% with lost slots / T 16 / CLIC; best or tied-best with exact reports; at 30 dB 24% fewer slots than online at T 16 |
 | A full code review | 29 | 10-27 | docs/CORRECTNESS_REVIEW.md: no bug found in the code behind any reported number (hand-derived the link abstraction, the restless-bandit DP/bound, the stale-CSI model; checked CRN, pairing and leakage everywhere else); added the one check that was missing (the bootstrap CI's own empirical coverage) as a permanent smoke test |
-| The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6 points with exact reports, +1.19 dB / +8.1 points at 2 dB CQI error, +1.56 dB / +12.0 points at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6 points ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1 points; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
-| Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1 to +3.4 points) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
-| The measured spread (curves and reports) | 33, 34 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4 to +3.6 points over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7 / +15.8 points at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB; 34: fig14 and Tables II-IV redrawn with it (Table II at r 0.8: +8.75 [6.0, 11.3] over the hard target, missed 1.7% -> 0.4%) |
-| The figures' review: CLASP's channel, the 3 dB-gap code at 30 dB | 35, 36 | 11-01 | under CLASP the lift over a blind slot is +5.6 / +4.8 / +4.2 dB (phases 1-3) and keeps 65% of itself at r = 0.8, close to r^2 as under the closed form; phase 1 +0.7 to +5.4 dB from K 2 to 24; the 3 dB-gap code with HARQ is 2.4 points ahead at 30 dB with exact reports and behind from 1 dB of CQI error or r = 0.95 (+5.3 to +13.7, paired); fig12(c) on round 24's frames |
+| The Introduction's numbers for CLASP | 30, 31 | 10-31 | CLASP beats digital at every CSI condition: +0.20 dB / +3.6% with exact reports, +1.19 dB / +8.1% at 2 dB CQI error, +1.56 dB / +12.0% at r 0.8 (paired, 2000 frames); at the target the planner is 1.1-4.6% ahead of CLASP once CSI errors reach 2 dB or r 0.9; aged reports cost CLASP 0.57 dB, digital 1.93; decoded gains with their own intervals, and at 2 dB CQI error +0.51 dB / +8.1%; training on CLASP's channel +0.21 dB (two seeds), its lengths alone nothing, a code per scheduler, after co-design the closed form ties CLASP for the mean (31: +0.013 [-0.013, +0.037] dB); 31: every planner-CLASP difference significant, CLASP's margin pays at r <= 0.8 |
+| Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1% to +3.4%) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
+| The measured spread (curves and reports) | 33, 34 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4% to +3.6% over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7% / +15.8% at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB; 34: fig14 and Tables II-IV redrawn with it (Table II at r 0.8: +8.75 [6.0, 11.3] over the hard target, missed 1.7% -> 0.4%) |
+| The figures' review: CLASP's channel, the 3 dB-gap code at 30 dB | 35, 36 | 11-01 | under CLASP the lift over a blind slot is +5.6 / +4.8 / +4.2 dB (phases 1-3) and keeps 65% of itself at r = 0.8, close to r^2 as under the closed form; phase 1 +0.7 to +5.4 dB from K 2 to 24; the 3 dB-gap code with HARQ is 2.4% ahead at 30 dB with exact reports and behind from 1 dB of CQI error or r = 0.95 (+5.3 to +13.7, paired); fig12(c) on round 24's frames |

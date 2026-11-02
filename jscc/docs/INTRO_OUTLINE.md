@@ -13,7 +13,10 @@ SNRs a codeword's symbols met to its decoded quality. *Physical link design* and
 the two existing categories (paragraph 2). *Calibration-aware*: deciding on a calibrated
 predictive distribution of a user's decoded quality, whose spread is the measured error of the
 prediction, from the quality model and from the channel reports. *CLASP* (Calibration-aware,
-Link-Abstraction-based Scheduling of Progressive codes): our method (paragraph 5).
+Link-Abstraction-based Scheduling of Progressive codes): our method (paragraph 5). *Share of
+users at the target*: the percentage of users whose decoded PSNR reaches the quality target by
+the deadline. A difference between two shares is the difference of the two percentages, given in
+% of all users: "an extra X% of the users" means X% more of all users reach the target.
 
 ## Paragraph 1. Why the problem matters
 
@@ -201,8 +204,8 @@ serves every user slot by slot up to the deadline."
      with a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB, whether the reports
      are exact, carry 2 dB CQI errors, or are aged (correlation 0.8).
    - But even this small error is first-order at a hard quality target. A scheduler that takes
-     the calibrated curves as exact loses 1.7-2.0 points of the share of users reaching 30 dB,
-     at every cell size from 16 to 128 users.
+     the calibrated curves as exact leaves an extra 1.7-2.0% of the users below 30 dB, at every
+     cell size from 16 to 128 users.
 5. In short, a learned code can be given a link abstraction through training. With it, each
    user's state reduces to two numbers: the phases received, and their accumulated weighted noise.
    Scheduling then becomes a planning problem, provided the abstraction's residual error is part
@@ -239,17 +242,18 @@ serves every user slot by slot up to the deadline."
 4. Results:
    - Decoded by the codec, in all four decoded cases (Kodak with fresh reports, 2 dB CQI errors
      or aged reports; CLIC with fresh reports), CLASP gains 0.5-0.6 dB of mean PSNR over
-     proportional fair and brings 8-15 points more users to 30 dB than per-image rate selection
-     [Zhang23].
+     proportional fair and brings an extra 8-15% of the users to 30 dB over per-image rate
+     selection [Zhang23].
    - Simulated against the bound, its gap shrinks to 0.005 dB per user at 128 users for mean
-     PSNR, and stays within ±0.3 points from 16 users on for the target.
+     PSNR; for the target, its share of users at 30 dB is within ±0.3% of the bound from 16
+     users on.
    - Simulated on the same frames as a digital chain with CQI-table link adaptation and
      incremental-redundancy HARQ, CLASP beats it at every CSI condition tested: by 1.2-1.6 dB of
-     mean PSNR and 13-16 points at 30 dB with 2 dB CQI errors or aged reports (correlation
-     0.8), and by 0.2 dB and 3.6 points with exact reports.
-   - An idealised digital code 3 dB from capacity, with the same HARQ, reaches 2.4 points more
-     users at 30 dB than CLASP with exact reports; from 1 dB CQI errors or correlation 0.95 on,
-     CLASP leads it by 5-14 points.
+     mean PSNR and an extra 13-16% of the users at 30 dB with 2 dB CQI errors or aged reports
+     (correlation 0.8), and by 0.2 dB and 3.6% with exact reports.
+   - An idealised digital code 3 dB from capacity, with the same HARQ, brings an extra 2.4% of
+     the users to 30 dB over CLASP with exact reports; from 1 dB CQI errors or correlation 0.95
+     on, CLASP brings an extra 5-14% of the users there.
    - Decoded on the same slots, training the code on the channel CLASP creates adds 0.21 dB (two
      seeds) over training it as long on the usual channel. Training on CLASP's prefix lengths
      with blindly taken slots gains nothing (-0.09 dB), so the gain comes from the slots CLASP
@@ -276,16 +280,16 @@ Overall, our main contributions are as follows.
      from the channel reports, makes it robust to both; report-aware programs decide on aged
      reports.
 3. **Performance.**
-   - Decoded, CLASP gains 0.5-0.6 dB over proportional fair, and 8-15 points of users at 30 dB
-     over per-image rate selection, with fresh, noisy or aged reports.
+   - Decoded, CLASP gains 0.5-0.6 dB over proportional fair, and an extra 8-15% of the users at
+     30 dB over per-image rate selection, with fresh, noisy or aged reports.
    - Simulated, its gap to the bound vanishes as the cell grows:
      - for mean PSNR, from 0.21 to 0.005 dB per user between 8 and 128 users;
-     - for the target, within ±0.3 points from 16 users on.
+     - for the target, within ±0.3% of the bound from 16 users on.
    - Simulated, CLASP outperforms a digital chain with link adaptation and HARQ at every CSI
-     condition tested: by 1.2-1.6 dB and 13-16 points with 2 dB CQI errors or reports aged to
-     correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
+     condition tested: by 1.2-1.6 dB and an extra 13-16% of the users at 30 dB with 2 dB CQI
+     errors or reports aged to correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
    - Once reports are imperfect, from 1 dB CQI errors or correlation 0.95 on, CLASP also leads an
-     idealised digital code 3 dB from capacity, by 5-14 points at 30 dB.
+     idealised digital code 3 dB from capacity, with an extra 5-14% of the users at 30 dB.
    - Decoded, training the code on CLASP's channel adds 0.21 dB.
 
 **How paragraphs 3, 5 and 6 line up:**
@@ -294,7 +298,7 @@ Overall, our main contributions are as follows.
 |---|---|---|
 | (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
 | (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
-| (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | +1.7 points over the hard target, users missed 0.0% against 1.2% (decoded); +13.3 / +12.5 points over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and +13-16 points over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
+| (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | an extra 1.7% of the users at 30 dB over the hard target, users missed 0.0% against 1.2% (decoded); an extra 13.3% / 12.5% over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and an extra 13-16% over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
 

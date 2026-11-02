@@ -69,9 +69,9 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
   the smallest remaining need (phases at the mean SNR, from what they already hold) that fit
   in the slots left, open spare slots to all, serve by the advantage index, and stop a user as
   soon as the model says its realised SNRs got it there. Against PADC's rule (per-image length
-  at the mean SNR, fixed; given shortest-first admission and PF timing): +9.4 points of users
+  at the mean SNR, fixed; given shortest-first admission and PF timing): +9.4% of users
   at 30 dB (K = 8, T = 24), +10.0 decoded, +6.9 to +10.4 over targets, frame lengths, K = 16
-  and identical images. Its parts: per-image sizing (+5.0 points; the curves), online stopping
+  and identical images. Its parts: per-image sizing (+5.0%; the curves), online stopping
   (+3.9; encode-once prefix + mixed-SNR utility, no feedback beyond CQI), advantage timing
   (+3.2 to +3.4; the utility), admission (+2.0, +11 in tight frames).
 * Optimality, layer by layer (what is exact, what is not; `tools/headroom.py` measures each):
@@ -102,10 +102,9 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
      the largest); (c) the advantage index as its certainty-equivalent approximation (the
      continuation valued at a typical, mean-SNR slot instead of the program's). Checked
      against exact expectimax on small frames: bound >= best causal >= Whittle. Stand-in,
-     K 8, T 24: the Whittle policy ties our rules (-0.02 dB [-0.04, +0.01] mean PSNR; -0.4
-     points at 30 dB), rollout +0.05 dB / +3.1 points, causal bound +0.20 dB / +5.6 points,
+     K 8, T 24: the Whittle policy ties our rules (-0.02 dB [-0.04, +0.01] mean PSNR; -0.4% at 30 dB), rollout +0.05 dB / +3.1%, causal bound +0.20 dB / +5.6%,
      clairvoyant optimum +0.19 / +6.3: best causal - our rule is within [+0.05, +0.19] dB
-     for the mean (certified), [+3.1, +5.6] points at 30 dB, where a better causal policy
+     for the mean (certified), [+3.1%, +5.6%] of the users at 30 dB, where a better causal policy
      has room. The gradient-scheduler link (Stolyar; Agrawal and Subramanian) stays as the
      long-horizon motivation.
   4. PHASE ORDER: when a user's slot count is fixed before the frame (fixed quotas, no lost
@@ -155,8 +154,8 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         0.8, 8% at 0.3. Unlike the stand-in suggested, the aware transmitter is worth something:
         it keeps the whole gain over PF to r = 0.8 and saves the quality target (stopping on the
         reports breaks: a user served at a reported peak looks done although its slot was worse;
-        aware plan_adv keeps +8 points over PADC at r = 0.8). JSCC's lead over digital grows
-        with report age, the physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5 points at
+        aware plan_adv keeps +8% over PADC at r = 0.8). JSCC's lead over digital grows
+        with report age, the physical axis of C5: +0.3 dB at r = 1, +1.7 dB / +15.5% at
         0.8, +1.7 / +14 at 0.6 against digital with incremental-redundancy HARQ (without it:
         +2.5 / +19, +3.3 / +20; COMMANDS 20.2), and the JSCC side holds decoded (20.1). The
         bound falls with r (31.68 -> 30.18 dB, r 1 -> 0.4) and the gap of every policy to it
@@ -180,7 +179,7 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         0.009 / 0.005 dB, faster than 1/sqrt(K); Whittle 0.265 -> 0.016; our closed form 0.267
         -> 0.155, a plateau (its continuation is a typical slot, not the price); PF 0.71 ->
         0.52. In total, the Lagrangian index's gap stays bounded (1.66 -> 0.64 dB): Zhang and
-        Frazier's non-degenerate O(1). At 30 dB the Lagrangian index stays ~1.5 points from the
+        Frazier's non-degenerate O(1). At 30 dB the Lagrangian index stays ~1.5% from the
         bound at every K, which the theory does not predict. Two leads (2026-10-20): Hao, Xu and
         Tong's Figs. 3-4 show the same flat gap when ties are not broken by the relaxation's own
         randomized policy (ours go to the Whittle index), and McDowell et al. (read in full;
@@ -195,12 +194,12 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         several users are indifferent at once (Gast et al. Thm 5), as a 0/1 target makes likely;
         ours ranks the indifferent users by the Whittle index. Prices matter little: on the
         stand-in with a binding 29 dB target (T 10), proper per-slot prices lower the bound by
-        0.07 / 0.15 points per user at K 8 / 32. Diagnosis owed: docs/PAPER.md, owed item 9 (the
+        0.07% / 0.15% at K 8 / 32. Diagnosis owed: docs/PAPER.md, owed item 9 (the
         relaxation's tie rule first; built 2026-10-22 with the price solver, grid and LP-update
         variants, COMMANDS 22.2; on the stand-in the tie rule changes nothing). Resolved
         2026-10-25 (COMMANDS 23.1, docs/NOTES.md 6e): none of those, but the transmitter's curve
-        errors. Given the curves it plans with, the Lagrangian index is within +-0.3 points of
-        the bound from K 16 on; the calibrated curves cost ~1.6 points per user at every K at a
+        errors. Given the curves it plans with, the Lagrangian index is within +-0.3% of
+        the bound from K 16 on; the calibrated curves cost ~1.6% at every K at a
         hard target and nothing measurable for the mean; uniform margins make it worse.
         Recovered 2026-10-26 (COMMANDS 24, docs/NOTES.md 6f): a terminal reward equal to the
         probability of success under the curves' measured error brings the index on the
@@ -238,9 +237,9 @@ DRJSCC (single link, re-encodes the remaining blocks when the channel changes, a
         quality target, spreading slots over too many users wastes them (its random tie-breaking
         failure), which our admission rules (shortest need first) already prevent.
         `tools/rmab_scale.py` runs the ID-guided policy and its random-order baseline beside the
-        indices (COMMANDS 18.3). Measured: at 30 dB ID beats random by +0.5 to +0.7 points at
+        indices (COMMANDS 18.3). Measured: at 30 dB ID beats random by +0.5% to +0.7% at
         every K (persistency, modest here: the stand-in's +9 was four frames), but both trail
-        the Lagrangian index (2.6 / 3.1 vs 1.5 points from the bound at K 128); for the mean
+        the Lagrangian index (2.6 / 3.1 vs 1.5% from the bound at K 128); for the mean
         value ranking wins (0.005 vs 0.09-0.11 dB at K 128). On stale reports (r = 0.7) the
         guided policies collapse at the target (ID 35.6%, random 46.3%, the best policy 59.9%):
         with flat ideal actions the order alone decides. The conflict rule matters because of
@@ -328,10 +327,10 @@ slots to bring all users to a target. Kodak and CLIC; K in {4, 8, 16}; mean SNRs
 | P-A mixed-SNR decoding | `tools/mixed_snr.py` on the w1 ViT, then on a `--snr-chunks 4` fine-tune vs its constant-SNR control (COMMANDS.txt section 5) | a mixed prefix within ~0.2 dB of the model's prediction; constant-SNR quality within 0.1 dB of the control. **2026-10-10: passes with `--snr-chunks` training (additive within 0.06 dB on 2-chunk means; constant-SNR cost 0.06-0.10 dB); fails for constant-SNR decoders** |
 | P-B utility model | the same runs, then per phase (COMMANDS.txt section 6) | MAE <= 0.2 dB per image on held-out profiles. **2026-10-10: passes for snrc4 (held-out 0.03-0.07 dB per image and phase, replayed schedules 0.08 dB); s1 0.12-0.29** |
 | P-C1 mean quality | simulator on the real utility, then the codec on the schedules (section 7) | >= 0.3 dB mean PSNR over PF, decoded, K = 8, Rayleigh. **2026-10-10: content-aware lengths +0.05 (the first form fails); the advantage index passes: +0.476 simulated, +0.465 [0.39, 0.53] decoded; +0.34 to +0.49 over every scenario** |
-| P-C2 quality target | the same, with `--target` | >= 5 points more users at the target than PADC's rule (with shortest-first admission and PF timing), decoded, K = 8, T = 24, 30 dB. **2026-10-10: passes: +9.4 simulated, +10.0 [7.3, 12.9] decoded (+9.6 with a 0.2 dB margin, 0.2% missed); +6.9 to +10.4 over the scenarios, +4.2 with 10% curve errors** |
-| P-C3 realistic transmitter | the same with `--belief` (each image calibrated from 2P constant decodes; kappa, rho from other images), correlated fading (section 8) | P-C1 and P-C2 still pass. **2026-10-11: passes: decoded +0.464 dB [0.39, 0.53] and +11.0 points [8.3, 13.8]; calibration error 0.03-0.06 dB, as good as the full fit; under slot correlation up to 0.98 the leads are >= +0.34 dB and >= +5.6 points** |
-| P-D separation | `tools/digital_rd.py` + the same schedulers on a digital utility (alloc/digital.py: HEIC, error-free CQI link adaptation, free file switching, up to 12 slots per user) | ahead of HEVC-intra + CQI link adaptation at low and mid SNR; honest against the capacity bound. **2026-10-11: ON PAR, not ahead: mean PSNR +0.13 dB (prefix) / +0.28 (per-CBR) at each one's best policy; target: +6 to +9 points in tight frames, -6 to +0.2 at 32 dB; a 3 dB-gap code is 0.5-0.7 dB ahead, capacity 1.7-1.9. At the equal per-user cap (6 slots, 2026-10-12): mean unchanged; target +0.5 / +5.0 / +8.4 points at 30 / 28 / T 16, -1.6 at 32 (prefix code), +0.8 to +10.5 with a decoder per length. Error-free CQI is the assumption left that favours digital: section 13 (`--cqi-error`)** |
-| P-E one model per CBR | six specialists (1/48 ... 1/8), each trained like snrc4_s1 plus `--fixed-cbr`, one per-CBR utility; scheduled with `--fixed-codes` (spare slots planned before the frame) | the prefix code's best policy ahead of the specialists' best. **2026-10-11: with known slots per-CBR wins: mean +0.15 dB, target +2.0 to +6.0 points against `online` (much of it the slot planner, which the prefix code can use too: `plan_adv` / `replan_adv`, section 12). With lost slots the prefix code wins mean PSNR by +0.36 / +0.53 dB (10% / 25% lost) against per-CBR's best hedge. 2026-10-12, the same planner on both: per-CBR still +1.0 to +4.4 points with known slots (the nesting penalty itself); with 25% lost `replan_adv` +0.5; with a decoder per length (P-F) -0.9 to +1.2 known, +2.8 points / +0.73 dB at 25% lost. Decoded: the model and both schedulers hold on the per-CBR codes (MAE 0.06-0.08 dB)** |
+| P-C2 quality target | the same, with `--target` | >= 5% more users at the target than PADC's rule (with shortest-first admission and PF timing), decoded, K = 8, T = 24, 30 dB. **2026-10-10: passes: +9.4 simulated, +10.0 [7.3, 12.9] decoded (+9.6 with a 0.2 dB margin, 0.2% missed); +6.9 to +10.4 over the scenarios, +4.2 with 10% curve errors** |
+| P-C3 realistic transmitter | the same with `--belief` (each image calibrated from 2P constant decodes; kappa, rho from other images), correlated fading (section 8) | P-C1 and P-C2 still pass. **2026-10-11: passes: decoded +0.464 dB [0.39, 0.53] and +11.0% [8.3, 13.8]; calibration error 0.03-0.06 dB, as good as the full fit; under slot correlation up to 0.98 the leads are >= +0.34 dB and >= +5.6%** |
+| P-D separation | `tools/digital_rd.py` + the same schedulers on a digital utility (alloc/digital.py: HEIC, error-free CQI link adaptation, free file switching, up to 12 slots per user) | ahead of HEVC-intra + CQI link adaptation at low and mid SNR; honest against the capacity bound. **2026-10-11: ON PAR, not ahead: mean PSNR +0.13 dB (prefix) / +0.28 (per-CBR) at each one's best policy; target: +6% to +9% in tight frames, -6 to +0.2 at 32 dB; a 3 dB-gap code is 0.5-0.7 dB ahead, capacity 1.7-1.9. At the equal per-user cap (6 slots, 2026-10-12): mean unchanged; target +0.5% / +5.0% / +8.4% at 30 / 28 / T 16, -1.6 at 32 (prefix code), +0.8 to +10.5 with a decoder per length. Error-free CQI is the assumption left that favours digital: section 13 (`--cqi-error`)** |
+| P-E one model per CBR | six specialists (1/48 ... 1/8), each trained like snrc4_s1 plus `--fixed-cbr`, one per-CBR utility; scheduled with `--fixed-codes` (spare slots planned before the frame) | the prefix code's best policy ahead of the specialists' best. **2026-10-11: with known slots per-CBR wins: mean +0.15 dB, target +2.0% to +6.0% against `online` (much of it the slot planner, which the prefix code can use too: `plan_adv` / `replan_adv`, section 12). With lost slots the prefix code wins mean PSNR by +0.36 / +0.53 dB (10% / 25% lost) against per-CBR's best hedge. 2026-10-12, the same planner on both: per-CBR still +1.0% to +4.4% with known slots (the nesting penalty itself); with 25% lost `replan_adv` +0.5; with a decoder per length (P-F) -0.9 to +1.2 known, +2.8% / +0.73 dB at 25% lost. Decoded: the model and both schedulers hold on the per-CBR codes (MAE 0.06-0.08 dB)** |
 | P-F decoder heads | decoder-only specialists and LoRA budget heads on the frozen snrc4 encoder | how much of the penalty a per-length decoder recovers. **2026-10-11: LoRA heads none (= more training alone); a decoder of its own ~40% at 1 and 6 phases. 2026-10-12, all six lengths: 79-101% of the penalty at 2-4 phases (57-100% beyond more training), 49-65% at 1, 5, 6: where schedules live the penalty is mostly a decoder matter, paid at the receiver. Encode once + a decoder per length is the recommended JSCC system; equal-budget check: section 13** |
 
 G-A, G-B and G-C of `docs/ASSESSMENT.md` stay relevant: G-A picks the codec, G-B says how much

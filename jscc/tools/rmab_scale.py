@@ -44,7 +44,7 @@ with phases left, as in tools/schedule_sim.py):
                 largest gain; top B (mean objective only)
 
 The relaxation's tie rule and price solver (docs/PAPER.md owed item 9: at 30 dB the
-Lagrangian index stays ~1.5 points per user below the bound at every K):
+Lagrangian index stays ~1.5% of the users below the bound at every K):
     lagrange_relax  the Lagrangian index in Zhang and Frazier's fluid-priority order: users
                 whose gain at lambda*_t is above the programs' precision first (by gain), then
                 the indifferent ones (|gain| within it: they would take a later unit as well)
