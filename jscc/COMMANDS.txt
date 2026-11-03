@@ -9,7 +9,8 @@
 WHAT TO RUN: section 39 (CPU, ~2 min; no GPU): the redraw with CLASP in the legends and the
 shares of users in % (no "points"); nothing to send back but a "skip" line, if any. Sections 0-36
 are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md, all reviewed); section 39 replaces
-37 and 38.
+37 and 38. Optional: section 40 compiles the Introduction draft (jscc/paper/main.pdf is already
+in the repository, built from the same files).
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
 docs/INTRO_NUMBERS.md).
@@ -88,6 +89,8 @@ docs/INTRO_NUMBERS.md).
      the legends and Table III's caption
   39 redraw: CLASP, and the shares of users     TO RUN (CPU, ~2 min)
      in % instead of "points"
+  40 compile the Introduction draft            optional (CPU, seconds; needs pdflatex)
+     (jscc/paper)
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3753,3 +3756,22 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 
 # Reading: "14" (the figures and tables written) and no "skip" line. To look at the new labels:
 # figures/fig04_scaling.png, figures/fig05_ablation_calibration.png, figures/fig08_users.png.
+
+================================================================================
+ 40. OPTIONAL -- compile the Introduction draft (CPU, seconds; needs pdflatex and bibtex)
+================================================================================
+# jscc/paper/main.tex: the title, the abstract (docs/PAPER_OUTLINE.md), Section I
+# (paper/sections/introduction.tex, drafted from docs/INTRO_OUTLINE.md) and the headings of
+# Sections II-VI, which the Introduction's cross-references point to; paper/references.bib holds
+# the 33 references of the outline's list. The PDF it builds is already in the repository as
+# paper/main.pdf. Nothing to send back.
+
+cd ~/projects/JSCCwClaude-main/jscc/paper
+mkdir -p build                                 # the output goes to build/ (ignored by git), so
+                                               # the committed main.pdf is never overwritten
+pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; bibtex build/main
+pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
+pdflatex -interaction=nonstopmode -output-directory=build main.tex | tail -2
+
+# Reading: "Output written on build/main.pdf (4 pages ...)"; bibtex warns only "empty year in
+# TS36213" (the outline's entry gives no release).

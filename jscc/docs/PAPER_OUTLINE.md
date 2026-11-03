@@ -48,7 +48,10 @@ transmission.
 ## I. Introduction (~1.5 pages)
 
 Seven paragraphs, in the order of the supervisor's template: `docs/INTRO_OUTLINE.md` (with
-Figure 1, the references, and the source of every number in `docs/INTRO_NUMBERS.md`).
+Figure 1, the references, and the source of every number in `docs/INTRO_NUMBERS.md`). Drafted in
+`paper/sections/introduction.tex` (built into `paper/main.pdf`); the outline's setup details (the
+phases and architecture, the distortion formula, the calibration accuracy per prefix length, the
+reward's spreads) are left to Sections III-V.
 
 ## II. Related Work (~1 page)
 
