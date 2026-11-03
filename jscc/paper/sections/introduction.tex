@@ -3,8 +3,8 @@
 
 \IEEEPARstart{D}{eep} joint source-channel coding (JSCC) maps an image straight to channel symbols
 with one learned encoder and decoder, with no separate source and channel codes
-\cite{Bourtsoulatze19}. It matches or beats separation-based digital transmission at low SNR and
-degrades gracefully as the channel worsens, instead of failing once the SNR drops below what a
+\cite{Bourtsoulatze19}. It matches or beats separation-based digital transmission at low signal-to-noise
+ratio (SNR) and degrades gracefully as the channel worsens, instead of failing once the SNR drops below what a
 digital code was designed for \cite{Bourtsoulatze19,Gunduz23}. That makes it a strong candidate for
 image delivery in 6G \cite{Gunduz23}. But a learned code is designed and evaluated as a single link
 at a given SNR: one transmitter, one receiver, the channel condition handed to it
@@ -22,38 +22,29 @@ Existing approaches to serving images to many users over a fading downlink fall 
 engineers the link that carries its bits, and \emph{the JSCC way}, which lets a learned code take on
 the channel itself.
 
-Physical link design is how cellular systems deliver images today. A standard codec compresses the
-image into bits once (HEVC intra, as in HEIC \cite{Sullivan12}); for each slot, the physical layer
-picks the modulation and coding rate from the user's channel quality indicator (CQI) report
-\cite{Goldsmith97,TS36213}; failed blocks are retransmitted with incremental-redundancy hybrid
-automatic repeat request (HARQ) \cite{Caire01}; and a channel-aware scheduler, such as proportional
-fair (PF), picks the user each slot serves \cite{Viswanath02}. Its tools for many users are mature:
-effective-SNR link abstractions, the exponential and the mutual-information effective SNR mappings
-(EESM, MIESM), predict a coded block's error rate from the SNRs of all the resources it occupies
-\cite{Ericsson03,EMD09,Lagen20}, and media-aware schedulers weigh each user's next packet by the
-distortion it removes before its deadline \cite{Chou06,Pahalawatta07,Fu10,Hosseini19}. All of them,
-however, rest on a binary outcome per block, decoded or lost, so a user's quality is a step function
-of its channel: a slot below the block's design SNR delivers nothing, and SNR above it is wasted, the
-cliff effect \cite{Bourtsoulatze19,Gunduz23}. Moreover, the rate is committed before the slot is
-seen, from a report that may be late or wrong, and link adaptation and HARQ protect the bits only by
-spending extra slots. In our simulations, going from fresh reports to aged ones (correlation 0.8)
-costs the digital chain 1.9~dB of mean PSNR, against 0.6~dB for a learned code under our scheduler
-(Section~\ref{sec:eval-csi}).
+Physical link design is how cellular systems deliver images today: a standard codec compresses the
+image into bits once, and the physical layer carries them with link adaptation from the user's
+channel quality indicator (CQI) reports, hybrid automatic repeat request (HARQ), and a
+channel-aware scheduler such as proportional fair (PF) \cite{Goldsmith97,Caire01,Viswanath02}. Its
+tools for many users are mature (Section~\ref{sec:related-link}), but they rest on a binary outcome
+per block, decoded or lost, so a user's quality is a step function of its channel: a slot below
+the block's design SNR delivers nothing, and SNR above it is wasted, the cliff effect
+\cite{Bourtsoulatze19,Gunduz23}. Moreover, the rate is committed before the slot is seen, from a
+report that may be late or wrong, and link adaptation and HARQ protect the bits only by spending
+extra slots. In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the
+digital chain 1.9~dB of mean peak signal-to-noise ratio (PSNR), against 0.6~dB for a learned code
+under our scheduler (Section~\ref{sec:eval-csi}).
 
 In contrast, the JSCC way replaces the two codes with one learned code that maps the image straight
 to channel symbols \cite{Bourtsoulatze19}. Its quality degrades smoothly with the SNR its symbols
 meet, so no block is lost outright and no coding rate has to be matched to an uncertain report; the
 same symbols serve receivers of different SNRs, as linear analog codes showed for multicast video
-\cite{Jakubczak11}. One line of work adapts a single link to the SNR \cite{Xu22}, to the bandwidth
-and rate \cite{Kurka21,Dai22,Zhang23,Yang25}, to feedback that stops the transmission once a target
-quality is reached \cite{Kurka20,Wu24f}, and to MIMO channels \cite{Wu24m}. To serve many users, the
-JSCC way splits the shared channel by each user's predicted quality at its SNR, through channel and
-symbol assignment \cite{Yan22}, user association and bandwidth \cite{Xia24}, or Bayesian
-optimization over a learned quality oracle \cite{Hou26}; other work builds the sharing into the code
-\cite{Yilmaz23}. Where the allocation must change over time, a scheduler is learned by deep
-reinforcement learning \cite{Wang22,Zhang23t}, most recently as a restless bandit over fading slots
-whose slot values are learned \cite{McDowell26}. Our method belongs to the JSCC way: it schedules a
-learned code to many users across fading slots.
+\cite{Jakubczak11}. Most of this work adapts a single link to the channel and the budget
+(Section~\ref{sec:related-jscc}). To serve many users, the JSCC way splits the shared channel by each
+user's predicted quality at its SNR \cite{Yan22,Xia24,Hou26}, or learns the allocation by deep
+reinforcement learning \cite{Wang22,Zhang23t}, most recently inside a restless bandit over fading
+slots \cite{McDowell26}. Our method belongs to the JSCC way: it schedules a learned code to many
+users across fading slots.
 
 \begin{figure}[!t]
 \centering
@@ -77,22 +68,23 @@ schedules a learned code to many users over fading slots.
 \item \emph{No link abstraction.} They value a user's transmission at a single SNR, with a fitted
 quality-SNR curve or a learned quality predictor \cite{Yan22,Zhang23,Hou26}. A scheduled image,
 however, is spread over slots of different SNRs, and for a nonlinear learned code no rule is known
-for how these SNRs combine into decoded quality. EESM and MIESM predict a digital block's error
-rate, not a learned code's distortion, and to our knowledge have not been validated on a learned
-code.
+for how these SNRs combine into decoded quality. The exponential and the mutual-information
+effective SNR mappings (EESM, MIESM) of physical link design predict a digital block's error rate
+from the SNRs of the resources it occupies \cite{Ericsson03,EMD09}, not a learned code's
+distortion, and to our knowledge have not been validated on a learned code.
 \item \emph{No tractable, certifiable scheduler.} Deciding which user each slot serves, before a
 deadline and without knowing future slots, is a stochastic dynamic program whose state grows
 exponentially with the number of users. Existing methods either decide each transmission at its
 current SNR without planning over the slots left before the deadline \cite{Yan22,Xia24,Hou26}, or
-learn slot values by reinforcement learning, which needs many interactions to train and gives no
+learn the allocation by reinforcement learning, which needs many interactions to train and gives no
 certificate of how far the learned policy is from optimal \cite{Wang22,Zhang23t,McDowell26}.
 \item \emph{Imperfect information.} The quality model and the channel reports are both estimates,
 yet existing schedulers take them at face value: per-image rate selection (PADC \cite{Zhang23})
-treats its predicted quality as exact, and the learned schedulers assume perfect channel knowledge
-\cite{McDowell26}, so a user predicted just above a quality target can decode just below it.
+treats its predicted quality as exact, so a user predicted just above a quality target can decode
+just below it, and the closest learned scheduler assumes exact channel knowledge \cite{McDowell26}.
 Moreover, the advantage of the JSCC way over physical link design was measured on single links
 against an idealized digital side, with exact channel knowledge and capacity-achieving codes
-\cite{Kurka20}; whether it survives the reports a real base station has is open.
+\cite{Bourtsoulatze19,Kurka20}; whether it survives the reports a real base station has is open.
 \end{itemize}
 Behind all three lies one question: does a learned code have a link abstraction at all, a rule that,
 like EESM for a digital block, turns the SNRs its symbols met into its decoded quality? And if it
@@ -120,14 +112,15 @@ provided the abstraction's residual error is part of the objective.
 
 To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
 of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.
-Unlike existing JSCC methods, which value each user at one SNR or learn slot values by reinforcement
-learning, CLASP values every slot for every user through the code's link abstraction and plans each
+Unlike existing JSCC methods, which value each user at one SNR or learn the allocation by
+reinforcement learning, CLASP values every slot for every user through the code's link abstraction and plans each
 user's delivery to the deadline exactly. It has one design for each challenge.
 \begin{itemize}
 \item \emph{Link abstraction.} The progressive code is trained under slot-varying SNR and its MMSE
 link abstraction is calibrated per image, so that each user becomes a two-number state.
 \item \emph{Scheduler.} On this state the frame becomes a finite-horizon restless bandit
-\cite{Whittle88}. A Lagrangian relaxation splits it into one small dynamic program per user under
+\cite{Whittle88}, a model already used to schedule layered video \cite{Hosseini19} and learned
+semantic codes \cite{McDowell26}. A Lagrangian relaxation splits it into one small dynamic program per user under
 per-slot prices, solved exactly on a CPU; the relaxation's value is an upper bound on every causal
 scheduler; and users are served in the order of the Lagrangian index those programs define
 \cite{Hao22,Brown20}.

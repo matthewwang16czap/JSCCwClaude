@@ -9,8 +9,8 @@
 WHAT TO RUN: section 39 (CPU, ~2 min; no GPU): the redraw with CLASP in the legends and the
 shares of users in % (no "points"); nothing to send back but a "skip" line, if any. Sections 0-36
 are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md, all reviewed); section 39 replaces
-37 and 38. Optional: section 40 compiles the paper draft on the IEEE template (jscc/paper/main.pdf
-is already in the repository, built from the same files).
+37 and 38. Optional: section 40 compiles the paper draft (Sections I-II) on the IEEE template
+(jscc/paper/main.pdf is already in the repository, built from the same files).
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
 docs/INTRO_NUMBERS.md).
@@ -3763,10 +3763,11 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 # jscc/paper/main.tex follows New_IEEEtran_how-to.tex (IEEEtran V1.8b): its preamble, title,
 # author and \thanks block, running heads, abstract, index terms and \balance; paper/IEEEtran.cls
 # is the class file you sent. It holds the abstract (docs/PAPER_OUTLINE.md), Section I
-# (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md) and the headings of Sections
-# II-VI, which the Introduction's cross-references point to. paper/references.bib holds the 33
-# references, each checked against Crossref, arXiv, the 3GPP archive or the IEEE 802.16 list.
-# The PDF it builds is already in the repository as paper/main.pdf. Nothing to send back.
+# (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md), Section II
+# (paper/sections/related.tex) and the headings of Sections III-VI, which the cross-references
+# point to. paper/references.bib holds the 42 references; why each qualifies, and the text behind
+# what the paper says about it: docs/RELATED_SOURCES.md. The PDF it builds is already in the
+# repository as paper/main.pdf. Nothing to send back.
 
 cd ~/projects/JSCCwClaude-main/jscc/paper
 kpsewhich subfig.sty stfloats.sty algorithmic.sty balance.sty | wc -l   # 4; if fewer:
@@ -3775,9 +3776,14 @@ mkdir -p build                                 # the output goes to build/ (igno
                                                # the committed main.pdf is never overwritten
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; bibtex build/main
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
+pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex | tail -2
-grep -c "Overfull" build/main.log                # 0
+grep "Overfull" build/main.log                   # one line, about 1 pt (see below)
+grep -c "bibitem" build/main.bbl                 # 42
 
-# Reading: "Output written on build/main.pdf (4 pages ...)", bibtex with no warning, and 0.
+# Reading: "Output written on build/main.pdf (6 pages ...)", bibtex with no warning, one
+# "Overfull \vbox (1.1...pt too high)" line, and 42. That line comes from balancing the columns
+# of the last page (the template's \balance) and is invisible; one of tens of pt would mean a
+# reference was pushed off a page.
 # The log's one LaTeX warning, "Unused global option(s): [lettersize]", comes from the
 # template's first line: V1.8b has no such option and uses letter paper by default.
