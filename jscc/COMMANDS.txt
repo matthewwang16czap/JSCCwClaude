@@ -9,7 +9,7 @@
 WHAT TO RUN: section 39 (CPU, ~2 min; no GPU): the redraw with CLASP in the legends and the
 shares of users in % (no "points"); nothing to send back but a "skip" line, if any. Sections 0-36
 are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md, all reviewed); section 39 replaces
-37 and 38. Optional: section 40 compiles the paper draft (Sections I-II) on the IEEE template
+37 and 38. Optional: section 40 compiles the paper draft (Sections I-III) on the IEEE template
 (jscc/paper/main.pdf is already in the repository, built from the same files).
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
@@ -3764,14 +3764,15 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 # author and \thanks block, running heads, abstract, index terms and \balance; paper/IEEEtran.cls
 # is the class file you sent. It holds the abstract (docs/PAPER_OUTLINE.md), Section I
 # (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md), Section II
-# (paper/sections/related.tex) and the headings of Sections III-VI, which the cross-references
-# point to. paper/references.bib holds the 42 references; why each qualifies, and the text behind
-# what the paper says about it: docs/RELATED_SOURCES.md. The PDF it builds is already in the
-# repository as paper/main.pdf. Nothing to send back.
+# (paper/sections/related.tex), Section III (paper/sections/preliminaries.tex: Table I and Fig. 2,
+# drawn in TikZ) and the headings of Sections IV-VI, which the cross-references point to.
+# paper/references.bib holds the 43 references; why each qualifies, and the text behind what the
+# paper says about it: docs/RELATED_SOURCES.md. The PDF it builds is already in the repository as
+# paper/main.pdf. Nothing to send back.
 
 cd ~/projects/JSCCwClaude-main/jscc/paper
-kpsewhich subfig.sty stfloats.sty algorithmic.sty balance.sty | wc -l   # 4; if fewer:
-                                               # sudo apt-get install texlive-latex-extra texlive-science
+kpsewhich subfig.sty stfloats.sty algorithmic.sty balance.sty tikz.sty | wc -l   # 5; if fewer:
+                       # sudo apt-get install texlive-latex-extra texlive-science texlive-pictures
 mkdir -p build                                 # the output goes to build/ (ignored by git), so
                                                # the committed main.pdf is never overwritten
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; bibtex build/main
@@ -3779,10 +3780,10 @@ pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex | tail -2
 grep "Overfull" build/main.log                   # one line, about 1 pt (see below)
-grep -c "bibitem" build/main.bbl                 # 42
+grep -c "bibitem" build/main.bbl                 # 43
 
-# Reading: "Output written on build/main.pdf (6 pages ...)", bibtex with no warning, one
-# "Overfull \vbox (1.1...pt too high)" line, and 42. That line comes from balancing the columns
+# Reading: "Output written on build/main.pdf (8 pages ...)", bibtex with no warning, one
+# "Overfull \vbox (0.8...pt too high)" line, and 43. That line comes from balancing the columns
 # of the last page (the template's \balance) and is invisible; one of tens of pt would mean a
 # reference was pushed off a page.
 # The log's one LaTeX warning, "Unused global option(s): [lettersize]", comes from the

@@ -99,29 +99,53 @@ Panwar; McDowell et al.). What the section says about each work is checked again
 
 ## III. Preliminaries: System Model and Problem Statement (~1.5 pages)
 
-- **Downlink frame.**
-  - K users, T slots, B resource units per slot (B = 1 is TDMA; B = K/8 in the scaling study).
-  - A unit carries one *phase* of one user's code.
-  - Block Rayleigh fading per user and slot; mean SNRs drawn from U[0, 15] dB.
-- **CSI models.**
-  - Exact CQI.
-  - Gaussian CQI error with standard deviation σ dB.
-  - Outdated reports h_rep = r h + sqrt(1-r^2) e, with r = J0(2π f_D τ).
-  - Units lost to other traffic with probability p.
-- **The progressive code.**
-  - An encoder maps the image to 6 phases (CBR 1/48 each, up to 1/8).
-  - Any prefix of L phases decodes. Phase j crosses the channel at its own slot's SNR.
-  - Encode once, one decoder for every L.
-- **Objectives.**
-  - Mean PSNR over users at the deadline.
-  - The share of users reaching a target Q (30 dB).
-  - Causal policies only: the current slot's report, never a future one.
-- **Digital baseline.**
-  - HEVC intra (HEIC) at the rate the LTE CQI table allows, with a tuned backoff (or, on aged
-    reports, an offset on the aware transmitter's rate).
-  - IR-HARQ up to four transmissions; lost blocks are counted.
-  - An idealised code 3 dB from capacity with the same HARQ.
-- **Notation table.**
+Drafted in `paper/sections/preliminaries.tex`, with Table I (every symbol, and the default values
+of Section V) and Fig. 2 (a frame of K = 3 users, B = 2 units and T = 6 slots, drawn in TikZ:
+which phase each unit carries, a unit taken by other traffic, and one user's phases arriving at
+their slots' SNRs and decoded at the deadline). Every symbol is defined where it first appears;
+equations (1)-(21):
+
+- **A. Downlink frame.** K users, T slots, B units of S channel uses per slot, a user at most one
+  unit per slot; each unit free with probability 1 - p, so B_t ~ Binomial(B, 1 - p) (1); the
+  capacity constraint sum_k a_kt <= B_t (2).
+- **B. Channel and reports.** y = sqrt(mean SNR) h s + w (3); equalized, an AWGN channel at
+  gamma_kt = mean SNR |h|^2, noise n_kt = 1 / gamma_kt (4). Exact, erroneous (5) and aged (6)
+  reports, r = |J0(2 pi f_D tau)| (the magnitude suffices: e is circular, so the joint law of |h|
+  and |h_rep| is the same for either sign); the posterior CN(r h_rep, 1 - r^2) (7). Slot SNRs and
+  reports clipped to the training range [-2, 22] dB.
+- **C. The progressive code.** P phases of S symbols, unit power (8), bandwidth ratio 1/48 per
+  phase and 1/8 in all; L_k phases held; the slot of phase j (9); each phase at its own slot's
+  noise (10); one decoder for any prefix (11); MSE and PSNR, peak 1 (12); D_empty (10 dB) when
+  nothing arrives.
+- **D. The digital baseline.** HEIC (HEVC intra) files; the CQI rate with a backoff (13), thresholds
+  ours, efficiencies from TS 36.213; the backoff 0 with exact reports and tuned per scheduler and
+  objective otherwise; block loss and acknowledgments; HARQ by incremental redundancy (14) or
+  Chase combining (15): a lost block takes the user's next slots until decoded or sent M = 4
+  times, and one still pending at the deadline is lost; I(gamma) the CQI table interpolated in
+  dB, falling to zero 3.7 dB below the first entry and flat above the last, so one transmission
+  decodes exactly as without HARQ; at most P slots; bits per pixel (16), the largest file that
+  fits; the 3 dB-gap code with the same backoff and HARQ.
+- **E. Problem statement.** Causal policies a_t = pi_t(I_t) (17) on the information (18); the mean
+  PSNR (19) and the share at the target (20); the problem (21) and its three difficulties, which
+  Section IV takes in turn.
+
+Where each part of the model is implemented:
+
+| model | code |
+|---|---|
+| frame, one phase per unit, prefix order, decoding at the deadline | `tools/schedule_sim.py` (docstring, `draw_frames`) |
+| B units per slot, a user at most one unit per slot | `tools/rmab_scale.py` (docstring, `draw`) |
+| units taken by other traffic | `--preempt`: per slot in `schedule_sim.py` (B = 1), per unit in `rmab_scale.py` |
+| mean SNRs U[0, 15] dB, Rayleigh fades, the [-2, 22] dB clip | `schedule_sim.py` `draw_frames`, `fades`, `--snr-clip` |
+| unit power per codeword, noise variance 10^(-SNR/10), an SNR per position | `net/channel.py` (`normalize`, `piecewise_snr`) |
+| erroneous reports | `schedule_sim.py` `draw_frames` (`cqi_error`) |
+| aged reports and their posterior | `alloc/csi.py` (`outdated`, `posterior`) |
+| 6 phases of CBR 1/48, encoder and decoder blind to the SNR | `docs/NOTES.md` section 1 |
+| PSNR with peak 1; D_empty = 0.1 | `utils/metrics.py` `psnr`; `alloc/utility.py` `d_empty` |
+| CQI rate, block loss, IR and Chase HARQ, M = 4, the gap code, bits per pixel, the largest file | `alloc/digital.py`; `schedule_sim.py` `--harq`, `--harq-max`, `--link shannon --gap-db 3`, `--digital-max-phases 6` |
+| HARQ retransmission in the user's next slots, the drop after M, I(gamma) and its ends | `schedule_sim.py` `harq_deliver`; `alloc/digital.py` `mutual_info` |
+| the backoff: 0 with exact reports, else tuned per scheduler and objective on other frames | `schedule_sim.py` `tune_backoff`, `--cqi-backoff auto` |
+| mean PSNR and the share at the target | `schedule_sim.py` (default objective, `--target`) |
 
 ## IV. Method (~4 pages)
 

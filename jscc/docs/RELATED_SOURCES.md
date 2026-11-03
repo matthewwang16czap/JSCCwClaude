@@ -1,4 +1,4 @@
-# Sources of Sections I and II: why each reference qualifies, and what supports each claim
+# Sources of the paper's references: why each qualifies, and what supports each claim
 
 **The rule.** Cite top venues from the last three years, or highly cited work. Applied as:
 
@@ -12,7 +12,7 @@ uses (marked *used*), and standards documents. Two works that fail the rule are 
 authors' request as the closest prior work (marked *exception*): Hosseini and Panwar (IEEE Access)
 and McDowell et al. (an arXiv preprint, the only one cited).
 
-**How each claim was checked.** Every statement Sections I and II make about a work was compared
+**How each claim was checked.** Every statement Sections I-III make about a work was compared
 with the work's abstract (Crossref, OpenAlex or Semantic Scholar record), with its full text where
 the abstract does not settle it (the readings in
 `research_notes/Related work for JSCC scheduling/fulltext_readings.md`, or the documents
@@ -56,8 +56,13 @@ downloaded on 2026-11-03), or both. The support column quotes the text. Numbers 
 
 **[5] TS36213.** 3GPP TS 36.213 V8.8.0 (Release 8), Sep. 2009; standard; *used* (CQI table of the
 digital baseline).
-- Says (I, II-A): the base station knows the channel through a report; in LTE, a 4-bit CQI.
-- Support (V8.8.0 text): "a single 4-bit wideband CQI is reported according to Table 7.2.3-1".
+- Says (I, II-A, III-D): the base station knows the channel through a report; in LTE, a 4-bit
+  CQI; the efficiencies of the CQI table; a CQI index is one whose transport block could be
+  received with an error probability of at most 0.1.
+- Support (V8.8.0 text): "a single 4-bit wideband CQI is reported according to Table 7.2.3-1";
+  "could be received with a transport block error probability not exceeding 0.1"; Table 7.2.3-1
+  holds the efficiencies 0.1523 to 5.5547 used by `alloc/digital.py`. The SNR thresholds
+  theta_c are not from the specification: Section III-D calls them the AWGN SNRs we take.
 
 **[6] Goldsmith97.** IEEE TCOM 1997; 1851; highly cited.
 - Says (I, II-A): adaptive modulation from the channel state; its bit error rate depends on the
@@ -67,8 +72,9 @@ digital baseline).
   performance of our adaptive scheme."
 
 **[7] Caire01.** IEEE TIT 2001; 559; highly cited; *used* (IR-HARQ).
-- Says (I, II-A): HARQ; the throughput of such protocols over a fading Gaussian collision channel
-  has closed forms; incremental redundancy accumulates.
+- Says (I, II-A, III-D): HARQ; the throughput of such protocols over a fading Gaussian collision
+  channel has closed forms; incremental redundancy accumulates (III-D: a block is decoded once
+  the information of its transmissions adds up to its rate, eq. (14)).
 - Support (abstract): "protocols for reliable packet communication based on 'hybrid-ARQ,' over a
   slotted multiple-access Gaussian channel with fading"; "we obtain closed-form throughput
   formulas". The accumulated-information rule for IR is attributed to Caire and Tuninetti by
@@ -189,8 +195,9 @@ origin of EESM; *used* (EESM baseline).
   encoder expects based on the training data".
 
 **[21] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
-- Says (I, II-C): the constraint on the number of projects operated is relaxed to its expected
-  value; the multiplier defines an index; the conjecture of near-optimality.
+- Says (I, II-C, III-E): the constraint on the number of projects operated is relaxed to its
+  expected value; the multiplier defines an index; the conjecture of near-optimality (III-E: the
+  scheduling problem becomes a restless bandit).
 - Support (abstract): "under a constraint upon the expected number of projects in operation. The
   Lagrange multiplier associated with this constraint defines an index"; "for m and n large in
   constant ratio, the policy of operating the m projects of largest current index is nearly
@@ -226,12 +233,15 @@ authors and title).
   many items; mixed policies and tiebreaking play an essential role".
 
 **[25] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
-- Says (II-A): HEVC as the standard codec.
+- Says (II-A, III-D): HEVC as the standard codec; the HEIC files of the digital baseline use HEVC
+  intra coding ([25] is cited for HEVC; HEIC is the HEIF image format with HEVC-coded images).
 - Support (abstract): "This paper provides an overview of the technical features and
   characteristics of the HEVC standard."
 
 **[26] Chase85.** IEEE TCOM 1985; 743; highly cited.
-- Says (II-A): the receiver combines the noisy copies of a retransmitted block.
+- Says (II-A, III-D): the receiver combines the noisy copies of a retransmitted block (III-D
+  models it as the copies' SNRs adding, eq. (15); the equation is ours, [26] is cited for the
+  scheme).
 - Support (title): "Code combining - A maximum-likelihood decoding approach for combining an
   arbitrary number of noisy packets".
 
@@ -342,6 +352,17 @@ authors and title).
   multi-action bandit.
 - Support (abstract): "the co-design problem becomes a restless multi-arm multi-action bandit
   problem".
+
+**[43] Jakes94.** W. C. Jakes (ed.), Microwave Mobile Communications, IEEE Press, 1994 (the
+reissue of the 1974 book); 2145 citations; highly cited.
+- Says (III-B): the magnitude of the correlation of the fading process at lag tau under Jakes'
+  isotropic-scattering model is |J0(2 pi f_D tau)|.
+- Support: Crossref record (doi: 10.1109/9780470545287). The correlation is the inverse Fourier
+  transform of the Doppler spectrum of that model, 1 / (pi sqrt(f_D^2 - nu^2)) for |nu| < f_D,
+  and that transform equals J0(2 pi f_D tau), checked numerically on 2026-11-03 (five lags, to
+  six decimals). Wikipedia's "Rayleigh fading" attributes the spectrum to Clarke (1968) and its
+  popularization to Jakes' book, and the IEEE 802.16m EMD cites the book for the Jakes Doppler
+  spectrum.
 
 ## Considered and left out
 
