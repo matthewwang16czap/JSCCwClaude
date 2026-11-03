@@ -9,6 +9,8 @@
 \usepackage{verbatim}
 \usepackage{graphicx}
 \usepackage{cite}
+\usepackage{tikz}
+\usetikzlibrary{patterns,decorations.pathreplacing}
 \hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
 \usepackage{balance}
 
@@ -38,8 +40,7 @@ Deep joint source-channel coding, hybrid automatic repeat request, image transmi
 
 \input{sections/related}
 
-\section{Preliminaries: System Model and Problem Statement}
-\label{sec:system}
+\input{sections/preliminaries}
 
 \section{Method}
 \label{sec:method}
@@ -84,7 +85,7 @@ Deep joint source-channel coding, hybrid automatic repeat request, image transmi
 \label{sec:conclusion}
 
 \IEEEtriggercmd{\balance\interlinepenalty=10000}
-\IEEEtriggeratref{41}
+\IEEEtriggeratref{17}
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

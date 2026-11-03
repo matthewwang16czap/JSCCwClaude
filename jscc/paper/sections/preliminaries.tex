@@ -1,0 +1,347 @@
+\section{Preliminaries: System Model and Problem Statement}
+\label{sec:system}
+
+This section defines the downlink frame, the channel and the reports the base station receives,
+the progressive code, the digital chain it is compared with, and the scheduling problem.
+Table~\ref{tab:notation} collects the notation, with the default values of
+Section~\ref{sec:eval}, and Fig.~\ref{fig:system} illustrates the frame and the code.
+
+\begin{table}[!t]
+\caption{Notation. Values are the defaults of Section~\ref{sec:eval};
+$\mathcal{U}[a, b]$ is the uniform distribution on $[a, b]$.}
+\label{tab:notation}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|c|>{\raggedright\arraybackslash}p{4.45cm}|>{\raggedright\arraybackslash}p{1.75cm}|}
+\hline
+Symbol & Meaning & Value \\
+\hline
+$K$, $\mathcal{K}$, $k$ & number, set and index of users & $K = 8$ \\
+$T$, $t$ & deadline in slots, slot index & $T = 24$ \\
+$B$ & resource units per slot & $1$ \\
+$B_t$ & units available in slot $t$ & \\
+$p$ & probability that a unit is taken & $0$ \\
+$S$ & complex channel uses per unit & $3HW/48$ \\
+$a_{k,t}$ & $1$ if user $k$ is served in slot $t$ & \\
+$\mathbf{a}_t$ & schedule $(a_{1,t}, \dots, a_{K,t})$ of slot $t$ & \\
+\hline
+$\bar\gamma_k$ & mean SNR of user $k$ & $\mathcal{U}[0, 15]$~dB \\
+$h_{k,t}$ & fading coefficient & $\mathcal{CN}(0,1)$ \\
+$\gamma_{k,t}$, $n_{k,t}$ & slot SNR, noise variance & \\
+$\gamma_{\min}$, $\gamma_{\max}$ & SNR range of training & $-2$, $22$~dB \\
+$\hat\gamma_{k,t}$, $\hat h_{k,t}$ & reported SNR, reported fading & \\
+$\epsilon_{k,t}$, $\sigma_\epsilon$ & report error, standard deviation & $\sigma_\epsilon = 0$--$3$~dB \\
+$r$, $f_D$, $\tau$ & correlation, Doppler frequency, age & $r = 1$--$0$ \\
+\hline
+$\mathbf{x}_k$, $\hat{\mathbf{x}}_k$ & image, its reconstruction & \\
+$H$, $W$ & image height and width in pixels & \\
+$f$, $g$ & encoder, decoder & \\
+$P$, $j$ & phases per code, phase index & $P = 6$ \\
+$\mathbf{u}_{k,j}$, $\mathbf{z}_{k,j}$ & phase $j$, as sent and as received & \\
+$t_{k,j}$ & slot that carries phase $j$ & \\
+$L_k$ & phases held at the deadline & $L_k \le P$ \\
+$\gamma_{k,(j)}$, $n_{k,(j)}$ & SNR, noise variance of phase $j$ & \\
+$D_k$, $q_k$ & MSE, PSNR at the deadline & \\
+$D_\emptyset$ & MSE with no phase received & $0.1$ \\
+\hline
+$c$, $\eta_c$ & CQI index, its efficiency & \cite{TS36213} \\
+$\theta_c$ & SNR threshold of index $c$ & $-6.7$--$22.7$~dB \\
+$R(\cdot)$ & rate selected for an SNR & \\
+$\eta_{k,t}$ & rate of the block in slot $t$ & \\
+$\beta$ & rate backoff & tuned \\
+$M$ & transmissions per block, HARQ & $4$ \\
+$I(\cdot)$ & information per transmission & \\
+$\Gamma$ & SNR gap of the idealized code & $3$~dB \\
+$b_k$ & bits per pixel received & \\
+\hline
+$\pi$, $\mathcal{I}_t$ & policy, information at slot $t$ & \\
+$Q$ & quality target & $30$~dB \\
+$J_{\mathrm{mean}}$, $J_Q$ & mean PSNR, share at the target & \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Downlink Frame}
+\label{sec:system-frame}
+
+A base station serves $K$ users, indexed by $k \in \mathcal{K} = \{1, \dots, K\}$, over a frame of
+$T$ slots, indexed by $t = 1, \dots, T$. Each user is owed one image
+$\mathbf{x}_k \in [0,1]^{3 \times H \times W}$, of $H \times W$ pixels with three color channels and
+intensities scaled to $[0,1]$, and every image must be delivered by the end of slot $T$, the
+deadline. Each slot holds $B$ resource units of $S$ complex channel uses each: $B = 1$ is
+time-division multiple access, and $B > 1$ models $B$ groups of subbands within one slot. A user
+receives at most one unit per slot. Other traffic may take a unit: each unit is available to the
+frame with probability $1 - p$, independently of the other units and slots, so the number of
+units available in slot $t$ is
+\begin{equation}
+B_t \sim \mathrm{Binomial}(B, 1 - p),
+\label{eq:units}
+\end{equation}
+and $B_t$ becomes known at the start of slot $t$. The schedule is a set of binary variables
+$a_{k,t} \in \{0, 1\}$, with $a_{k,t} = 1$ if user $k$ receives a unit in slot $t$. Since a user
+takes at most one unit, a slot can serve at most $B_t$ users:
+\begin{equation}
+\sum_{k=1}^{K} a_{k,t} \le B_t, \quad t = 1, \dots, T.
+\label{eq:capacity}
+\end{equation}
+
+\subsection{Channel and Channel Reports}
+\label{sec:system-channel}
+
+The channel of each user is flat within a slot and changes independently from slot to slot
+(block fading). In slot $t$, a complex symbol $s$ of unit average power sent to user $k$ arrives
+as
+\begin{equation}
+y = \sqrt{\bar\gamma_k}\, h_{k,t}\, s + w,
+\label{eq:channel}
+\end{equation}
+where $\bar\gamma_k$ is the mean SNR of user $k$, set by its path loss;
+$h_{k,t} \sim \mathcal{CN}(0, 1)$ is its Rayleigh fading coefficient, independent over users and
+slots; and $w \sim \mathcal{CN}(0, 1)$ is the receiver noise, independent over symbols. $\mathcal{CN}(\mu, v)$ denotes a circularly symmetric complex Gaussian law of mean
+$\mu$ and variance $v$. The receiver knows $h_{k,t}$ and equalizes,
+$z = y / (\sqrt{\bar\gamma_k}\, h_{k,t}) = s + w / (\sqrt{\bar\gamma_k}\, h_{k,t})$, so every
+symbol of the slot crosses an additive white Gaussian noise (AWGN) channel with SNR
+$\gamma_{k,t}$ and noise variance $n_{k,t}$:
+\begin{equation}
+\gamma_{k,t} = \bar\gamma_k\, |h_{k,t}|^2, \qquad n_{k,t} = \frac{1}{\gamma_{k,t}}.
+\label{eq:slot-snr}
+\end{equation}
+As $|h_{k,t}|^2$ is exponential with unit mean, $\gamma_{k,t}$ is exponential with mean
+$\bar\gamma_k$. A superscript dB marks a value in decibels, as in
+$\gamma^{\mathrm{dB}}_{k,t} = 10 \log_{10} \gamma_{k,t} = \bar\gamma^{\mathrm{dB}}_k +
+10 \log_{10} |h_{k,t}|^2$.
+
+At the start of slot $t$, the base station holds a report $\hat\gamma_{k,t}$ of the slot SNR of
+every user, and nothing about later slots. Three report models are considered.
+\emph{Exact reports} give $\hat\gamma_{k,t} = \gamma_{k,t}$. \emph{Erroneous reports} are off by
+a Gaussian error in decibels,
+\begin{equation}
+\hat\gamma^{\mathrm{dB}}_{k,t} = \gamma^{\mathrm{dB}}_{k,t} + \epsilon_{k,t}, \qquad
+\epsilon_{k,t} \sim \mathcal{N}(0, \sigma_\epsilon^2),
+\label{eq:cqi-error}
+\end{equation}
+independent over users and slots, where $\mathcal{N}(\mu, v)$ denotes a real Gaussian law of mean
+$\mu$ and variance $v$, so that $\sigma_\epsilon$ is the standard deviation of the error.
+\emph{Aged reports} were measured a time $\tau$ before the slot, and the channel has changed
+since:
+\begin{equation}
+\hat h_{k,t} = r\, h_{k,t} + \sqrt{1 - r^2}\, e_{k,t}, \qquad
+\hat\gamma_{k,t} = \bar\gamma_k\, |\hat h_{k,t}|^2,
+\label{eq:aged}
+\end{equation}
+where $\hat h_{k,t}$ is the fading coefficient the report was measured on,
+$e_{k,t} \sim \mathcal{CN}(0, 1)$ is independent of $h_{k,t}$, and
+$r = |J_0(2\pi f_D \tau)| \in [0, 1]$ is the magnitude of the correlation of the fading process
+at lag $\tau$ under Jakes' isotropic-scattering model \cite{Jakes94}, with $f_D$ the Doppler
+frequency and $J_0$ the Bessel function of the first kind and order zero. The magnitude suffices:
+as $e_{k,t}$ is circularly symmetric, the joint law of $|h_{k,t}|$ and $|\hat h_{k,t}|$, which is
+all the SNRs depend on, is the same for a correlation of either sign. A report with $r = 1$ is
+fresh, and one with $r = 0$ says nothing about the slot. Since $\hat h_{k,t}$ has unit
+variance and $\mathbb{E}[h_{k,t} \hat h_{k,t}^*] = r$, where ${}^*$ denotes complex conjugation,
+the two coefficients are jointly Gaussian with correlation $r$, and the channel given the report is
+\begin{equation}
+h_{k,t} \mid \hat h_{k,t} \sim \mathcal{CN}\big(r\, \hat h_{k,t},\, 1 - r^2\big),
+\label{eq:posterior}
+\end{equation}
+which a transmitter that knows $r$ can use instead of the report itself
+(Section~\ref{sec:method-csi}). In the evaluation, slot SNRs and reports are clipped, in
+decibels, to the range $[\gamma_{\min}, \gamma_{\max}]$ on which the code was trained.
+
+\begin{figure}[!t]
+\centering
+\begin{tikzpicture}[x=0.85cm, y=0.55cm, font=\footnotesize, >=stealth,
+  u1/.style={fill=blue!18}, u2/.style={fill=orange!28}, u3/.style={fill=green!20}]
+\foreach \s/\r/\k/\j in {1/1/2/1, 2/1/3/2, 3/1/2/2, 4/1/3/3, 5/1/2/3, 6/1/2/4,
+                         1/0/3/1, 2/0/1/1, 3/0/1/2, 5/0/1/3, 6/0/3/4} {
+  \filldraw[u\k, draw=black] (\s-1, \r) rectangle (\s, \r+1);
+  \node at (\s-0.5, \r+0.5) {$\mathbf{u}_{\k,\j}$};
+}
+\fill[pattern=north east lines, pattern color=black!50] (3, 0) rectangle (4, 1);
+\draw (3, 0) rectangle (4, 1);
+\foreach \s in {2, 3, 5} \draw[line width=1.1pt] (\s-1, 0) rectangle (\s, 1);
+\foreach \s in {1, ..., 6} \node at (\s-0.5, 2.5) {$\s$};
+\node[anchor=east] at (-0.15, 2.5) {$t$};
+\draw[decorate, decoration={brace, amplitude=3pt}] (-0.15, 0) -- (-0.15, 2)
+  node[midway, left=3pt] {$B$};
+\draw[dashed] (6, -2.1) -- (6, 3.0) node[above] {deadline};
+\node[draw, inner sep=2.5pt] (g) at (7.0, -0.85) {$g$};
+\node (xh) at (8.1, -0.85) {$\hat{\mathbf{x}}_1$};
+\draw[->] (0, -0.85) -- (g);
+\draw[->] (g) -- (xh);
+\node[anchor=east] at (-0.15, -0.85) {user 1};
+\foreach \s/\j in {2/1, 3/2, 5/3} {
+  \node[fill=white, inner sep=1.5pt] (z\j) at (\s-0.5, -0.85) {$\mathbf{z}_{1,\j}$};
+  \draw[->] (\s-0.5, 0) -- (z\j);
+  \node at (\s-0.5, -1.65) {$\gamma_{1,(\j)}$};
+}
+\end{tikzpicture}
+\caption{A frame with $K = 3$ users, $B = 2$ units per slot and $T = 6$ slots. Each cell is a
+resource unit, shaded by the user it serves and labeled with the phase it carries; the column of
+slot $t$ is the schedule $\mathbf{a}_t$, chosen at the start of the slot from $\mathcal{I}_t$.
+Other traffic takes the hatched unit, so $B_4 = 1$. User~1 is served in slots 2, 3 and 5, so
+$t_{1,1} = 2$, $t_{1,2} = 3$, $t_{1,3} = 5$ and $L_1 = 3$; its phases arrive as
+$\mathbf{z}_{1,j}$, each at the SNR $\gamma_{1,(j)} = \gamma_{1, t_{1,j}}$ of its slot, and the
+decoder $g$ reconstructs $\hat{\mathbf{x}}_1$ from them at the deadline.}
+\label{fig:system}
+\end{figure}
+
+\subsection{The Progressive Code}
+\label{sec:system-code}
+
+Each image is encoded once, before the frame, by an encoder $f$ that maps it to $P$ phases of $S$
+complex symbols each,
+\begin{equation}
+f(\mathbf{x}_k) = (\mathbf{u}_{k,1}, \dots, \mathbf{u}_{k,P}), \qquad \mathbf{u}_{k,j} \in
+\mathbb{C}^S,
+\label{eq:encoder}
+\end{equation}
+normalized to unit average power per complex symbol. A phase fills one resource unit, so it has
+a bandwidth ratio, the number of complex channel uses per real source dimension, of
+$S / (3HW)$, and the whole code has $P S / (3HW)$; with the values of Table~\ref{tab:notation},
+these are $1/48$ and $1/8$. The phases are sent in order: the $j$-th unit that user $k$ receives
+carries $\mathbf{u}_{k,j}$. User $k$ receives $L_k = \sum_{t=1}^{T} a_{k,t}$ units in the frame,
+at most $P$, so it holds $L_k$ phases at the deadline, and for $j = 1, \dots, L_k$ the slot that
+carries phase $j$ is
+\begin{equation}
+t_{k,j} = \min \Big\{ t : \sum_{t' = 1}^{t} a_{k,t'} = j \Big\},
+\label{eq:phase-slot}
+\end{equation}
+the first slot by which user $k$ has been served $j$ times (Fig.~\ref{fig:system}). Phase $j$
+arrives after equalization as
+\begin{equation}
+\mathbf{z}_{k,j} = \mathbf{u}_{k,j} + \mathbf{w}_{k,j}, \qquad
+\mathbf{w}_{k,j} \sim \mathcal{CN}\big(\mathbf{0},\, n_{k,(j)} \mathbf{I}_S\big),
+\label{eq:phase-rx}
+\end{equation}
+where $\mathbf{I}_S$ is the $S \times S$ identity matrix, so the $S$ entries of the noise
+$\mathbf{w}_{k,j}$ are independent with variance $n_{k,(j)} = n_{k, t_{k,j}}$, that of the slot
+that carried the phase. Each phase thus meets the SNR of its own slot,
+$\gamma_{k,(j)} = \gamma_{k, t_{k,j}}$. At the deadline, user $k$ decodes the prefix it holds with
+one decoder $g$ that accepts any number of phases,
+\begin{equation}
+\hat{\mathbf{x}}_k = g(\mathbf{z}_{k,1}, \dots, \mathbf{z}_{k,L_k}),
+\label{eq:decoder}
+\end{equation}
+and neither $f$ nor $g$ is told an SNR. The quality of the reconstruction is its mean squared
+error (MSE) per pixel and color channel, $D_k$, or its peak signal-to-noise ratio (PSNR), $q_k$:
+\begin{equation}
+D_k = \frac{1}{3HW} \big\| \mathbf{x}_k - \hat{\mathbf{x}}_k \big\|_2^2, \qquad
+q_k = 10 \log_{10} \frac{1}{D_k}~\text{dB},
+\label{eq:psnr}
+\end{equation}
+where the peak intensity is 1. A user that receives no phase is assigned $D_k = D_\emptyset$,
+a PSNR of $10$~dB for the value of Table~\ref{tab:notation}. The decoded quality thus depends on
+the image, on the number of phases received and on the SNR each of them met. For a trained,
+nonlinear decoder no closed form of this dependence is known;
+Section~\ref{sec:method-abstraction} models it.
+
+\subsection{The Digital Baseline}
+\label{sec:system-digital}
+
+Physical link design sends the image as bits. The image is compressed into HEIC files, which use
+HEVC intra coding \cite{Sullivan12}, at several sizes. A unit given to user $k$ in slot $t$ carries one
+block of $S$ channel uses at a spectral efficiency $\eta_{k,t}$, in bits per channel use, set from
+the report through the CQI table:
+\begin{equation}
+\begin{aligned}
+R(\gamma^{\mathrm{dB}}) &= \max \big\{ \eta_c : \theta_c \le \gamma^{\mathrm{dB}} \big\}, \\
+\eta_{k,t} &= R\big(\hat\gamma^{\mathrm{dB}}_{k,t} - \beta\big).
+\end{aligned}
+\label{eq:cqi}
+\end{equation}
+Here $\eta_c$ is the efficiency of CQI index $c = 1, \dots, 15$ in Table~7.2.3-1 of
+\cite{TS36213}, from $0.15$ to $5.55$ bits per channel use. A CQI index is defined there as one
+whose transport block could be received with an error probability of at most $0.1$, and
+$\theta_c$ is the AWGN SNR we take for that, from $-6.7$~dB for $c = 1$ to $22.7$~dB for
+$c = 15$. Below $\theta_1$, $R = 0$ and the unit carries nothing. The backoff $\beta$, in
+decibels, trades the rate of a block against the risk that a report error makes it fail: with
+exact reports $\beta = 0$, and otherwise Section~\ref{sec:eval} tunes it for each scheduler and
+objective. A block is decoded if the true SNR supports its rate,
+$R(\gamma^{\mathrm{dB}}_{k,t}) \ge \eta_{k,t}$, and is lost otherwise; an acknowledgment tells
+the base station which.
+
+With hybrid automatic repeat request (HARQ), a lost block is sent again in each of the user's
+next slots until it is decoded or has been sent $M$ times, when it is dropped; a block still
+pending at the deadline is lost. After $m$ transmissions, at SNRs $\gamma_1, \dots, \gamma_m$,
+the receiver combines them. With incremental redundancy \cite{Caire01} the block is decoded once
+\begin{equation}
+\sum_{i=1}^{m} I(\gamma_i) \ge \eta,
+\label{eq:harq-ir}
+\end{equation}
+and with Chase combining \cite{Chase85} once
+\begin{equation}
+I\Big( \sum_{i=1}^{m} \gamma_i \Big) \ge \eta,
+\label{eq:harq-cc}
+\end{equation}
+where $\eta$ is the rate of the block, set at its first transmission, and $I(\gamma)$, the
+information one transmission adds, is the efficiency of the CQI table interpolated linearly in
+decibels between its entries; below $\theta_1$ it falls with the slope of the first segment, to
+zero at $\theta_1 - 3.7$~dB, and above $\theta_{15}$ it stays at $\eta_{15}$. Because $I(\gamma)$
+equals $\eta_c$ at $\theta_c$ and increases strictly up to $\theta_{15}$, a single transmission is
+decoded exactly when $R(\gamma^{\mathrm{dB}}) \ge \eta$, as without HARQ.
+
+As with the code, a user is served in at most $P$ slots, so that both deliver an image in at most
+$PS$ channel uses. At the deadline user $k$ has received
+\begin{equation}
+b_k = \frac{S}{HW} \sum_{\text{decoded blocks}} \eta
+\label{eq:bpp}
+\end{equation}
+bits per pixel, and it decodes the largest file of $\mathbf{x}_k$ whose size, in bits per pixel,
+is at most $b_k$, or nothing ($D_k = D_\emptyset$) if even the smallest file is larger. An
+idealized digital code replaces both $R$ and $I$ by $\log_2(1 + \gamma / \Gamma)$, the rate of a
+code whose SNR gap to capacity is $\Gamma$, with the same backoff and HARQ.
+
+\subsection{Problem Statement}
+\label{sec:system-problem}
+
+A scheduler is a policy $\pi = (\pi_1, \dots, \pi_T)$ that chooses the schedule of slot $t$ from
+what the base station knows at its start:
+\begin{equation}
+\mathbf{a}_t = \pi_t(\mathcal{I}_t),
+\label{eq:policy}
+\end{equation}
+where $\mathbf{a}_t = (a_{1,t}, \dots, a_{K,t})$ is the schedule of slot $t$ and
+\begin{equation}
+\mathcal{I}_t = \big\{ B_{t'},\, \hat\gamma_{k,t'} : k \in \mathcal{K},\ t' \le t \big\} \cup
+\big\{ \mathbf{a}_{t'} : t' < t \big\}
+\label{eq:info}
+\end{equation}
+holds the units available and the reports up to slot $t$, and the schedules before it. From
+$\mathcal{I}_t$ the base station knows how many phases each user holds and in which slots they
+were sent, but not the SNRs they met. Besides $\mathcal{I}_t$, it knows the images and the mean
+SNRs $\bar\gamma_1, \dots, \bar\gamma_K$ from the start of the frame; a transmitter that accounts
+for aged reports also knows $r$; and the digital chain knows the acknowledgments of its past
+blocks. The policy is causal: it never sees the report of a later slot. Two objectives are
+considered. The first is the mean PSNR at the deadline,
+\begin{equation}
+J_{\mathrm{mean}}(\pi) = \mathbb{E} \Big[ \frac{1}{K} \sum_{k=1}^{K} q_k \Big],
+\label{eq:obj-mean}
+\end{equation}
+and the second is the share of users whose image reaches a quality target $Q$ by the deadline,
+\begin{equation}
+J_Q(\pi) = \mathbb{E} \Big[ \frac{1}{K} \sum_{k=1}^{K} \mathbf{1}\{ q_k \ge Q \} \Big],
+\label{eq:obj-target}
+\end{equation}
+where $\mathbf{1}\{\cdot\}$ is the indicator function. The expectations are over the fading, the
+reports, the available units and the channel noise, and in the evaluation also over the images
+and the mean SNRs drawn for each frame. The scheduling problem is
+\begin{equation}
+\max_{\pi\ \text{causal}} \ J(\pi) \quad \text{s.t.} \quad \eqref{eq:capacity},\ \
+a_{k,t} \in \{0, 1\},\ \ L_k \le P\ \ \forall k,
+\label{eq:problem}
+\end{equation}
+with $J = J_{\mathrm{mean}}$ or $J = J_Q$.
+
+Problem~\eqref{eq:problem} is a finite-horizon stochastic control problem with three
+difficulties. First, each user's reward is the decoded quality $q_k$ of \eqref{eq:psnr}, for
+which a learned code offers no closed form. Second, the state at slot $t$ holds every user's
+delivery history, the number of phases it holds and the SNR each met, so it is continuous, its
+dimension grows with $K$, and the users are coupled through \eqref{eq:capacity}. Third, the
+decisions are made on the reports $\hat\gamma_{k,t}$, not on the SNRs $\gamma_{k,t}$ that decide
+the quality. Section~\ref{sec:method} takes them in turn: a link abstraction predicts $q_k$ and
+reduces each user's history to two numbers (Section~\ref{sec:method-abstraction}); the problem
+then becomes a restless bandit \cite{Whittle88}, which CLASP relaxes into one exact dynamic
+program per user (Section~\ref{sec:method-clasp}); and a calibration-aware reward and the
+posterior~\eqref{eq:posterior} account for the reports (Section~\ref{sec:method-csi}).
