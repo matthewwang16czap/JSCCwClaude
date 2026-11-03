@@ -51,53 +51,45 @@ Seven paragraphs, in the order of the supervisor's template: `docs/INTRO_OUTLINE
 Figure 1, the references, and the source of every number in `docs/INTRO_NUMBERS.md`). Drafted in
 `paper/sections/introduction.tex` (built into `paper/main.pdf`); the outline's setup details (the
 phases and architecture, the distortion formula, the calibration accuracy per prefix length, the
-reward's spreads) are left to Sections III-V.
+reward's spreads) are left to Sections III-V, and the works behind the two categories to Section
+II.
 
 ## II. Related Work (~1 page)
 
-The same two categories as the Introduction's paragraph 2, then the scheduling theory CLASP
-builds on.
+Drafted in `paper/sections/related.tex`: the two categories of the Introduction's paragraph 2,
+then the scheduling theory CLASP builds on. Every reference follows the citation rule (a top
+venue, and 2023 or later or cited 100 times or more; the sources of the methods and baselines
+used; standards), and what the section says about each work is checked against its text:
+`docs/RELATED_SOURCES.md`, which also lists the works left out and why.
 
 - **A. Physical link design for multi-user media delivery.**
-  - A standard codec over adaptive modulation and coding from CQI reports, with IR-HARQ, and a
-    channel-aware scheduler (proportional fair).
-  - Effective-SNR link abstraction for coded blocks over many resources: EESM, MIESM, and the
-    NR physical-layer abstraction for system-level simulation.
-  - Media-aware scheduling: RaDiO (per-unit programs under a rate price); content-aware packet
-    scheduling (Pahalawatta et al.); price-coordinated per-user programs (Fu and van der
-    Schaar); restless bandits for scalable video (Hosseini and Panwar).
-  - Every one of these rests on a binary outcome per block. Under imperfect CSI: outdated-CSI
-    models (Jakes correlation), HARQ with Chase and IR combining; layered HARQ (Steiner and
-    Shamai) is designed for no transmit CSI, and we say why it is not the competitor here.
+  - HEVC; adaptive modulation, whose error rate depends on the error and delay of the channel
+    estimate; the 4-bit CQI of LTE; HARQ with Chase combining or incremental redundancy; PF
+    scheduling.
+  - Effective SINR mappings for system-level evaluation: EESM (union-Chernoff bound, one
+    parameter per MCS), MIESM (mutual information per symbol or per bit), the 5G NR abstraction
+    of ns-3 (calibrated EESM, SINR-BLER tables).
+  - Media-aware scheduling: RaDiO (one MDP per data unit, a price on rate); gradient scheduling
+    with distortion utilities; frame deadlines with per-client delivery debts.
+  - All of them decide over blocks that are decoded or lost; the MMSE abstraction takes EESM's
+    place for a learned code.
 - **B. The JSCC way.**
-  - DeepJSCC and its successors (SwinJSCC, ViT-based codes); single-link adaptation to the SNR
-    and the budget: one model for all SNRs, DeepJSCC-l (successive refinement with several
-    decoders), NTSCC, PADC (a quality predictor that picks each image's rate), JSCCformer-f
-    (feedback), DeepJSCC-MIMO.
-  - Multi-user allocation by each user's predicted quality at one SNR (semantic spectral
-    efficiency; user association and bandwidth; Bayesian optimisation over a learned quality
-    oracle); non-orthogonal access built into the code; schedulers learned by deep
-    reinforcement learning; a restless bandit whose slot values are learned (McDowell et al.:
-    every slot carries a fresh codeword, nothing accumulates across slots).
-  - Linear analog codes (SoftCast) obey an additive per-component MMSE by construction; our
-    form is theirs, and what is new is that a nonlinear learned code acquires it, only through
-    training.
-  - JSCC against separation on single links: near-parity with exact CSI, measured with an
-    idealised digital side.
+  - DeepJSCC; one model for many SNRs (ADJSCC); NTSCC; SwinJSCC; PADC; OFDM, MIMO and feedback
+    (DeepJSCC-f, JSCCformer-f); DeepJSCC-l.
+  - Single-link comparisons with separation, some with an idealized digital side.
+  - SoftCast: a linear code is additive per component by construction.
+  - Multi-user: semantic spectral efficiency; user association and bandwidth; Bayesian
+    optimization over Gaussian-process quality models; semantic NOMA per fading state;
+    multi-user semantic transceivers; schedulers learned by PPO and DDPG. The allocations value a
+    user at one SNR; the learned policies come with no bound.
 - **C. Restless bandits and Lagrangian index policies.**
-  - Whittle; Hawkins's Lagrangian decomposition.
-  - Finite-horizon index policies whose gap to the relaxation vanishes as users grow: Hu and
-    Frazier; Brown and Smith; Zhang and Frazier; Gast, Gaujal and Yan; the Lagrangian priority
-    policy of Hao, Xu and Tong; PI indices (Ayesta et al.); relaxations under partial channel
-    observation (Ouyang et al.).
-  - Learning restless bandits solve a different problem (unknown reward and transition kernel,
-    learned online; e.g. Zamir and Hou's Deep Index Policy). CLASP is the planning kind: the
-    channel law and the calibrated curves are known, so each user's program is solved exactly.
-  - We import this machinery and say so. Ours are the arm it applies to (phases that accumulate
-    across slots, each graded by its own slot's SNR), the calibration-aware reward, and the
-    evidence on a decoded reward.
-- A positioning table closes the section: columns are learned code, multi-user, slot-varying
-  SNR, deadline, bound, imperfect CSI.
+  - Whittle; Weber and Weiss; Adelman and Mersereau; Brown and Smith; Gast, Gaujal and Yan; Hao,
+    Xu and Tong.
+  - In wireless scheduling: Liu and Zhao (closed-form index, Lagrangian bound); Kadota et al.
+    (age of information); Shisher et al. (remote inference).
+  - CLASP imports the relaxation, its bound and the Lagrangian priority policy; what is new is
+    the arm (phases that accumulate over slots of different SNRs, a two-number state) and the
+    calibration-aware reward.
 
 ## III. Preliminaries: System Model and Problem Statement (~1.5 pages)
 

@@ -1,0 +1,131 @@
+\section{Related Work}
+\label{sec:related}
+
+We review the two categories of Section~\ref{sec:intro} in turn, and then the scheduling theory
+CLASP builds on.
+
+\subsection{Physical Link Design for Multi-User Media Delivery}
+\label{sec:related-link}
+
+In a cellular downlink, an image is compressed once by a standard codec such as High Efficiency
+Video Coding (HEVC) \cite{Sullivan12}, and its bits are carried by a physical layer that adapts to
+the channel. Adaptive modulation selects the constellation and the transmit power from the channel state, and
+its bit error rate depends on the error and the delay of the channel estimate it adapts to
+\cite{Goldsmith97}; in Long Term Evolution (LTE), the receiver reports the channel as a 4-bit CQI
+\cite{TS36213}. HARQ retransmits a failed block, and the receiver either combines the noisy copies
+\cite{Chase85} or accumulates incremental redundancy; the throughput of such protocols over a
+fading Gaussian collision channel has closed forms \cite{Caire01}. Across users, a scheduler
+exploits multiuser diversity by serving each user when its instantaneous channel quality is near
+its peak, as PF scheduling does \cite{Viswanath02}.
+
+To evaluate such systems without simulating the decoding of every block, system-level simulators
+predict a block's
+error rate from the signal-to-interference-plus-noise ratios (SINRs) of all the resources it
+occupies. An effective SINR mapping compresses them into one effective SNR, from which the block
+error rate (BLER) is read off the link-level curve of an additive white Gaussian noise channel.
+EESM was derived for orthogonal frequency-division multiplexing (OFDM) from the union--Chernoff
+bound, with one parameter tuned per modulation and coding scheme \cite{Ericsson03}; MIESM maps the
+SINRs through the mutual information per received symbol or per bit \cite{EMD09}; and the
+5G New Radio abstraction of the ns-3 simulator calibrates EESM and obtains SINR--BLER tables with
+a link-level simulator \cite{Lagen20}. Both mappings predict whether a block decodes;
+Section~\ref{sec:eval-abstraction} tests them as predictors of a learned code's distortion.
+
+Media-aware schedulers value data by the distortion it removes. RaDiO reduces the rate-distortion
+optimized streaming of a presentation to the error-cost optimized transmission of each data unit,
+solved as a Markov decision process over the unit's transmission opportunities with a Lagrange
+multiplier pricing the rate, and essentially achieves the operational distortion-rate function of
+the source at the capacity of the packet erasure channel \cite{Chou06}. In a wireless downlink with
+several users, gradient-based schedulers set each user's rate from its channel quality and the
+gradient of a utility built from the distortion of its received video \cite{Pahalawatta07}. For
+packets that expire at the end of each frame, Hou, Borkar and Kumar characterize the feasible
+per-client delivery ratios and show that serving the client with the largest delivery debt first
+fulfills every feasible set \cite{HouBorkar09}. All of these treat a block or a packet as decoded
+or lost, so the channel affects quality only through how many of them get through, the source of
+the cliff effect that learned codes avoid \cite{Bourtsoulatze19}. Our link abstraction takes the
+place of an effective SNR mapping for a learned code: it predicts distortion rather than a
+probability of decoding, and so it can value every slot a user receives.
+
+\subsection{The JSCC Way}
+\label{sec:related-jscc}
+
+Deep JSCC trains a convolutional encoder and decoder through a non-trainable channel layer. It
+outperforms JPEG or JPEG2000 compression with a capacity-achieving channel code at low SNR and
+small bandwidth, has no cliff effect, and degrades gracefully when the SNR departs from its
+training value \cite{Bourtsoulatze19}. Later codes adapt one model to the channel and the budget.
+Channel-wise attention scales the features by the SNR, so that one model serves a range of SNRs
+\cite{Xu22}; nonlinear transform source-channel coding learns an entropy model of its latent
+representation and adapts the transmission rate to it \cite{Dai22}; Swin Transformer backbones
+adapt to the channel state and the target rate within a single model \cite{Yang25}; and
+predictive and adaptive deep coding (PADC) predicts each image's PSNR from its content, the SNR
+and the compression ratio, and sends it at the least compression ratio that meets a quality
+constraint \cite{Zhang23}. Other codes exploit the structure of the channel: OFDM over multipath
+fading \cite{YangBianKim22}, multiple-input multiple-output (MIMO) channels, with robustness to
+channel estimation errors \cite{Wu24m}, and channel output feedback, which refines the receiver's
+estimate block by block and shortens variable-length transmission \cite{Kurka20,Wu24f}.
+DeepJSCC-$l$ sends an image in layers, as successive refinements or as multiple descriptions,
+with negligible loss against a single transmission \cite{Kurka21}. A tutorial on semantic and
+task-oriented communications is given in \cite{Gunduz23}.
+
+These codes are compared with separation-based transmission on single links: against JPEG or JPEG2000 with a
+capacity-achieving code \cite{Bourtsoulatze19}, against Better Portable Graphics (BPG) with
+low-density parity-check (LDPC) codes over OFDM, with 2.5--4~dB of SNR gain at equal quality
+\cite{YangBianKim22}, and against BPG with 5G LDPC codes \cite{Yang25}. In some of these
+comparisons the digital side is idealized, with capacity-achieving codes and exact channel
+knowledge at the receiver \cite{Bourtsoulatze19,Kurka20}; Section~\ref{sec:eval-csi} compares
+instead with CQI-driven link adaptation and HARQ under erroneous and aged reports.
+
+Linear analog transmission is the precedent for our link abstraction. SoftCast makes the network stack
+act as a linear transform of the pixels, so that channel noise reduces sharpness instead of
+causing glitches, and one multicast stream gives each receiver a quality commensurate with its
+channel \cite{Jakubczak11}. For a linear code, the distortion is a sum of per-component MMSE
+terms by construction; the learned code of Section~\ref{sec:method-abstraction} acquires this
+form, but only when it is trained for slot-varying SNR.
+
+To serve many users, semantic and JSCC systems allocate the shared channel by each user's
+predicted quality: channel assignment and the number of transmitted semantic symbols from a
+semantic spectral efficiency \cite{Yan22}; user association and bandwidth from a message-level
+throughput \cite{Xia24}; compression ratios and transmission rates by Bayesian optimization over
+Gaussian-process models of quality against SNR and compression ratio \cite{Hou26}; and, in a
+non-orthogonal uplink shared with a bit-based user, the communication mode of the semantic user
+in each fading state \cite{Mu23}. Multi-user semantic transceivers are also trained end to end for
+image retrieval, machine translation and visual question answering \cite{Xie22}. Where the
+allocation changes over time, it is learned by deep reinforcement learning: proximal policy
+optimization with an attention network assigns resource blocks and the part of each user's
+semantic content to send \cite{Wang22}, and a deep deterministic policy gradient agent sets each
+user's compression ratio, transmit power and bandwidth \cite{Zhang23t}. The allocations value
+each user's transmission at one SNR and decide it as a whole, so none of them can value a slot
+for an image whose symbols are spread over slots of different SNRs; the learned policies need
+many interactions to train and come with no bound on their distance from the optimum.
+
+\subsection{Restless Bandits and Lagrangian Index Policies}
+\label{sec:related-rmab}
+
+Whittle relaxed the constraint on the number of projects operated at each instant to a
+constraint on its expected value. The Lagrange multiplier of the relaxed constraint defines an
+index, and Whittle conjectured that operating the projects of largest index is nearly optimal
+when there are many of them \cite{Whittle88}. Weber and Weiss proved the conjecture when the
+fluid approximation of the index policy has a globally stable equilibrium point, and gave an
+example in which it fails \cite{WeberWeiss90}. More generally, dynamic programs whose subproblems
+are coupled only through constraints on their actions admit Lagrangian and linear-programming
+relaxations whose value functions separate by subproblem \cite{Adelman08}. Relaxing the limit on
+the number of items selected at a time yields both an upper bound on the optimal value and the
+Lagrangian index policy, and under mild conditions both are asymptotically optimal with many
+items, with tie-breaking playing an essential role \cite{Brown20}. A linear-program-based index
+policy is asymptotically optimal over finite and infinite horizons, at a square-root rate in
+general and exponentially fast under further conditions \cite{Gast24}. For deadline scheduling,
+Hao, Xu and Tong define the Lagrangian priority value of a job as the greatest tax under which
+it is optimal to process it, and prove that serving jobs in that order is asymptotically optimal
+as the system scales \cite{Hao22}.
+
+The same tools are established in wireless scheduling. For dynamic multichannel access, the
+Whittle index has a closed form, and for non-identical channels a Lagrangian relaxation gives an
+upper bound on performance \cite{LiuZhao10}. For the age of information of clients behind
+unreliable channels, Whittle's index policy performs near optimally \cite{Kadota18}. For remote
+inference, the joint choice of feature lengths and transmissions forms a restless multi-armed,
+multi-action bandit \cite{Shisher23}.
+
+CLASP imports this machinery: the Lagrangian relaxation with one price per slot, its upper bound,
+and the Lagrangian priority policy \cite{Brown20,Hao22}. What is new is the arm and the reward:
+each user's phases accumulate over slots of different SNRs toward a decoded quality at the
+deadline, the link abstraction reduces each user to a two-number state whose program is solved
+exactly, and the reward accounts for the measured error of the quality prediction.
