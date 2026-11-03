@@ -3765,7 +3765,7 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 # is the class file you sent. It holds the abstract (docs/PAPER_OUTLINE.md), Section I
 # (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md), Section II
 # (paper/sections/related.tex) and the headings of Sections III-VI, which the cross-references
-# point to. paper/references.bib holds the 40 references; why each qualifies, and the text behind
+# point to. paper/references.bib holds the 42 references; why each qualifies, and the text behind
 # what the paper says about it: docs/RELATED_SOURCES.md. The PDF it builds is already in the
 # repository as paper/main.pdf. Nothing to send back.
 
@@ -3778,8 +3778,12 @@ pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; 
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex | tail -2
-grep -c "Overfull" build/main.log                # 0
+grep "Overfull" build/main.log                   # one line, about 1 pt (see below)
+grep -c "bibitem" build/main.bbl                 # 42
 
-# Reading: "Output written on build/main.pdf (6 pages ...)", bibtex with no warning, and 0.
+# Reading: "Output written on build/main.pdf (6 pages ...)", bibtex with no warning, one
+# "Overfull \vbox (1.1...pt too high)" line, and 42. That line comes from balancing the columns
+# of the last page (the template's \balance) and is invisible; one of tens of pt would mean a
+# reference was pushed off a page.
 # The log's one LaTeX warning, "Unused global option(s): [lettersize]", comes from the
 # template's first line: V1.8b has no such option and uses letter paper by default.

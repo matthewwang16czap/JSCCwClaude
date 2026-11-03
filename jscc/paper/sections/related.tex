@@ -36,8 +36,11 @@ solved as a Markov decision process over the unit's transmission opportunities w
 multiplier pricing the rate, and essentially achieves the operational distortion-rate function of
 the source at the capacity of the packet erasure channel \cite{Chou06}. In a wireless downlink with
 several users, gradient-based schedulers set each user's rate from its channel quality and the
-gradient of a utility built from the distortion of its received video \cite{Pahalawatta07}. For
-packets that expire at the end of each frame, Hou, Borkar and Kumar characterize the feasible
+gradient of a utility built from the distortion of its received video \cite{Pahalawatta07}.
+Hosseini and Panwar model scalable video streaming to many users over Markov channels as a
+restless bandit, relax it to a linear program whose value they plot beside their policies, and
+improve network utilization by up to a factor of two over PF \cite{Hosseini19}. For packets that
+expire at the end of each frame, Hou, Borkar and Kumar characterize the feasible
 per-client delivery ratios and show that serving the client with the largest delivery debt first
 fulfills every feasible set \cite{HouBorkar09}. All of these treat a block or a packet as decoded
 or lost, so the channel affects quality only through how many of them get through, the source of
@@ -122,10 +125,17 @@ Whittle index has a closed form, and for non-identical channels a Lagrangian rel
 upper bound on performance \cite{LiuZhao10}. For the age of information of clients behind
 unreliable channels, Whittle's index policy performs near optimally \cite{Kadota18}. For remote
 inference, the joint choice of feature lengths and transmissions forms a restless multi-armed,
-multi-action bandit \cite{Shisher23}.
+multi-action bandit \cite{Shisher23}. Closest to ours, McDowell et al. schedule a learned semantic
+code over independent Rayleigh-fading slots: a Lagrangian relaxation with one price splits the
+problem into per-sensor programs whose values are learned by reinforcement learning, the reward is
+a task value computed from the decoder's posterior, and a fluid upper bound is stated but not
+plotted \cite{McDowell26}. Each slot, however, carries a fresh codeword of the newest observation,
+so nothing accumulates across slots toward a deadline, and the channel state is known exactly.
 
-CLASP imports this machinery: the Lagrangian relaxation with one price per slot, its upper bound,
-and the Lagrangian priority policy \cite{Brown20,Hao22}. What is new is the arm and the reward:
+Restless bandits thus already schedule layered video \cite{Hosseini19} and learned semantic codes
+\cite{McDowell26}, which supports casting the deadline scheduling of learned codes as one. CLASP
+imports this machinery: the Lagrangian relaxation with one price per slot, its upper bound, and the
+Lagrangian priority policy \cite{Brown20,Hao22}. What is new is the arm and the reward:
 each user's phases accumulate over slots of different SNRs toward a decoded quality at the
 deadline, the link abstraction reduces each user to a two-number state whose program is solved
 exactly, and the reward accounts for the measured error of the quality prediction.

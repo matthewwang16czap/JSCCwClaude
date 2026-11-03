@@ -8,7 +8,9 @@
   `is-referenced-by-count`, read on 2026-11-03).
 
 Two kinds are cited whatever their count: works whose method, definition or baseline the paper
-uses (marked *used*), and standards documents. No preprint is cited.
+uses (marked *used*), and standards documents. Two works that fail the rule are kept at the
+authors' request as the closest prior work (marked *exception*): Hosseini and Panwar (IEEE Access)
+and McDowell et al. (an arXiv preprint, the only one cited).
 
 **How each claim was checked.** Every statement Sections I and II make about a work was compared
 with the work's abstract (Crossref, OpenAlex or Semantic Scholar record), with its full text where
@@ -122,7 +124,24 @@ digital baseline).
   station"; "a joint optimization problem of the semantic compression ratio, transmit power, and
   bandwidth of each user".
 
-**[15] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
+**[15] McDowell26.** arXiv 2608.28441 (v2, 31 Aug 2026); preprint; *exception*, kept at the
+authors' request as the closest prior learned scheduler.
+- Says (I, II-C): learns the allocation by reinforcement learning inside a restless bandit over
+  independent Rayleigh-fading slots, for a learned semantic code; a Lagrangian relaxation with one
+  price splits it into per-sensor programs whose values are learned by reinforcement learning; the
+  reward is a task value computed from the decoder's posterior; a fluid upper bound is stated but
+  not plotted, so the learned policy has no certificate; each slot carries a fresh codeword of the
+  newest observation, so nothing accumulates across slots toward a deadline; the channel state is
+  known exactly.
+- Support: read in full (arXiv v2). The notes of that reading (`fulltext_readings.md` item 6)
+  record: N sensors over an orthogonal multiple-access channel with i.i.d. Rayleigh block fading
+  per slot; a meta-learned code; the per-slot budget relaxed to a discounted one with one
+  multiplier found by bisection; each sensor's Q-function learned by PPO; the reward computed from
+  the decoder's own posterior; the fluid LP upper bound stated in Appendix C and plotted in no
+  figure; a fresh, self-contained codeword of the newest observation in every slot, no deadline,
+  and CSI at both ends.
+
+**[16] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
 - Says (I, II-B): PADC predicts each image's PSNR from its content, the SNR and the compression
   ratio, and sends it at the least compression ratio meeting a quality constraint, treating the
   prediction as exact.
@@ -131,7 +150,7 @@ digital baseline).
   ratio (CR) value, and a CR optimizer aims at finding the minimal data-level or instance-level CR
   with a PSNR quality constraint". Read in full with its code (`docs/SURVEY.md` A).
 
-**[16] Ericsson03.** 3GPP TSG-RAN WG1 #35, Tdoc R1-031303, Nov. 2003; standards contribution, the
+**[17] Ericsson03.** 3GPP TSG-RAN WG1 #35, Tdoc R1-031303, Nov. 2003; standards contribution, the
 origin of EESM; *used* (EESM baseline).
 - Says (I, II-A): an effective SINR mapping turns the SNRs of a block's resources into one
   effective SNR, from which the block error rate is read off the AWGN curve; EESM is derived from
@@ -143,7 +162,7 @@ origin of EESM; *used* (EESM baseline).
   bound"; "generalized to include an MCS-dependent parameter"; "system-level evaluation of e.g.
   OFDM performance".
 
-**[17] EMD09.** IEEE 802.16m-08/004r5, Jan. 2009; standard; *used* (MIESM baseline).
+**[18] EMD09.** IEEE 802.16m-08/004r5, Jan. 2009; standard; *used* (MIESM baseline).
 - Says (I, II-A): MIESM maps the SINRs through the mutual information per received symbol or per
   bit.
 - Support (Sec. 4.3): "Within the class of MIESM there are two variants, one is based on the
@@ -151,7 +170,7 @@ origin of EESM; *used* (EESM baseline).
   other directly computes the bit mutual information. Each of these PHY abstractions uses a
   different function to map the vector of SINR values to a single number."
 
-**[18] Kurka20.** IEEE JSAIT 2020; 492; highly cited.
+**[19] Kurka20.** IEEE JSAIT 2020; 492; highly cited.
 - Says (I, II-B): channel output feedback, with shorter variable-length transmission; the digital
   side of the comparison has exact channel knowledge and capacity-achieving codes.
 - Support (abstract): "exploits the channel output feedback, and provides considerable
@@ -160,7 +179,7 @@ origin of EESM; *used* (EESM baseline).
   `deepjscc_link_level.md`): the separation scheme "inherently assumes perfect CSI at the
   receiver"; its baselines are BPG with capacity-achieving codes.
 
-**[19] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
+**[20] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
 - Says (I, II-B): layers as successive refinements or multiple descriptions with negligible loss;
   refinements lose value below the training SNR.
 - Support (abstract): "the well known problems of successive refinement and multiple
@@ -169,7 +188,7 @@ origin of EESM; *used* (EESM baseline).
   item 8): "since the reconstructed base layer becomes significantly different from what the
   encoder expects based on the training data".
 
-**[20] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
+**[21] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
 - Says (I, II-C): the constraint on the number of projects operated is relaxed to its expected
   value; the multiplier defines an index; the conjecture of near-optimality.
 - Support (abstract): "under a constraint upon the expected number of projects in operation. The
@@ -177,7 +196,20 @@ origin of EESM; *used* (EESM baseline).
   constant ratio, the policy of operating the m projects of largest current index is nearly
   optimal" (a conjecture).
 
-**[21] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
+**[22] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
+the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
+authors and title).
+- Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
+  restless bandit and relaxed to a linear program whose value is plotted beside the policies; up to
+  twice the network utilization of PF; layered video already scheduled by a restless bandit.
+- Support (abstract): "We model the QA-adaptive scheduling ... as a Restless Bandit"; "our
+  QA-Aware strategy can achieve up to two times improvement in network utilization compared to
+  popular baseline algorithms such as Proportional Fairness". Read in full (arXiv v2); the notes
+  of that reading (`fulltext_readings.md` item 1) record a finite Markov channel per user that sets
+  how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
+  value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
+
+**[23] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
 - Says (I, II-C): the Lagrangian priority value is the greatest tax under which processing is
   optimal; serving in that order is asymptotically optimal; one multiplier per stage.
 - Support (abstract): "we define the Lagrangian priority value as the greatest tax under which it
@@ -185,7 +217,7 @@ origin of EESM; *used* (EESM baseline).
   Read in full (`fulltext_readings.md` item 4): "Lagrangian relaxation with one multiplier per
   stage".
 
-**[22] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
+**[24] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
 - Says (I, II-C): relaxing the limit on the number of items selected gives an upper bound and the
   Lagrangian index policy, both asymptotically optimal with many items; tie-breaking matters.
 - Support (abstract): "a Lagrangian relaxation of the DP that relaxes the constraint limiting the
@@ -193,24 +225,24 @@ origin of EESM; *used* (EESM baseline).
   "under mild conditions, these policies and bounds are asymptotically optimal for problems with
   many items; mixed policies and tiebreaking play an essential role".
 
-**[23] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
+**[25] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
 - Says (II-A): HEVC as the standard codec.
 - Support (abstract): "This paper provides an overview of the technical features and
   characteristics of the HEVC standard."
 
-**[24] Chase85.** IEEE TCOM 1985; 743; highly cited.
+**[26] Chase85.** IEEE TCOM 1985; 743; highly cited.
 - Says (II-A): the receiver combines the noisy copies of a retransmitted block.
 - Support (title): "Code combining - A maximum-likelihood decoding approach for combining an
   arbitrary number of noisy packets".
 
-**[25] Lagen20.** IEEE ICC 2020; 101; highly cited.
+**[27] Lagen20.** IEEE ICC 2020; 101; highly cited.
 - Says (II-A): the 5G NR abstraction of the ns-3 simulator calibrates EESM and obtains SINR-BLER
   tables with a link-level simulator.
 - Support (abstract): "its integration into an open-source ns-3 based NR system-level simulator";
   "we used an NR-compliant link-level simulator to calibrate the EESM method as well as to obtain
   SINR-block error rate (BLER) lookup tables".
 
-**[26] Chou06.** IEEE TMM 2006; 405; highly cited.
+**[28] Chou06.** IEEE TMM 2006; 405; highly cited.
 - Says (II-A): RaDiO reduces streaming to the error-cost optimized transmission of each data unit,
   an MDP with a Lagrange multiplier pricing the rate, essentially at the operational D(R) of the
   source at the erasure channel's capacity.
@@ -220,64 +252,64 @@ origin of EESM; *used* (EESM baseline).
   the packet erasure channel". Read in full (`fulltext_readings.md` item 5): "priced by a Lagrange
   multiplier".
 
-**[27] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
+**[29] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
 - Says (II-A): gradient-based schedulers set each user's rate from its channel quality and the
   gradient of a utility built from its received-video distortion.
 - Support (abstract): "user data rates are dynamically adjusted based on channel quality as well
   as the gradients of a utility function. The user utilities are designed as a function of the
   distortion of the received video."
 
-**[28] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
+**[30] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
 - Says (II-A): packets expire at the end of each frame; feasible per-client delivery ratios are
   characterized; largest-debt-first fulfills every feasible set.
 - Support: read in full; the notes of that reading (`fulltext_readings.md` batch 4, `docs/SURVEY.md`
   F2) record frames of tau slots with one packet per client per frame, expired at the frame's end,
   per-client long-run delivery ratios, and that largest-debt-first is feasibility optimal.
 
-**[29] Dai22.** IEEE JSAC 2022; 378; highly cited.
+**[31] Dai22.** IEEE JSAC 2022; 378; highly cited.
 - Says (II-B): learns an entropy model of its latent representation and adapts the rate to it.
 - Support (abstract): "learns both the source latent representation and an entropy model as the
   prior on the latent representation. Accordingly, novel adaptive rate transmission ...
   mechanisms are developed".
 
-**[30] YangBianKim22.** IEEE TCCN 2022; 201; highly cited.
+**[32] YangBianKim22.** IEEE TCCN 2022; 201; highly cited.
 - Says (II-B): deep JSCC with OFDM over multipath fading; 2.5-4 dB of SNR gain over BPG with LDPC.
 - Support (abstract): "we combine an autoencoder with orthogonal frequency division multiplexing
   (OFDM) to cope with multipath fading"; "2.5 - 4 dB SNR gain for the equivalent image quality
   compared to ... BPG and ... LDPC".
 
-**[31] Wu24m.** IEEE TWC 2024; 121; recent and highly cited.
+**[33] Wu24m.** IEEE TWC 2024; 121; recent and highly cited.
 - Says (II-B): MIMO channels, with robustness to channel estimation errors.
 - Support (abstract): "over multiple-input multiple-output (MIMO) channels"; "exhibiting
   robustness to channel estimation errors".
 
-**[32] Wu24f.** IEEE TWC 2024; 60; recent.
+**[34] Wu24f.** IEEE TWC 2024; 60; recent.
 - Says (II-B): feedback refines the receiver's estimate block by block.
 - Support (abstract): "employs a single encoder to facilitate transmission over multiple blocks,
   refining the receiver's estimation at each block".
 
-**[33] Mu23.** IEEE JSAC 2023; 88; recent.
+**[35] Mu23.** IEEE JSAC 2023; 88; recent.
 - Says (II-B): in a non-orthogonal uplink shared with a bit-based user, the semantic user's
   communication mode is chosen in each fading state.
 - Support (abstract): "a secondary far user (F-user) employs the semantic communication (SemCom)
   while a primary near user (N-user) employs the conventional bit-based communication (BitCom)";
   "via the most suitable communication method at each fading state".
 
-**[34] Xie22.** IEEE JSAC 2022; 469; highly cited.
+**[36] Xie22.** IEEE JSAC 2022; 469; highly cited.
 - Says (II-B): multi-user semantic transceivers trained end to end for image retrieval, machine
   translation and visual question answering.
 - Support (abstract): "deep learning (DL) based multi-user semantic communication systems"; "image
   retrieval, machine translation, and visual question answering (VQA)"; "DeepSC-IR is trained to
   ...", "DeepSC-MT is trained to ...".
 
-**[35] WeberWeiss90.** J. Appl. Probab. 1990; 337; highly cited.
+**[37] WeberWeiss90.** J. Appl. Probab. 1990; 337; highly cited.
 - Says (II-C): Whittle's conjecture holds when the fluid approximation has a globally stable
   equilibrium; a counterexample otherwise.
 - Support (abstract): "the conjecture is true if the differential equation describing the fluid
   approximation to the index policy has a globally stable equilibrium point"; "we present an
   example for which the index policy is not asymptotically optimal".
 
-**[36] Adelman08.** Oper. Res. 2008; 169; highly cited.
+**[38] Adelman08.** Oper. Res. 2008; 169; highly cited.
 - Says (II-C): subproblems coupled only through action constraints admit Lagrangian and LP
   relaxations whose value functions separate by subproblem.
 - Support (abstract): "multiple subproblems that are independent of each other except for a
@@ -285,27 +317,27 @@ origin of EESM; *used* (EESM baseline).
   function approximation using two techniques, namely, Lagrangian relaxation and the linear
   programming (LP) approach".
 
-**[37] Gast24.** Math. Oper. Res. 2024; 19; recent.
+**[39] Gast24.** Math. Oper. Res. 2024; 19; recent.
 - Says (II-C): an LP-based index policy is asymptotically optimal over finite and infinite
   horizons, at a square-root rate in general and an exponential one under nondegeneracy.
 - Support (abstract): "under both finite and infinite time horizons"; "the LP-index policy that is
   asymptotically optimal with square root convergence rate on all models and with exponential rate
   if the model is nondegenerate in finite horizon".
 
-**[38] LiuZhao10.** IEEE TIT 2010; 284; highly cited.
+**[40] LiuZhao10.** IEEE TIT 2010; 284; highly cited.
 - Says (II-C): closed-form Whittle index for dynamic multichannel access; a Lagrangian relaxation
   bounds performance for non-identical channels.
 - Support (abstract): "establish the indexability and obtain Whittle index in closed form"; "For
   nonidentical arms, we develop efficient algorithms for computing a performance upper bound given
   by Lagrangian relaxation."
 
-**[39] Kadota18.** IEEE/ACM ToN 2018; 575; highly cited.
+**[41] Kadota18.** IEEE/ACM ToN 2018; 575; highly cited.
 - Says (II-C): for the age of information over unreliable channels, Whittle's index policy is
   near optimal.
 - Support (abstract): "a Whittle's Index policy"; "both the Max-Weight and Whittle's Index policies
   ... achieve near optimal performance".
 
-**[40] Shisher23.** IEEE JSAIT 2023; 29; recent.
+**[42] Shisher23.** IEEE JSAIT 2023; 29; recent.
 - Says (II-C): feature-length selection and transmission scheduling form a restless multi-armed,
   multi-action bandit.
 - Support (abstract): "the co-design problem becomes a restless multi-arm multi-action bandit
@@ -319,9 +351,7 @@ citations, 2026-11-03):
 | work | venue, year | citations | reason |
 |---|---|---|---|
 | Fu and van der Schaar, multi-user wireless video as per-user MDPs with prices | IEEE JSAC 2010 | 74 | before 2023, under 100 |
-| Hosseini and Panwar, restless video bandits | IEEE Access 2019 | 0 | venue; under 100 |
 | Yilmaz, Karamanlı and Gündüz, distributed DeepJSCC over a MAC | IEEE ICC 2023 | 38 | conference, under 100 |
-| McDowell, Panebianco, Chakraborty and Sun, significance-driven semantic communication | arXiv 2608.28441 | - | preprint |
 | Yu, Xu and Tong, deadline scheduling as restless bandits | IEEE TAC 2018 | 40 | before 2023, under 100 |
 | Ouyang, Eryilmaz and Shroff, downlink scheduling over Markovian fading channels | IEEE/ACM ToN 2016 | 17 | before 2023, under 100 |
 | Ouyang, Murugesan, Eryilmaz and Shroff, channel memory and Whittle indexability | IEEE TIT 2015 | 18 | before 2023, under 100 |

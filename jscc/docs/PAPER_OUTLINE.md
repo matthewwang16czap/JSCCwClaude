@@ -59,7 +59,8 @@ II.
 Drafted in `paper/sections/related.tex`: the two categories of the Introduction's paragraph 2,
 then the scheduling theory CLASP builds on. Every reference follows the citation rule (a top
 venue, and 2023 or later or cited 100 times or more; the sources of the methods and baselines
-used; standards), and what the section says about each work is checked against its text:
+used; standards), except the two closest prior works, kept at the authors' request (Hosseini and
+Panwar; McDowell et al.). What the section says about each work is checked against its text:
 `docs/RELATED_SOURCES.md`, which also lists the works left out and why.
 
 - **A. Physical link design for multi-user media delivery.**
@@ -70,7 +71,8 @@ used; standards), and what the section says about each work is checked against i
     parameter per MCS), MIESM (mutual information per symbol or per bit), the 5G NR abstraction
     of ns-3 (calibrated EESM, SINR-BLER tables).
   - Media-aware scheduling: RaDiO (one MDP per data unit, a price on rate); gradient scheduling
-    with distortion utilities; frame deadlines with per-client delivery debts.
+    with distortion utilities; layered video as a restless bandit with an LP relaxation (Hosseini
+    and Panwar); frame deadlines with per-client delivery debts.
   - All of them decide over blocks that are decoded or lost; the MMSE abstraction takes EESM's
     place for a learned code.
 - **B. The JSCC way.**
@@ -86,7 +88,11 @@ used; standards), and what the section says about each work is checked against i
   - Whittle; Weber and Weiss; Adelman and Mersereau; Brown and Smith; Gast, Gaujal and Yan; Hao,
     Xu and Tong.
   - In wireless scheduling: Liu and Zhao (closed-form index, Lagrangian bound); Kadota et al.
-    (age of information); Shisher et al. (remote inference).
+    (age of information); Shisher et al. (remote inference). Closest to ours, McDowell et al.: a
+    learned semantic code over fading slots, one price, per-sensor values learned by RL, a fluid
+    bound stated but not plotted; a fresh codeword per slot, no deadline, exact channel state.
+  - Restless bandits already schedule layered video and learned semantic codes, which supports
+    the formulation.
   - CLASP imports the relaxation, its bound and the Lagrangian priority policy; what is new is
     the arm (phases that accumulate over slots of different SNRs, a two-number state) and the
     calibration-aware reward.

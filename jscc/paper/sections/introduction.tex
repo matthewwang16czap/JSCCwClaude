@@ -42,8 +42,9 @@ same symbols serve receivers of different SNRs, as linear analog codes showed fo
 \cite{Jakubczak11}. Most of this work adapts a single link to the channel and the budget
 (Section~\ref{sec:related-jscc}). To serve many users, the JSCC way splits the shared channel by each
 user's predicted quality at its SNR \cite{Yan22,Xia24,Hou26}, or learns the allocation by deep
-reinforcement learning \cite{Wang22,Zhang23t}. Our method belongs to the JSCC way: it schedules a
-learned code to many users across fading slots.
+reinforcement learning \cite{Wang22,Zhang23t}, most recently inside a restless bandit over fading
+slots \cite{McDowell26}. Our method belongs to the JSCC way: it schedules a learned code to many
+users across fading slots.
 
 \begin{figure}[!t]
 \centering
@@ -76,11 +77,11 @@ deadline and without knowing future slots, is a stochastic dynamic program whose
 exponentially with the number of users. Existing methods either decide each transmission at its
 current SNR without planning over the slots left before the deadline \cite{Yan22,Xia24,Hou26}, or
 learn the allocation by reinforcement learning, which needs many interactions to train and gives no
-certificate of how far the learned policy is from optimal \cite{Wang22,Zhang23t}.
+certificate of how far the learned policy is from optimal \cite{Wang22,Zhang23t,McDowell26}.
 \item \emph{Imperfect information.} The quality model and the channel reports are both estimates,
 yet existing schedulers take them at face value: per-image rate selection (PADC \cite{Zhang23})
 treats its predicted quality as exact, so a user predicted just above a quality target can decode
-just below it.
+just below it, and the closest learned scheduler assumes exact channel knowledge \cite{McDowell26}.
 Moreover, the advantage of the JSCC way over physical link design was measured on single links
 against an idealized digital side, with exact channel knowledge and capacity-achieving codes
 \cite{Bourtsoulatze19,Kurka20}; whether it survives the reports a real base station has is open.
@@ -118,7 +119,8 @@ user's delivery to the deadline exactly. It has one design for each challenge.
 \item \emph{Link abstraction.} The progressive code is trained under slot-varying SNR and its MMSE
 link abstraction is calibrated per image, so that each user becomes a two-number state.
 \item \emph{Scheduler.} On this state the frame becomes a finite-horizon restless bandit
-\cite{Whittle88}. A Lagrangian relaxation splits it into one small dynamic program per user under
+\cite{Whittle88}, a model already used to schedule layered video \cite{Hosseini19} and learned
+semantic codes \cite{McDowell26}. A Lagrangian relaxation splits it into one small dynamic program per user under
 per-slot prices, solved exactly on a CPU; the relaxation's value is an upper bound on every causal
 scheduler; and users are served in the order of the Lagrangian index those programs define
 \cite{Hao22,Brown20}.

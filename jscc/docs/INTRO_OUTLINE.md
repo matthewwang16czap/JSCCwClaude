@@ -76,7 +76,7 @@ category ours belongs to.
 7. Most of this work adapts a single link to the channel and the budget (Section II-B).
 8. To serve many users, the JSCC way splits the shared channel by each user's predicted quality
    at its SNR [Yan22, Xia24, Hou26], or learns the allocation by deep reinforcement learning
-   [Wang22, Zhang23t].
+   [Wang22, Zhang23t], most recently inside a restless bandit over fading slots [McDowell26].
 9. Our method belongs to the JSCC way: it schedules a learned code to many users across fading
    slots.
 
@@ -134,11 +134,12 @@ serves every user slot by slot up to the deadline."
        slots left before the deadline [Yan22, Xia24, Hou26];
      - others learn the allocation by reinforcement learning, which needs many interactions to
        train and gives no certificate of how far the learned policy is from optimal [Wang22,
-       Zhang23t].
+       Zhang23t, McDowell26].
 4. **(3) Imperfect information.**
    - The scheduler's quality model and its channel reports are both estimates, yet existing
      schedulers take them at face value.
      - PADC picks a rate from a predicted quality as if the prediction were exact [Zhang23].
+     - The closest learned scheduler assumes exact channel knowledge [McDowell26].
    - So a user predicted just above a quality target can decode just below it.
    - The JSCC way's advantage over physical link design was measured on single links with an
      idealised digital side: exact channel knowledge and capacity-achieving codes
@@ -204,7 +205,8 @@ serves every user slot by slot up to the deadline."
      SNR and calibrate its MMSE link abstraction per image from 12 decodes. Each user then becomes
      a two-number state.
    - **Challenge (2), the scheduler.** On this state the frame becomes a finite-horizon restless
-     bandit [Whittle88]:
+     bandit [Whittle88], a model already used to schedule layered video [Hosseini19] and learned
+     semantic codes [McDowell26]:
      - a Lagrangian relaxation splits it into one small dynamic program per user under per-slot
        prices, solved exactly on a CPU;
      - the relaxation's value is an upper bound on every causal scheduler;
@@ -317,14 +319,16 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [12] Hou26 | H. Hou, S. Bi, X. Li, H. Zhang, and Z. Quan, "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," IEEE Trans. Wireless Commun., vol. 25, pp. 22323–22338, 2026, doi: 10.1109/TWC.2026.3724562. |
 | [13] Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, and S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598–2613, Sep. 2022, doi: 10.1109/JSAC.2022.3191112. |
 | [14] Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, and A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, no. 7, pp. 3992–4004, Jul. 2023, doi: 10.1109/TCOMM.2023.3274145. |
-| [15] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
-| [16] Ericsson03 | Ericsson, "System-level evaluation of OFDM – further considerations," 3GPP TSG-RAN WG1 #35, Lisbon, Portugal, Tdoc R1-031303, Nov. 2003. |
-| [17] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
-| [18] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
-| [19] Kurka21 | D. B. Kurka and D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., vol. 20, no. 12, pp. 8081–8095, Dec. 2021, doi: 10.1109/TWC.2021.3090048. |
-| [20] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
-| [21] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
-| [22] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
+| [15] McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, and Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, Aug. 2026. |
+| [16] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
+| [17] Ericsson03 | Ericsson, "System-level evaluation of OFDM – further considerations," 3GPP TSG-RAN WG1 #35, Lisbon, Portugal, Tdoc R1-031303, Nov. 2003. |
+| [18] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
+| [19] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
+| [20] Kurka21 | D. B. Kurka and D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., vol. 20, no. 12, pp. 8081–8095, Dec. 2021, doi: 10.1109/TWC.2021.3090048. |
+| [21] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
+| [22] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
+| [23] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
+| [24] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
 
 ## Numbers used
 
