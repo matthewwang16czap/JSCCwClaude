@@ -31,7 +31,7 @@ fair (PF), picks the user each slot serves \cite{Viswanath02}. Its tools for man
 effective-SNR link abstractions, the exponential and the mutual-information effective SNR mappings
 (EESM, MIESM), predict a coded block's error rate from the SNRs of all the resources it occupies
 \cite{Ericsson03,EMD09,Lagen20}, and media-aware schedulers weigh each user's next packet by the
-distortion it removes before its deadline \cite{Chou06,Pahalawatta07,Fu10,Hosseini16}. All of them,
+distortion it removes before its deadline \cite{Chou06,Pahalawatta07,Fu10,Hosseini19}. All of them,
 however, rest on a binary outcome per block, decoded or lost, so a user's quality is a step function
 of its channel: a slot below the block's design SNR delivers nothing, and SNR above it is wasted, the
 cliff effect \cite{Bourtsoulatze19,Gunduz23}. Moreover, the rate is committed before the slot is
@@ -49,13 +49,13 @@ and rate \cite{Kurka21,Dai22,Zhang23,Yang25}, to feedback that stops the transmi
 quality is reached \cite{Kurka20,Wu24f}, and to MIMO channels \cite{Wu24m}. To serve many users, the
 JSCC way splits the shared channel by each user's predicted quality at its SNR, through channel and
 symbol assignment \cite{Yan22}, user association and bandwidth \cite{Xia24}, or Bayesian
-optimization over a learned quality oracle \cite{BO26}; other work builds the sharing into the code
+optimization over a learned quality oracle \cite{Hou26}; other work builds the sharing into the code
 \cite{Yilmaz23}. Where the allocation must change over time, a scheduler is learned by deep
 reinforcement learning \cite{Wang22,Zhang23t}, most recently as a restless bandit over fading slots
 whose slot values are learned \cite{McDowell26}. Our method belongs to the JSCC way: it schedules a
 learned code to many users across fading slots.
 
-\begin{figure}[t]
+\begin{figure}[!t]
 \centering
 \fbox{\parbox[c][5.2cm][c]{0.94\columnwidth}{\centering
 \textbf{(a)} Physical link design\\[1.2cm]
@@ -75,7 +75,7 @@ Although existing JSCC methods are effective, they face three challenges when a 
 schedules a learned code to many users over fading slots.
 \begin{itemize}
 \item \emph{No link abstraction.} They value a user's transmission at a single SNR, with a fitted
-quality-SNR curve or a learned quality predictor \cite{Yan22,Zhang23,BO26}. A scheduled image,
+quality-SNR curve or a learned quality predictor \cite{Yan22,Zhang23,Hou26}. A scheduled image,
 however, is spread over slots of different SNRs, and for a nonlinear learned code no rule is known
 for how these SNRs combine into decoded quality. EESM and MIESM predict a digital block's error
 rate, not a learned code's distortion, and to our knowledge have not been validated on a learned
@@ -83,7 +83,7 @@ code.
 \item \emph{No tractable, certifiable scheduler.} Deciding which user each slot serves, before a
 deadline and without knowing future slots, is a stochastic dynamic program whose state grows
 exponentially with the number of users. Existing methods either decide each transmission at its
-current SNR without planning over the slots left before the deadline \cite{Yan22,Xia24,BO26}, or
+current SNR without planning over the slots left before the deadline \cite{Yan22,Xia24,Hou26}, or
 learn slot values by reinforcement learning, which needs many interactions to train and gives no
 certificate of how far the learned policy is from optimal \cite{Wang22,Zhang23t,McDowell26}.
 \item \emph{Imperfect information.} The quality model and the channel reports are both estimates,
@@ -118,7 +118,7 @@ gives a learned code a link abstraction. With it, each user's state reduces to t
 phases received and their accumulated weighted noise, and scheduling becomes a planning problem,
 provided the abstraction's residual error is part of the objective.
 
-To address these challenges, we propose CLASP (Calibration-aware, Link-Abstraction-based Scheduling
+To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
 of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.
 Unlike existing JSCC methods, which value each user at one SNR or learn slot values by reinforcement
 learning, CLASP values every slot for every user through the code's link abstraction and plans each
