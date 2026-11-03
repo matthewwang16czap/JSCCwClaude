@@ -39,9 +39,9 @@ transmission with CQI-table link adaptation and HARQ it leads by 1.2-1.6 dB and 
 30 dB under 2 dB CQI errors or aged reports. Training the code on the channel CLASP creates adds
 0.21 dB.
 
-**Index Terms:** deep joint source-channel coding, link abstraction, multi-user scheduling,
-restless bandits, Lagrangian relaxation, index policies, imperfect CSI, HARQ, image
-transmission.
+**Index Terms:** Deep joint source-channel coding, hybrid automatic repeat request, image
+transmission, imperfect channel state information, index policies, Lagrangian relaxation, link
+abstraction, multi-user scheduling, restless bandits.
 
 ---
 

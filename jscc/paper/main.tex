@@ -1,14 +1,28 @@
-\documentclass[journal]{IEEEtran}
-\usepackage{cite}
-\usepackage{amsmath,amssymb}
+\documentclass[lettersize,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{algorithmic}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
 \usepackage{graphicx}
-\raggedbottom
+\usepackage{cite}
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
+\usepackage{balance}
 
 \begin{document}
 
 \title{Scheduling Learned Image Codes over Fading Multi-User Downlinks: A Link Abstraction and a Calibration-Aware Restless-Bandit Scheduler}
 
-\author{}
+\author{First~Author and Second~Author
+\thanks{Manuscript created November 2026.}
+\thanks{First~Author and Second~Author are with [department], [university], [city], [country]
+(e-mail: [address]).}}
+
+\markboth{IEEE Transactions on Wireless Communications}%
+{Author \MakeLowercase{\textit{et al.}}: Scheduling Learned Image Codes over Fading Multi-User Downlinks}
 
 \maketitle
 
@@ -17,17 +31,20 @@ Deep joint source-channel coding (JSCC) is designed and evaluated on single link
 \end{abstract}
 
 \begin{IEEEkeywords}
-deep joint source-channel coding, link abstraction, multi-user scheduling, restless bandits, Lagrangian relaxation, index policies, imperfect CSI, HARQ, image transmission
+Deep joint source-channel coding, hybrid automatic repeat request, image transmission, imperfect channel state information, index policies, Lagrangian relaxation, link abstraction, multi-user scheduling, restless bandits.
 \end{IEEEkeywords}
 
 \input{sections/introduction}
 
 \section{Related Work}
 \label{sec:related}
+
 \subsection{Physical Link Design for Multi-User Media Delivery}
 \label{sec:related-link}
+
 \subsection{The JSCC Way}
 \label{sec:related-jscc}
+
 \subsection{Restless Bandits and Lagrangian Index Policies}
 \label{sec:related-rmab}
 
@@ -36,34 +53,48 @@ deep joint source-channel coding, link abstraction, multi-user scheduling, restl
 
 \section{Method}
 \label{sec:method}
+
 \subsection{Training the Progressive Code for Slot-Varying SNR}
 \label{sec:method-training}
+
 \subsection{The MMSE Link Abstraction}
 \label{sec:method-abstraction}
+
 \subsection{CLASP: Deadline Scheduling as a Finite-Horizon Restless Bandit}
 \label{sec:method-clasp}
+
 \subsection{Imperfect Information: The Calibration-Aware Reward and Aged Reports}
 \label{sec:method-csi}
+
 \subsection{Training the Code on the Channel CLASP Creates}
 \label{sec:method-codesign}
 
 \section{Experiments}
 \label{sec:eval}
+
 \subsection{Link Abstraction Accuracy}
 \label{sec:eval-abstraction}
+
 \subsection{Mean PSNR: Near the Bound, and over PF}
 \label{sec:eval-mean}
+
 \subsection{Quality Target and Latency}
 \label{sec:eval-target}
+
 \subsection{Imperfect CSI and the Digital Baseline}
 \label{sec:eval-csi}
+
 \subsection{Training the Code on CLASP's Channel}
 \label{sec:eval-codesign}
+
 \subsection{Ablations and System Choice}
 \label{sec:eval-ablation}
 
 \section{Conclusion}
 \label{sec:conclusion}
+
+\IEEEtriggercmd{\balance}
+\IEEEtriggeratref{14}
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
