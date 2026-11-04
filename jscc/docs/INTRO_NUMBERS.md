@@ -5,7 +5,8 @@ gives the number as the outline writes it and where; the lines the run printed, 
 outputs you pasted back into the session (with the date you sent them); the file on the server
 (`~/projects/JSCCwClaude-main/jscc/results/`) and the COMMANDS.txt step that wrote it; and how
 the outline's number follows from the printed one. A number that appears again points to its
-first entry. Settings (a report correlation, a CQI error, the 30 dB target, user counts) are
+first entry. Entries 1-3, the aged-report setting and what aged reports cost, come first because
+entries 19 and 53 in paragraphs 4 and 6 point to them. Settings (a report correlation, a CQI error, the 30 dB target, user counts) are
 listed where they first appear.
 
 - **Simulated**: schedules scored on the fitted quality curves (`tools/schedule_sim.py`,
@@ -22,7 +23,7 @@ listed where they first appear.
 
 The commands that print every quoted line on the server are at the end, in the same order.
 
-## Paragraph 2 (item 5)
+## Aged reports: the setting and its cost (quoted in paragraphs 4 and 6)
 
 **1. "correlation 0.8"** (aged reports): a setting. The aged-report condition is report
 correlation r = 0.8 (`--cqi-corr 0.8`): CLASP with the aware transmitter (`--cqi-aware`), the
