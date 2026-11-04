@@ -33,47 +33,46 @@ the deadline. A difference between two shares is the difference of the two perce
    Yang25] is not automatically the gain a base station delivers to many users over fading slots.
 5. A base station splits a frame of slots among many users through a scheduler, and each user's
    slots fade independently.
-6. Moreover, the base station knows only an estimate of the current slot's channel, a
-   channel-quality report [TS36213] that is often late or wrong. Since each delivery has a
-   deadline, such errors matter all the more.
+6. Moreover, the base station knows only an estimate of the current slot's channel, making a
+   channel-quality report [TS36213] often late or wrong. Since each delivery has a deadline, a
+   low-latency scheduler is necessary as well.
 
 ## Paragraph 2. Existing approaches: physical link design and the JSCC way (Fig. 1)
 
 Order: physical link design and its limitations first; then "In contrast," the JSCC way, the
-category ours belongs to.
+category ours belongs to. Both are described by their schedulers, what they serve and what they
+value, since from paragraph 1 on the transmission is a learned code.
 
 1. Existing approaches to serving images to many users over a fading downlink fall into two
-   categories (Fig. 1):
-   - physical link design, which keeps the image codec separate and engineers the link that
-     carries its bits;
-   - the JSCC way, which lets a learned code take on the channel itself.
-2. Physical link design is how cellular systems deliver images today: a standard codec
-   compresses the image into bits once, and the physical layer carries them with link adaptation
-   from CQI reports, HARQ and a channel-aware scheduler such as proportional fair [Goldsmith97,
-   Caire01, Viswanath02].
-3. Its tools for many users are mature (Section II-A: link adaptation and HARQ, effective-SNR
-   mappings, media-aware schedulers).
-4. Limitation 1: every one of these tools rests on a binary outcome per block, decoded or lost.
-   - A user's quality is therefore a step function of its channel: a slot below the block's
-     design SNR delivers nothing, and SNR above it is wasted.
+   categories, which differ in what their schedulers serve and value (Fig. 1):
+   - physical link design, whose scheduler serves the bits of a separate image codec;
+   - the JSCC way, whose scheduler serves a learned code.
+2. Physical link design is how cellular systems deliver images today. A standard codec compresses
+   the image into bits once, and in every slot the scheduler picks the users to serve and the
+   rate of their blocks: link adaptation sets the rate from the user's CQI report, HARQ
+   retransmits a failed block, and a channel-aware policy such as proportional fair serves each
+   user when its channel quality is near its peak [Goldsmith97, Caire01, Viswanath02].
+3. Schedulers for media and deadline traffic go further: they value data by the distortion it
+   removes [Chou06, Pahalawatta07], serve first the client with the largest delivery debt
+   [HouBorkar09], or cast layered video streaming as a restless bandit [Hosseini19]
+   (Section II-A).
+4. Limitation 1: all of these schedulers rest on a binary outcome per block, decoded or lost.
+   - A slot is worth the bits it delivers, and a user's quality is a step function of its
+     channel: a slot below the block's design SNR delivers nothing, and SNR above it is wasted.
    - This is the cliff effect [Bourtsoulatze19, Gunduz23].
-5. Limitation 2: the rate is committed before the slot is seen, from a report that may be late or
-   wrong.
-   - An optimistic report costs a retransmission; a pessimistic one leaves capacity unused.
+5. Limitation 2: the scheduler commits the rate before the slot is seen, from a report that may
+   be late or wrong.
    - Link adaptation and HARQ protect the bits only by spending extra slots.
    - In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the digital
      chain 1.9 dB of mean PSNR, against 0.6 dB for a learned code under our scheduler
      (Section V-D).
-6. In contrast, the JSCC way replaces the two codes with one learned code that maps the image
-   straight to channel symbols [Bourtsoulatze19].
-   - Its quality degrades smoothly with the SNR its symbols meet, so no block is lost outright
-     and no coding rate has to be matched to an uncertain report.
-   - The same symbols serve receivers of different SNRs, each at a quality matched to its
-     channel, as linear analog codes showed for multicast video [Jakubczak11].
-7. Most of this work adapts a single link to the channel and the budget (Section II-B).
-8. To serve many users, the JSCC way splits the shared channel by each user's predicted quality
-   at its SNR [Yan22, Xia24, Hou26], or learns the allocation by deep reinforcement learning
-   [Wang22, Zhang23t], most recently inside a restless bandit over fading slots [McDowell26].
+6. In contrast, the JSCC way schedules a learned code, whose quality degrades smoothly with the
+   SNR its symbols meet: no block is lost outright, and no coding rate has to be matched to an
+   uncertain report.
+7. Its schedulers therefore value a user by the code's predicted quality rather than by bits.
+8. They split the shared channel by each user's predicted quality at its SNR [Yan22, Xia24,
+   Hou26], or learn the allocation by deep reinforcement learning [Wang22, Zhang23t], most
+   recently inside a restless bandit over fading slots [McDowell26] (Section II-B).
 9. Our method belongs to the JSCC way: it schedules a learned code to many users across fading
    slots.
 
@@ -87,12 +86,13 @@ The figure is one column wide, with three panels stacked top to bottom: (a), (b)
 - **(a) Physical link design.**
   - The chain: image → "codec" → bits → "AMC + HARQ" → a row of slots.
   - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost).
-  - A "scheduler (CQI)" box above the row picks the user for each slot.
+  - A "scheduler (CQI)" box above the row picks the user and the rate for each slot; it values a
+    slot by the bits it delivers.
   - Inset: quality against SNR as a step (the cliff).
 - **(b) The JSCC way.**
   - The chain: image → "learned JSCC" → one codeword per user.
   - Each codeword has a single arrow to its own channel, labelled with one SNR.
-  - An "allocator q(SNR)" box sets every user's share once.
+  - An "allocator q(SNR)" box sets every user's share from the quality predicted at its SNR.
   - A dashed "RL scheduler" box carries a "?" for the value of a slot.
   - Inset: quality against SNR as a smooth curve.
 - **(c) CLASP.**
@@ -102,11 +102,12 @@ The figure is one column wide, with three panels stacked top to bottom: (a), (b)
   - The scheduler serves users slot by slot up to a "deadline" marker.
   - Inset: predicted against decoded quality, on the diagonal.
 
-**Caption.** "Fig. 1. Approaches to serving images to many users over a fading downlink.
-(a) Physical link design: a separate codec over adaptive modulation and coding, HARQ and a
-channel-aware scheduler; each block is decoded or lost. (b) The JSCC way: a learned code degrades
-gracefully, but each user is valued at a single SNR and allocated once, or scheduled by a policy
-learned by trial and error. (c) CLASP: a progressive learned code trained under slot-varying SNR
+**Caption.** "Fig. 1. Approaches to serving images to many users over a fading downlink, by
+what their schedulers serve and value. (a) Physical link design: the scheduler serves the bits of
+a separate codec, sets each block's rate from a report and values a slot by the bits it delivers;
+each block is decoded or lost. (b) The JSCC way: the scheduler serves a learned code that degrades
+gracefully, but values each user at a single SNR, or follows a policy learned by trial and error.
+(c) CLASP: a progressive learned code trained under slot-varying SNR
 obeys a link abstraction that values every slot, and a restless-bandit scheduler built on it
 serves every user slot by slot up to the deadline."
 
@@ -310,22 +311,25 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [6] Goldsmith97 | A. J. Goldsmith and S.-G. Chua, "Variable-rate variable-power MQAM for fading channels," IEEE Trans. Commun., vol. 45, no. 10, pp. 1218–1230, Oct. 1997, doi: 10.1109/26.634685. |
 | [7] Caire01 | G. Caire and D. Tuninetti, "The throughput of hybrid-ARQ protocols for the Gaussian collision channel," IEEE Trans. Inf. Theory, vol. 47, no. 5, pp. 1971–1988, Jul. 2001, doi: 10.1109/18.930931. |
 | [8] Viswanath02 | P. Viswanath, D. N. C. Tse, and R. Laroia, "Opportunistic beamforming using dumb antennas," IEEE Trans. Inf. Theory, vol. 48, no. 6, pp. 1277–1294, Jun. 2002, doi: 10.1109/TIT.2002.1003822. |
-| [9] Jakubczak11 | S. Jakubczak and D. Katabi, "A cross-layer design for scalable mobile video," in Proc. 17th Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Las Vegas, NV, USA, Sep. 2011, pp. 289–300, doi: 10.1145/2030613.2030646. |
-| [10] Yan22 | L. Yan, Z. Qin, R. Zhang, Y. Li, and G. Y. Li, "Resource allocation for text semantic communications," IEEE Wireless Commun. Lett., vol. 11, no. 7, pp. 1394–1398, Jul. 2022, doi: 10.1109/LWC.2022.3170849. |
-| [11] Xia24 | L. Xia, Y. Sun, D. Niyato, X. Li, and M. A. Imran, "Joint user association and bandwidth allocation in semantic communication networks," IEEE Trans. Veh. Technol., vol. 73, no. 2, pp. 2699–2711, Feb. 2024, doi: 10.1109/TVT.2023.3318510. |
-| [12] Hou26 | H. Hou, S. Bi, X. Li, H. Zhang, and Z. Quan, "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," IEEE Trans. Wireless Commun., vol. 25, pp. 22323–22338, 2026, doi: 10.1109/TWC.2026.3724562. |
-| [13] Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, and S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598–2613, Sep. 2022, doi: 10.1109/JSAC.2022.3191112. |
-| [14] Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, and A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, no. 7, pp. 3992–4004, Jul. 2023, doi: 10.1109/TCOMM.2023.3274145. |
-| [15] McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, and Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, Aug. 2026. |
-| [16] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
-| [17] Ericsson03 | Ericsson, "System-level evaluation of OFDM – further considerations," 3GPP TSG-RAN WG1 #35, Lisbon, Portugal, Tdoc R1-031303, Nov. 2003. |
-| [18] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
-| [19] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
-| [20] Kurka21 | D. B. Kurka and D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., vol. 20, no. 12, pp. 8081–8095, Dec. 2021, doi: 10.1109/TWC.2021.3090048. |
-| [21] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
-| [22] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
-| [23] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
-| [24] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
+| [9] Chou06 | P. A. Chou and Z. Miao, "Rate-distortion optimized streaming of packetized media," IEEE Trans. Multimedia, vol. 8, no. 2, pp. 390–404, Apr. 2006, doi: 10.1109/TMM.2005.864313. |
+| [10] Pahalawatta07 | P. Pahalawatta, R. Berry, T. Pappas, and A. Katsaggelos, "Content-aware resource allocation and packet scheduling for video transmission over wireless networks," IEEE J. Sel. Areas Commun., vol. 25, no. 4, pp. 749–759, May 2007, doi: 10.1109/JSAC.2007.070511. |
+| [11] HouBorkar09 | I.-H. Hou, V. Borkar, and P. R. Kumar, "A theory of QoS for wireless," in Proc. IEEE INFOCOM, Rio de Janeiro, Brazil, Apr. 2009, pp. 486–494, doi: 10.1109/INFCOM.2009.5061954. |
+| [12] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
+| [13] Yan22 | L. Yan, Z. Qin, R. Zhang, Y. Li, and G. Y. Li, "Resource allocation for text semantic communications," IEEE Wireless Commun. Lett., vol. 11, no. 7, pp. 1394–1398, Jul. 2022, doi: 10.1109/LWC.2022.3170849. |
+| [14] Xia24 | L. Xia, Y. Sun, D. Niyato, X. Li, and M. A. Imran, "Joint user association and bandwidth allocation in semantic communication networks," IEEE Trans. Veh. Technol., vol. 73, no. 2, pp. 2699–2711, Feb. 2024, doi: 10.1109/TVT.2023.3318510. |
+| [15] Hou26 | H. Hou, S. Bi, X. Li, H. Zhang, and Z. Quan, "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," IEEE Trans. Wireless Commun., vol. 25, pp. 22323–22338, 2026, doi: 10.1109/TWC.2026.3724562. |
+| [16] Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, and S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598–2613, Sep. 2022, doi: 10.1109/JSAC.2022.3191112. |
+| [17] Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, and A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, no. 7, pp. 3992–4004, Jul. 2023, doi: 10.1109/TCOMM.2023.3274145. |
+| [18] McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, and Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, Aug. 2026. |
+| [19] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
+| [20] Ericsson03 | Ericsson, "System-level evaluation of OFDM – further considerations," 3GPP TSG-RAN WG1 #35, Lisbon, Portugal, Tdoc R1-031303, Nov. 2003. |
+| [21] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
+| [22] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
+| [23] Jakubczak11 | S. Jakubczak and D. Katabi, "A cross-layer design for scalable mobile video," in Proc. 17th Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Las Vegas, NV, USA, Sep. 2011, pp. 289–300, doi: 10.1145/2030613.2030646. |
+| [24] Kurka21 | D. B. Kurka and D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., vol. 20, no. 12, pp. 8081–8095, Dec. 2021, doi: 10.1109/TWC.2021.3090048. |
+| [25] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
+| [26] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
+| [27] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
 
 ## Numbers used
 
