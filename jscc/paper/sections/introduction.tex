@@ -1,21 +1,20 @@
 \section{Introduction}
 \label{sec:intro}
 
-\IEEEPARstart{D}{eep} joint source-channel coding (JSCC) maps an image straight to channel symbols
-with one learned encoder and decoder, with no separate source and channel codes
-\cite{Bourtsoulatze19}. It matches or beats separation-based digital transmission at low signal-to-noise
-ratio (SNR) and degrades gracefully as the channel worsens, instead of failing once the SNR drops below what a
-digital code was designed for \cite{Bourtsoulatze19,Gunduz23}. That makes it a strong candidate for
-image delivery in 6G \cite{Gunduz23}. But a learned code is designed and evaluated as a single link
-at a given SNR: one transmitter, one receiver, the channel condition handed to it
-\cite{Bourtsoulatze19,Xu22,Yang25}. A cellular downlink is different. A base station splits a frame
-of slots among many users through a scheduler; each user's slots fade independently; the base
-station knows only an estimate of the current slot, a channel-quality report \cite{TS36213} that is
-often late or wrong; and each delivery, one image, has a deadline. So the gain a point-to-point study
-reports is not automatically the gain a cell delivers. That depends on the scheduler, and no existing
-scheduler knows what a slot is worth to a learned code. To schedule, the base station needs the value
-of ``give user~$k$ this slot now.'' For a digital code that value follows from the rate the slot
-carries and the codec's rate-distortion curve. For a trained, nonlinear code no such value exists.
+\IEEEPARstart{D}{eep} joint source-channel coding (JSCC) can map an image directly to channel symbols
+with a single learned encoder and decoder, eliminating the separate source and channel codes that
+digital coding needs. Trained end to end through the channel, deep JSCC beats digital transmission
+at low signal-to-noise ratio (SNR) and degrades gracefully as the channel worsens, instead of
+failing once the SNR drops below what a digital code was designed for
+\cite{Bourtsoulatze19,Gunduz23}. That makes it a strong candidate for image delivery in 6G, yet a
+learned code is designed and evaluated on a single link at a given SNR. A cellular downlink is a
+multi-user, multi-slot system with fading, imperfect channel knowledge and deadlines, so the gain a
+learned code reports on a single link \cite{Bourtsoulatze19,Xu22,Yang25} is not automatically the
+gain a base station delivers to many users over fading slots. A base station splits a frame of
+slots among many users through a scheduler, and each user's slots fade independently. Moreover, the
+base station knows only an estimate of the current slot's channel, a channel-quality report
+\cite{TS36213} that is often late or wrong. Since each delivery has a deadline, such errors matter
+all the more.
 
 Existing approaches to serving images to many users over a fading downlink fall into two categories
 (Fig.~\ref{fig:overview}): \emph{physical link design}, which keeps the image codec separate and

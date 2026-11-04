@@ -25,16 +25,19 @@ downloaded on 2026-11-03), or both. The support column quotes the text. Numbers 
   and decoder trained through the channel; beats JPEG/JPEG2000 with a capacity-achieving code at
   low SNR and bandwidth; no cliff effect; degrades gracefully when the SNR departs from training;
   evaluated as a single link; idealized digital side.
-- Support (abstract): "directly maps the image pixel values to the complex-valued channel input
-  symbols"; "an autoencoder with a non-trainable layer in the middle that represents the noisy
-  communication channel"; "outperforms digital transmission concatenating JPEG or JPEG2000
+- Support (abstract, re-read on arXiv 1809.01733 on 2026-11-04): "directly maps the image pixel
+  values to the complex-valued channel input symbols"; "two convolutional neural networks (CNNs),
+  which are trained jointly, and can be considered as an autoencoder with a non-trainable layer in
+  the middle that represents the noisy communication channel" (Section I: trained end to end
+  through the channel); "outperforms digital transmission concatenating JPEG or JPEG2000
   compression with a capacity achieving channel code at low signal-to-noise ratio (SNR) and
   channel bandwidth values"; "does not suffer from the 'cliff effect'"; "graceful performance
   degradation as the channel SNR varies with respect to the SNR value assumed during training".
 
 **[2] Gunduz23.** IEEE JSAC 2023; 824; recent and highly cited.
 - Says (I, II-B): learned codes degrade gracefully instead of failing below a design SNR; a
-  candidate for 6G; a tutorial on semantic and task-oriented communications.
+  tutorial on semantic and task-oriented communications. Section I's 6G sentence is not cited;
+  the full-text line "future wireless communications systems, such as 6G" would support it.
 - Support (abstract): "This tutorial summarizes the efforts to date ... semantic-aware and
   task-oriented communications". Full text (arXiv 2207.09353v2): "future wireless communications
   systems, such as 6G" (Sec. I); "their performance does not fall apart when the channel quality
@@ -42,13 +45,15 @@ downloaded on 2026-11-03), or both. The support column quotes the text. Numbers 
   channel quality" (Sec. VI).
 
 **[3] Xu22.** IEEE TCSVT 2022; 530; highly cited.
-- Says (I, II-B): one model serves a range of SNRs by scaling features with the SNR.
+- Says (I, II-B): a single-link code whose gains are reported per SNR (I); one model serves a
+  range of SNRs by scaling features with the SNR (II-B).
 - Support (abstract): "can successfully operate with different SNR levels during transmission";
   "uses the channel-wise soft attention to scaling features according to SNR conditions".
 
 **[4] Yang25.** IEEE TCCN 2025; 246; recent and highly cited.
-- Says (I, II-B): Swin Transformer backbone that adapts to the channel state and the target rate
-  within one model; compared with BPG and 5G LDPC codes.
+- Says (I, II-B): a single-link code whose gains are reported per channel state (I); Swin
+  Transformer backbone that adapts to the channel state and the target rate within one model;
+  compared with BPG and 5G LDPC codes (II-B).
 - Support (abstract): "neural JSCC codec built on the emerging Swin Transformer backbone";
   "modulation modules that scale latent representations based on the channel state information
   and target transmission rate"; "better or comparable performance versus the state-of-the-art
