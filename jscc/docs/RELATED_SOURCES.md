@@ -93,28 +93,59 @@ digital baseline).
   503). Web-search summaries of two later sources, an RWTH Aachen paper and Tse's IMA 2001
   slides, tie it to proportional fair scheduling; neither source could be fetched either.
 
-**[9] Jakubczak11.** ACM MobiCom 2011; 193; highly cited.
-- Says (I, II-B): a linear analog code (SoftCast) serves receivers of different SNRs with one
-  stream, each at a quality matched to its channel; noise reduces sharpness instead of causing
-  glitches.
-- Support (abstract): "SoftCast changes the network stack to act like a linear transform"; "a
-  video source to multicast a single stream that each receiver decodes to a video quality
-  commensurate with its channel quality"; errors "now reduce the sharpness of the received pixels
-  but do not cause the video to glitch or stall".
+**[9] Chou06.** IEEE TMM 2006; 405; highly cited.
+- Says (I, II-A): a scheduler that values data by the distortion it removes (I); RaDiO reduces
+  streaming to the error-cost optimized transmission of each data unit, an MDP with a Lagrange
+  multiplier pricing the rate, essentially at the operational D(R) of the source at the erasure
+  channel's capacity.
+- Support (abstract): "can be reduced to the problem of error-cost optimized transmission of an
+  isolated data unit"; "the framework of Markov decision processes"; "essentially achieve the best
+  possible performance: the operational distortion-rate function of the source at the capacity of
+  the packet erasure channel". Read in full (`fulltext_readings.md` item 5): "priced by a Lagrange
+  multiplier".
 
-**[10] Yan22.** IEEE WCL 2022; 337; highly cited.
+**[10] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
+- Says (I, II-A): a scheduler that values data by the distortion it removes (I); gradient-based
+  schedulers set each user's rate from its channel quality and the gradient of a utility built from
+  its received-video distortion.
+- Support (abstract): "user data rates are dynamically adjusted based on channel quality as well
+  as the gradients of a utility function. The user utilities are designed as a function of the
+  distortion of the received video."
+
+**[11] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
+- Says (I, II-A): a deadline scheduler that serves first the client with the largest delivery debt
+  (I); packets expire at the end of each frame; feasible per-client delivery ratios are
+  characterized; largest-debt-first fulfills every feasible set.
+- Support: read in full; the notes of that reading (`fulltext_readings.md` batch 4, `docs/SURVEY.md`
+  F2) record frames of tau slots with one packet per client per frame, expired at the frame's end,
+  per-client long-run delivery ratios, and that largest-debt-first is feasibility optimal.
+
+**[12] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
+the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
+authors and title).
+- Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
+  restless bandit and relaxed to a linear program whose value is plotted beside the policies; up to
+  twice the network utilization of PF; layered video already scheduled by a restless bandit.
+- Support (abstract): "We model the QA-adaptive scheduling ... as a Restless Bandit"; "our
+  QA-Aware strategy can achieve up to two times improvement in network utilization compared to
+  popular baseline algorithms such as Proportional Fairness". Read in full (arXiv v2); the notes
+  of that reading (`fulltext_readings.md` item 1) record a finite Markov channel per user that sets
+  how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
+  value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
+
+**[13] Yan22.** IEEE WCL 2022; 337; highly cited.
 - Says (I, II-B): channel assignment and the number of semantic symbols from a semantic spectral
   efficiency; values a transmission at one SNR.
 - Support (abstract): "the semantic spectral efficiency (S-SE) is defined ... and is used to
   optimize resource allocation in terms of channel assignment and the number of transmitted
   semantic symbols".
 
-**[11] Xia24.** IEEE TVT 2024; 43; recent.
+**[14] Xia24.** IEEE TVT 2024; 43; recent.
 - Says (I, II-B): user association and bandwidth from a message-level throughput.
 - Support (abstract): "two fundamental problems of user association (UA) and bandwidth allocation
   (BA)"; "a new semantics-level metric, namely system throughput in message (STM)".
 
-**[12] Hou26.** IEEE TWC 2026; 0; recent.
+**[15] Hou26.** IEEE TWC 2026; 0; recent.
 - Says (I, II-B): compression ratios and transmission rates by Bayesian optimization over
   Gaussian-process models of quality against SNR and compression ratio.
 - Support (abstract): "a Bayesian optimization (BO)-based online algorithm"; "The edge server
@@ -122,20 +153,20 @@ digital baseline).
   models that capture the relationship between reconstruction performance, signal-to-noise ratio
   (SNR), and CR".
 
-**[13] Wang22.** IEEE JSAC 2022; 227; highly cited.
+**[16] Wang22.** IEEE JSAC 2022; 227; highly cited.
 - Says (I, II-B): proximal policy optimization with an attention network assigns resource blocks
   and the part of the semantic content to send.
 - Support (abstract): "the BS must select an appropriate resource block for each user as well as
   determine and transmit part of the semantic information"; "a proximal-policy-optimization-based
   reinforcement learning (RL) algorithm integrated with an attention network".
 
-**[14] Zhang23t.** IEEE TCOM 2023; 191; recent and highly cited.
+**[17] Zhang23t.** IEEE TCOM 2023; 191; recent and highly cited.
 - Says (I, II-B): a DDPG agent sets each user's compression ratio, power and bandwidth.
 - Support (abstract): "a deep deterministic policy gradient (DDPG) agent at the micro base
   station"; "a joint optimization problem of the semantic compression ratio, transmit power, and
   bandwidth of each user".
 
-**[15] McDowell26.** arXiv 2608.28441 (v2, 31 Aug 2026); preprint; *exception*, kept at the
+**[18] McDowell26.** arXiv 2608.28441 (v2, 31 Aug 2026); preprint; *exception*, kept at the
 authors' request as the closest prior learned scheduler.
 - Says (I, II-C): learns the allocation by reinforcement learning inside a restless bandit over
   independent Rayleigh-fading slots, for a learned semantic code; a Lagrangian relaxation with one
@@ -152,7 +183,7 @@ authors' request as the closest prior learned scheduler.
   figure; a fresh, self-contained codeword of the newest observation in every slot, no deadline,
   and CSI at both ends.
 
-**[16] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
+**[19] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
 - Says (I, II-B): PADC predicts each image's PSNR from its content, the SNR and the compression
   ratio, and sends it at the least compression ratio meeting a quality constraint, treating the
   prediction as exact.
@@ -161,7 +192,7 @@ authors' request as the closest prior learned scheduler.
   ratio (CR) value, and a CR optimizer aims at finding the minimal data-level or instance-level CR
   with a PSNR quality constraint". Read in full with its code (`docs/SURVEY.md` A).
 
-**[17] Ericsson03.** 3GPP TSG-RAN WG1 #35, Tdoc R1-031303, Nov. 2003; standards contribution, the
+**[20] Ericsson03.** 3GPP TSG-RAN WG1 #35, Tdoc R1-031303, Nov. 2003; standards contribution, the
 origin of EESM; *used* (EESM baseline).
 - Says (I, II-A): an effective SINR mapping turns the SNRs of a block's resources into one
   effective SNR, from which the block error rate is read off the AWGN curve; EESM is derived from
@@ -173,7 +204,7 @@ origin of EESM; *used* (EESM baseline).
   bound"; "generalized to include an MCS-dependent parameter"; "system-level evaluation of e.g.
   OFDM performance".
 
-**[18] EMD09.** IEEE 802.16m-08/004r5, Jan. 2009; standard; *used* (MIESM baseline).
+**[21] EMD09.** IEEE 802.16m-08/004r5, Jan. 2009; standard; *used* (MIESM baseline).
 - Says (I, II-A): MIESM maps the SINRs through the mutual information per received symbol or per
   bit.
 - Support (Sec. 4.3): "Within the class of MIESM there are two variants, one is based on the
@@ -181,7 +212,7 @@ origin of EESM; *used* (EESM baseline).
   other directly computes the bit mutual information. Each of these PHY abstractions uses a
   different function to map the vector of SINR values to a single number."
 
-**[19] Kurka20.** IEEE JSAIT 2020; 492; highly cited.
+**[22] Kurka20.** IEEE JSAIT 2020; 492; highly cited.
 - Says (I, II-B): channel output feedback, with shorter variable-length transmission; the digital
   side of the comparison has exact channel knowledge and capacity-achieving codes.
 - Support (abstract): "exploits the channel output feedback, and provides considerable
@@ -190,7 +221,17 @@ origin of EESM; *used* (EESM baseline).
   `deepjscc_link_level.md`): the separation scheme "inherently assumes perfect CSI at the
   receiver"; its baselines are BPG with capacity-achieving codes.
 
-**[20] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
+**[23] Jakubczak11.** ACM MobiCom 2011; 193; highly cited.
+- Says (I, II-B): linear analog codes, whose distortion is a sum of per-component MMSE terms by
+  construction (I, II-B); a linear analog code (SoftCast) serves receivers of different SNRs with
+  one stream, each at a quality matched to its channel, and noise reduces sharpness instead of
+  causing glitches (II-B).
+- Support (abstract): "SoftCast changes the network stack to act like a linear transform"; "a
+  video source to multicast a single stream that each receiver decodes to a video quality
+  commensurate with its channel quality"; errors "now reduce the sharpness of the received pixels
+  but do not cause the video to glitch or stall".
+
+**[24] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
 - Says (I, II-B): layers as successive refinements or multiple descriptions with negligible loss;
   refinements lose value below the training SNR.
 - Support (abstract): "the well known problems of successive refinement and multiple
@@ -199,7 +240,7 @@ origin of EESM; *used* (EESM baseline).
   item 8): "since the reconstructed base layer becomes significantly different from what the
   encoder expects based on the training data".
 
-**[21] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
+**[25] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
 - Says (I, II-C, III-E): the constraint on the number of projects operated is relaxed to its
   expected value; the multiplier defines an index; the conjecture of near-optimality (III-E: the
   scheduling problem becomes a restless bandit).
@@ -208,20 +249,7 @@ origin of EESM; *used* (EESM baseline).
   constant ratio, the policy of operating the m projects of largest current index is nearly
   optimal" (a conjecture).
 
-**[22] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
-the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
-authors and title).
-- Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
-  restless bandit and relaxed to a linear program whose value is plotted beside the policies; up to
-  twice the network utilization of PF; layered video already scheduled by a restless bandit.
-- Support (abstract): "We model the QA-adaptive scheduling ... as a Restless Bandit"; "our
-  QA-Aware strategy can achieve up to two times improvement in network utilization compared to
-  popular baseline algorithms such as Proportional Fairness". Read in full (arXiv v2); the notes
-  of that reading (`fulltext_readings.md` item 1) record a finite Markov channel per user that sets
-  how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
-  value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
-
-**[23] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
+**[26] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
 - Says (I, II-C): the Lagrangian priority value is the greatest tax under which processing is
   optimal; serving in that order is asymptotically optimal; one multiplier per stage.
 - Support (abstract): "we define the Lagrangian priority value as the greatest tax under which it
@@ -229,7 +257,7 @@ authors and title).
   Read in full (`fulltext_readings.md` item 4): "Lagrangian relaxation with one multiplier per
   stage".
 
-**[24] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
+**[27] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
 - Says (I, II-C): relaxing the limit on the number of items selected gives an upper bound and the
   Lagrangian index policy, both asymptotically optimal with many items; tie-breaking matters.
 - Support (abstract): "a Lagrangian relaxation of the DP that relaxes the constraint limiting the
@@ -237,49 +265,25 @@ authors and title).
   "under mild conditions, these policies and bounds are asymptotically optimal for problems with
   many items; mixed policies and tiebreaking play an essential role".
 
-**[25] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
+**[28] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
 - Says (II-A, III-D): HEVC as the standard codec; the HEIC files of the digital baseline use HEVC
-  intra coding ([25] is cited for HEVC; HEIC is the HEIF image format with HEVC-coded images).
+  intra coding (Sullivan12 is cited for HEVC; HEIC is the HEIF image format with HEVC-coded images).
 - Support (abstract): "This paper provides an overview of the technical features and
   characteristics of the HEVC standard."
 
-**[26] Chase85.** IEEE TCOM 1985; 743; highly cited.
+**[29] Chase85.** IEEE TCOM 1985; 743; highly cited.
 - Says (II-A, III-D): the receiver combines the noisy copies of a retransmitted block (III-D
-  models it as the copies' SNRs adding, eq. (15); the equation is ours, [26] is cited for the
+  models it as the copies' SNRs adding, eq. (15); the equation is ours, Chase85 is cited for the
   scheme).
 - Support (title): "Code combining - A maximum-likelihood decoding approach for combining an
   arbitrary number of noisy packets".
 
-**[27] Lagen20.** IEEE ICC 2020; 101; highly cited.
+**[30] Lagen20.** IEEE ICC 2020; 101; highly cited.
 - Says (II-A): the 5G NR abstraction of the ns-3 simulator calibrates EESM and obtains SINR-BLER
   tables with a link-level simulator.
 - Support (abstract): "its integration into an open-source ns-3 based NR system-level simulator";
   "we used an NR-compliant link-level simulator to calibrate the EESM method as well as to obtain
   SINR-block error rate (BLER) lookup tables".
-
-**[28] Chou06.** IEEE TMM 2006; 405; highly cited.
-- Says (II-A): RaDiO reduces streaming to the error-cost optimized transmission of each data unit,
-  an MDP with a Lagrange multiplier pricing the rate, essentially at the operational D(R) of the
-  source at the erasure channel's capacity.
-- Support (abstract): "can be reduced to the problem of error-cost optimized transmission of an
-  isolated data unit"; "the framework of Markov decision processes"; "essentially achieve the best
-  possible performance: the operational distortion-rate function of the source at the capacity of
-  the packet erasure channel". Read in full (`fulltext_readings.md` item 5): "priced by a Lagrange
-  multiplier".
-
-**[29] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
-- Says (II-A): gradient-based schedulers set each user's rate from its channel quality and the
-  gradient of a utility built from its received-video distortion.
-- Support (abstract): "user data rates are dynamically adjusted based on channel quality as well
-  as the gradients of a utility function. The user utilities are designed as a function of the
-  distortion of the received video."
-
-**[30] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
-- Says (II-A): packets expire at the end of each frame; feasible per-client delivery ratios are
-  characterized; largest-debt-first fulfills every feasible set.
-- Support: read in full; the notes of that reading (`fulltext_readings.md` batch 4, `docs/SURVEY.md`
-  F2) record frames of tau slots with one packet per client per frame, expired at the frame's end,
-  per-client long-run delivery ratios, and that largest-debt-first is feasibility optimal.
 
 **[31] Dai22.** IEEE JSAC 2022; 378; highly cited.
 - Says (II-B): learns an entropy model of its latent representation and adapts the rate to it.

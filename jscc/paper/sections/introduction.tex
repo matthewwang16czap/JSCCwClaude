@@ -5,45 +5,45 @@
 with a single learned encoder and decoder, eliminating the separate source and channel codes that
 digital coding needs. Trained end to end through the channel, deep JSCC beats digital transmission
 at low signal-to-noise ratio (SNR) and degrades gracefully as the channel worsens, instead of
-failing once the SNR drops below what a digital code was designed for
-\cite{Bourtsoulatze19,Gunduz23}. That makes it a strong candidate for image delivery in 6G, yet a
-learned code is designed and evaluated on a single link at a given SNR. A cellular downlink is a
-multi-user, multi-slot system with fading, imperfect channel knowledge and deadlines, so the gain a
-learned code reports on a single link \cite{Bourtsoulatze19,Xu22,Yang25} is not automatically the
-gain a base station delivers to many users over fading slots. A base station splits a frame of
-slots among many users through a scheduler, and each user's slots fade independently. Moreover, the
-base station knows only an estimate of the current slot's channel, a channel-quality report
-\cite{TS36213} that is often late or wrong. Since each delivery has a deadline, such errors matter
-all the more.
+failing once the SNR drops below what a digital code was designed for \cite{Bourtsoulatze19,Gunduz23}.
+That makes it a strong candidate for image delivery in 6G, yet a learned code is designed and
+evaluated on a single link at a given SNR. A cellular downlink is a multi-user, multi-slot system
+with fading, imperfect channel knowledge and deadlines, so the gain a learned code reports on a
+single link \cite{Bourtsoulatze19,Xu22,Yang25} is not automatically the gain a base station
+delivers to many users over fading slots. A base station splits a frame of slots among many users
+through a scheduler, and each user's slots fade independently. Moreover, the base station knows
+only an estimate of the current slot's channel, making a channel-quality report \cite{TS36213}
+often late or wrong. Since each delivery has a deadline, a low-latency scheduler is necessary as well.
 
-Existing approaches to serving images to many users over a fading downlink fall into two categories
-(Fig.~\ref{fig:overview}): \emph{physical link design}, which keeps the image codec separate and
-engineers the link that carries its bits, and \emph{the JSCC way}, which lets a learned code take on
-the channel itself.
+Existing approaches to serving images to many users over a fading downlink fall into two
+categories, which differ in what their schedulers serve and value (Fig.~\ref{fig:overview}):
+\emph{physical link design}, whose scheduler serves the bits of a separate image codec, and
+\emph{the JSCC way}, whose scheduler serves a learned code.
 
-Physical link design is how cellular systems deliver images today: a standard codec compresses the
-image into bits once, and the physical layer carries them with link adaptation from the user's
-channel quality indicator (CQI) reports, hybrid automatic repeat request (HARQ), and a
-channel-aware scheduler such as proportional fair (PF) \cite{Goldsmith97,Caire01,Viswanath02}. Its
-tools for many users are mature (Section~\ref{sec:related-link}), but they rest on a binary outcome
-per block, decoded or lost, so a user's quality is a step function of its channel: a slot below
-the block's design SNR delivers nothing, and SNR above it is wasted, the cliff effect
-\cite{Bourtsoulatze19,Gunduz23}. Moreover, the rate is committed before the slot is seen, from a
-report that may be late or wrong, and link adaptation and HARQ protect the bits only by spending
-extra slots. In our simulations, going from fresh reports to aged ones (correlation 0.8) costs the
-digital chain 1.9~dB of mean peak signal-to-noise ratio (PSNR), against 0.6~dB for a learned code
-under our scheduler (Section~\ref{sec:eval-csi}).
+Physical link design is how cellular systems deliver images today. A standard codec compresses the
+image into bits once, and in every slot the scheduler picks the users to serve and the rate of their
+blocks: link adaptation sets the rate from the user's channel quality indicator (CQI) report,
+hybrid automatic repeat request (HARQ) retransmits a failed block, and a channel-aware policy such
+as proportional fair (PF) serves each user when its channel quality is near its peak
+\cite{Goldsmith97,Caire01,Viswanath02}. Schedulers for media and deadline traffic go further: they
+value data by the distortion it removes \cite{Chou06,Pahalawatta07}, serve first the client with
+the largest delivery debt \cite{HouBorkar09}, or cast layered video streaming as a restless bandit
+\cite{Hosseini19} (Section~\ref{sec:related-link}). All of these schedulers rest on a binary
+outcome per block, decoded or lost, so a slot is worth the bits it delivers and a user's quality is
+a step function of its channel: a slot below the block's design SNR delivers nothing, and SNR above
+it is wasted, the cliff effect \cite{Bourtsoulatze19,Gunduz23}. Moreover, the scheduler commits the
+rate before the slot is seen, from a report that may be late or wrong, and link adaptation and HARQ
+protect the bits only by spending extra slots. In our simulations, going from fresh reports to aged
+ones (correlation 0.8) costs the digital chain 1.9~dB of mean peak signal-to-noise ratio (PSNR),
+against 0.6~dB for a learned code under our scheduler (Section~\ref{sec:eval-csi}).
 
-In contrast, the JSCC way replaces the two codes with one learned code that maps the image straight
-to channel symbols \cite{Bourtsoulatze19}. Its quality degrades smoothly with the SNR its symbols
-meet, so no block is lost outright and no coding rate has to be matched to an uncertain report; the
-same symbols serve receivers of different SNRs, as linear analog codes showed for multicast video
-\cite{Jakubczak11}. Most of this work adapts a single link to the channel and the budget
-(Section~\ref{sec:related-jscc}). To serve many users, the JSCC way splits the shared channel by each
-user's predicted quality at its SNR \cite{Yan22,Xia24,Hou26}, or learns the allocation by deep
-reinforcement learning \cite{Wang22,Zhang23t}, most recently inside a restless bandit over fading
-slots \cite{McDowell26}. Our method belongs to the JSCC way: it schedules a learned code to many
-users across fading slots.
+In contrast, the JSCC way schedules a learned code, whose quality degrades smoothly with the SNR its
+symbols meet: no block is lost outright, and no coding rate has to be matched to an uncertain
+report. Its schedulers therefore value a user by the code's predicted quality rather than by bits.
+They split the shared channel by each user's predicted quality at its SNR \cite{Yan22,Xia24,Hou26},
+or learn the allocation by deep reinforcement learning \cite{Wang22,Zhang23t}, most recently inside
+a restless bandit over fading slots \cite{McDowell26} (Section~\ref{sec:related-jscc}). Our method
+belongs to the JSCC way: it schedules a learned code to many users across fading slots.
 
 \begin{figure}[!t]
 \centering
@@ -51,11 +51,11 @@ users across fading slots.
 \textbf{(a)} Physical link design\\[1.2cm]
 \textbf{(b)} The JSCC way\\[1.2cm]
 \textbf{(c)} CLASP}}
-\caption{Approaches to serving images to many users over a fading downlink. (a) Physical link
-design: a separate codec over adaptive modulation and coding, HARQ and a channel-aware scheduler;
-each block is decoded or lost. (b) The JSCC way: a learned code degrades gracefully, but each user is
-valued at a single SNR and allocated once, or scheduled by a policy learned by trial and error.
-(c) CLASP: a progressive learned code trained under slot-varying SNR obeys a link abstraction that
+\caption{Approaches to serving images to many users over a fading downlink, by what their
+schedulers serve and value. (a) Physical link design: the scheduler serves the bits of a separate
+codec, sets each block's rate from a report and values a slot by the bits it delivers; each block is
+decoded or lost. (b) The JSCC way: the scheduler serves a learned code that degrades gracefully, but
+values each user at a single SNR, or follows a policy learned by trial and error. (c) CLASP: a progressive learned code trained under slot-varying SNR obeys a link abstraction that
 values every slot, and a restless-bandit scheduler built on it serves every user slot by slot up to
 the deadline.}
 \label{fig:overview}
