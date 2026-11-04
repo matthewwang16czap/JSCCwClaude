@@ -16,34 +16,30 @@ only an estimate of the current slot's channel, making a channel-quality report 
 often late or wrong. Since each delivery has a deadline, a low-latency scheduler is necessary as well.
 
 Existing approaches to serving images to many users over a fading downlink fall into two
-categories, which differ in what their schedulers serve and value (Fig.~\ref{fig:overview}):
-\emph{physical link design}, whose scheduler serves the bits of a separate image codec, and
-\emph{the JSCC way}, whose scheduler serves a learned code.
+categories, namely \emph{physical link design} and \emph{the JSCC way}. The scheduler of the former
+serves the bits of a separate image codec, whereas that of the latter serves a learned code.
 
-Physical link design is how cellular systems deliver images today. A standard codec compresses the
-image into bits once, and in every slot the scheduler picks the users to serve and the rate of their
-blocks: link adaptation sets the rate from the user's channel quality indicator (CQI) report,
-hybrid automatic repeat request (HARQ) retransmits a failed block, and a channel-aware policy such
-as proportional fair (PF) serves each user when its channel quality is near its peak
-\cite{Goldsmith97,Caire01,Viswanath02}. Schedulers for media and deadline traffic go further: they
-value data by the distortion it removes \cite{Chou06,Pahalawatta07}, serve first the client with
-the largest delivery debt \cite{HouBorkar09}, or cast layered video streaming as a restless bandit
-\cite{Hosseini19} (Section~\ref{sec:related-link}). All of these schedulers rest on a binary
-outcome per block, decoded or lost, so a slot is worth the bits it delivers and a user's quality is
-a step function of its channel: a slot below the block's design SNR delivers nothing, and SNR above
-it is wasted, the cliff effect \cite{Bourtsoulatze19,Gunduz23}. Moreover, the scheduler commits the
-rate before the slot is seen, from a report that may be late or wrong, and link adaptation and HARQ
-protect the bits only by spending extra slots. In our simulations, going from fresh reports to aged
-ones (correlation 0.8) costs the digital chain 1.9~dB of mean peak signal-to-noise ratio (PSNR),
-against 0.6~dB for a learned code under our scheduler (Section~\ref{sec:eval-csi}).
+Physical link design is how cellular systems deliver images today. As illustrated in
+Fig.~\ref{fig:overview}(a), its scheduler selects both the served users and the rate of their
+blocks in every slot. Link adaptation sets each rate from the channel quality indicator (CQI),
+hybrid automatic repeat request (HARQ) retransmits failed blocks, and proportional fair (PF)
+scheduling serves each user near the peak of its channel quality
+\cite{Goldsmith97,Caire01,Viswanath02}. Media-aware schedulers further weigh each packet by the
+distortion it removes \cite{Chou06,Pahalawatta07}, and restless bandits have been applied to
+layered video streaming \cite{Hosseini19} (Section~\ref{sec:related-link}). All of these designs
+assume that each block is either decoded or lost. This assumption produces the cliff effect, in
+which a slot below the design SNR of its block delivers nothing and any SNR above it adds no
+quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link adaptation and HARQ protect the bits from
+imperfect channel knowledge only by spending extra slots.
 
-In contrast, the JSCC way schedules a learned code, whose quality degrades smoothly with the SNR its
-symbols meet: no block is lost outright, and no coding rate has to be matched to an uncertain
-report. Its schedulers therefore value a user by the code's predicted quality rather than by bits.
-They split the shared channel by each user's predicted quality at its SNR \cite{Yan22,Xia24,Hou26},
-or learn the allocation by deep reinforcement learning \cite{Wang22,Zhang23t}, most recently inside
-a restless bandit over fading slots \cite{McDowell26} (Section~\ref{sec:related-jscc}). Our method
-belongs to the JSCC way: it schedules a learned code to many users across fading slots.
+In contrast, the learned code of the JSCC way has a distortion that varies continuously with the
+SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be matched
+to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this category
+value each user by the predicted quality of the code rather than by bits. Examples include
+allocating the shared channel by the quality predicted at each user's SNR \cite{Yan22,Xia24,Hou26},
+training an allocation policy by deep reinforcement learning \cite{Wang22,Zhang23t}, and embedding
+such learning in a restless bandit over fading slots \cite{McDowell26}
+(Section~\ref{sec:related-jscc}).
 
 \begin{figure}[!t]
 \centering
@@ -51,13 +47,12 @@ belongs to the JSCC way: it schedules a learned code to many users across fading
 \textbf{(a)} Physical link design\\[1.2cm]
 \textbf{(b)} The JSCC way\\[1.2cm]
 \textbf{(c)} CLASP}}
-\caption{Approaches to serving images to many users over a fading downlink, by what their
-schedulers serve and value. (a) Physical link design: the scheduler serves the bits of a separate
-codec, sets each block's rate from a report and values a slot by the bits it delivers; each block is
-decoded or lost. (b) The JSCC way: the scheduler serves a learned code that degrades gracefully, but
-values each user at a single SNR, or follows a policy learned by trial and error. (c) CLASP: a progressive learned code trained under slot-varying SNR obeys a link abstraction that
-values every slot, and a restless-bandit scheduler built on it serves every user slot by slot up to
-the deadline.}
+\caption{Approaches to serving images to many users over a fading downlink. (a) Physical link
+design transmits the bits of a separate codec at a rate set from a channel report, so every block
+either decodes or fails. (b) The JSCC way transmits a learned code, and its scheduler values each
+user at a single SNR or follows a policy learned by reinforcement learning. (c) CLASP schedules a
+progressive code trained under slot-varying SNR, whose link abstraction values every slot. This
+restless-bandit scheduler serves every user slot by slot up to the deadline.}
 \label{fig:overview}
 \end{figure}
 
