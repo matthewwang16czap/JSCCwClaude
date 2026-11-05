@@ -38,16 +38,17 @@
 \node[gbox, minimum width=1.6cm] at (3.4,7.15) {link adaptation\\+ HARQ};
 \draw[garr] (4.25,7.15) -- (4.5,7.15);
 \foreach \i/\u in {0/1, 1/2, 2/3, 3/2, 4/1} {
-  \draw[black!35, fill=black!7] (4.55+0.42*\i,6.92) rectangle (4.97+0.42*\i,7.38);
-  \node[gtxt, small] at (4.76+0.42*\i,7.15) {\u};
+  \draw[black!35, fill=black!7] (4.55+0.42*\i,6.86) rectangle (4.97+0.42*\i,7.46);
+  \node[gtxt, small] at (4.76+0.42*\i,7.28) {\u};
 }
-\foreach \i in {0, 2, 3, 4} \pic[black!55] at (4.76+0.42*\i,6.68) {ok};
-\pic[black!55] at (5.18,6.68) {no};
-\draw[garr] (5.18,6.57) |- (3.4,6.38) -- (3.4,6.84);
-\node[gtxt, small] at (4.3,6.24) {NACK};
-\node[gtxt, small] at (6.02,6.44) {resent};
+\foreach \i in {0, 2, 3, 4} \pic[black!55, scale=0.8] at (4.76+0.42*\i,7.0) {ok};
+\pic[black!85, scale=0.9] at (5.18,7.0) {no};
+\draw[garr] (5.18,6.86) -- (5.18,6.58) -- (3.55,6.58) -- (3.55,6.84);
+\node[gtxt, small] at (4.33,6.7) {NACK};
+\draw[garr] (3.25,6.84) -- (3.25,6.4) -- (6.02,6.4) -- (6.02,6.84);
+\node[gtxt, small] at (4.63,6.28) {resend};
 \node[gbox, minimum width=2.1cm] (sa) at (5.6,7.95) {scheduler (CQI)};
-\draw[garr] (sa.south) -- (5.6,7.41);
+\draw[garr] (sa.south) -- (5.6,7.49);
 \draw[black!45, ->] (7.15,6.5) -- (8.6,6.5);
 \draw[black!45, ->] (7.15,6.5) -- (7.15,7.8);
 \draw[black!60, line width=0.8pt] (7.17,6.55) -- (7.78,6.55) -- (7.78,7.55) -- (8.5,7.55);
@@ -67,11 +68,8 @@
   \node[gtxt, small] at (\x+\w/2,4.08) {SNR\,\u};
 }
 \node[gtxt, small, align=center] at (5.95,4.45) {shared\\[-2pt]channel};
-\node[gbox, minimum width=1.45cm] (al) at (3.0,5.3) {allocator\\q(SNR)};
-\node[gtxt, small] at (3.92,5.3) {or};
-\node[gbox, minimum width=1.45cm] (rl) at (4.85,5.3) {RL policy};
-\draw[garr] (al.south) -- (3.0,4.68);
-\draw[garr] (rl.south) -- (4.85,4.68);
+\node[gbox, minimum width=2.0cm] (sb) at (3.85,5.3) {scheduler\\q(SNR) or RL policy};
+\draw[garr] (sb.south) -- (3.85,4.68);
 \draw[black!45, ->] (7.15,3.95) -- (8.6,3.95);
 \draw[black!45, ->] (7.15,3.95) -- (7.15,5.25);
 \draw[black!60, line width=0.8pt] (7.17,4.0) .. controls (7.55,4.85) and (8.0,5.05) .. (8.5,5.1);

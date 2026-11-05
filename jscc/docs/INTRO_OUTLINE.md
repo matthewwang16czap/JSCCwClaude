@@ -80,9 +80,10 @@ drawn in TikZ in `paper/figs/overview.tex`, which the figure environment of
 - **(a) Physical link design.**
   - The chain: image → "codec" → bits ("0110" on the arrow) → "link adaptation + HARQ" → a row
     of slots. The text says link adaptation and never defines AMC, so the box does too.
-  - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost). Exactly one block is lost.
-    Its NACK loops back to the HARQ box, and the same block is resent and decoded in a later slot
-    (marked "resent").
+  - Each slot holds one user's block, marked inside the slot ✓ (decoded) or ✗ (lost). Exactly
+    one block is lost. As in a real HARQ process, its NACK returns to the HARQ box and the HARQ
+    box resends the same block in a later slot, where it decodes. The two arrows form one loop
+    under the slot row, labelled "NACK" and "resend" side by side.
   - A "scheduler (CQI)" box above the row picks the user and the rate for each slot; it values a
     slot by the bits it delivers.
   - Inset: quality against SNR as a step (the cliff).
@@ -90,8 +91,8 @@ drawn in TikZ in `paper/figs/overview.tex`, which the figure environment of
   - The chain: image → "learned JSCC" → one shared channel, a bar split into unequal shares for
     users 1-3, each share labelled with the single SNR its user is valued at. As in (a) and (c),
     one image icon stands for the images of all users.
-  - An "allocator q(SNR)" box and an "RL policy" box, joined by "or", each set the split with an
-    arrow into the channel. Neither carries a question mark.
+  - One "scheduler" box, labelled "q(SNR) or RL policy", sets the split with a single arrow into
+    the channel. Existing designs use one of the two, never both together.
   - Inset: quality against SNR as a smooth curve.
 - **(c) CLASP.**
   - The chain: image → "progressive JSCC" → phases spread over slots of different SNRs (slot
