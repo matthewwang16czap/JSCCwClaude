@@ -75,7 +75,7 @@ Panwar; McDowell et al.). What the section says about each work is checked again
     and Panwar); frame deadlines with per-client delivery debts.
   - All of them decide over blocks that are decoded or lost; the MMSE abstraction takes EESM's
     place for a learned code.
-- **B. The JSCC way.**
+- **B. JSCC design.**
   - DeepJSCC; one model for many SNRs (ADJSCC); NTSCC; SwinJSCC; PADC; OFDM, MIMO and feedback
     (DeepJSCC-f, JSCCformer-f); DeepJSCC-l.
   - Single-link comparisons with separation, some with an idealized digital side.
