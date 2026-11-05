@@ -106,45 +106,44 @@ deadline."
 
 ## Paragraph 3. Challenges of the JSCC way, and the question they raise
 
-1. Although existing JSCC methods are effective, they still face the following challenges when a
-   base station schedules a learned code to many users over fading slots.
-2. **(1) No link abstraction.**
-   - They value a user's transmission at a single SNR, with a fitted quality-SNR curve or a
-     learned quality predictor [Yan22, Zhang23, Hou26].
-   - A scheduled image, however, is spread over slots of different SNRs. For a nonlinear learned
-     code, no rule is known for how these SNRs combine into decoded quality.
-   - The exponential and the mutual-information effective SNR mappings (EESM, MIESM) of physical
-     link design predict a digital block's error rate from the SNRs of the resources it occupies
-     [Ericsson03, EMD09], not a learned code's distortion. To our knowledge, they have not been
-     validated on a learned code.
-3. **(2) No tractable, certifiable scheduler.**
-   - Deciding which user each slot serves, before a deadline and without knowing future slots,
-     is a stochastic dynamic program. Its state grows exponentially with the number of users.
-   - Existing methods take one of two routes, and neither plans over the frame with a guarantee:
-     - some decide each transmission on its own, at its current SNR, without planning over the
-       slots left before the deadline [Yan22, Xia24, Hou26];
-     - others learn the allocation by reinforcement learning, which needs many interactions to
-       train and gives no certificate of how far the learned policy is from optimal [Wang22,
-       Zhang23t, McDowell26].
+1. Although existing JSCC methods are effective, they face three challenges in deadline scheduling
+   over a multi-user fading downlink.
+2. **(1) Link abstraction.**
+   - The first challenge is the absence of a link abstraction for learned codes.
+   - The quality models of existing methods, whether fitted curves or learned predictors [Yan22,
+     Zhang23, Hou26], take a single SNR as input.
+   - The symbols of a scheduled image are instead spread over slots of different SNRs, and no
+     rule is known for how these SNRs combine into the quality of a nonlinear code.
+   - Physical link design provides such rules for the error rate of a digital block, namely the
+     exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
+     EMD09]. To our knowledge, neither mapping has been validated on the distortion of a learned
+     code.
+3. **(2) Tractable and certifiable scheduling.**
+   - Choosing the users of every slot up to the deadline, without knowledge of future slots, is a
+     stochastic dynamic program whose state grows exponentially with the number of users.
+   - Existing allocations are myopic, since they ignore the slots that remain in the frame
+     [Yan22, Xia24, Hou26].
+   - Learned policies [Wang22, Zhang23t, McDowell26] require many training interactions and offer
+     no certificate of their distance from the optimum.
 4. **(3) Imperfect information.**
-   - The scheduler's quality model and its channel reports are both estimates, yet existing
-     schedulers take them at face value.
-     - PADC picks a rate from a predicted quality as if the prediction were exact [Zhang23].
-     - The closest learned scheduler assumes exact channel knowledge [McDowell26].
-   - So a user predicted just above a quality target can decode just below it.
-   - The JSCC way's advantage over physical link design was measured on single links with an
-     idealised digital side: exact channel knowledge and capacity-achieving codes
-     [Bourtsoulatze19, Kurka20].
-     Whether that advantage survives the reports a real base station has is open.
-5. Behind all three challenges lies one question: does a learned code have a link abstraction at
-   all? That is, is there a rule that, like EESM for a digital block, turns the SNRs its symbols
-   met into its decoded quality? And if there is, what decides whether a code obeys it?
+   - The third challenge is imperfect information, because the scheduler decides on predictions
+     of both the quality and the channel.
+   - Per-image rate selection [Zhang23] treats its predicted quality as exact, so a user predicted
+     just above a quality target may decode just below it.
+   - The closest learned scheduler likewise assumes exact channel knowledge [McDowell26].
+   - The reported advantage of JSCC over separation-based transmission was measured against an
+     idealized digital link with exact channel knowledge and capacity-achieving codes
+     [Bourtsoulatze19, Kurka20]. Whether this advantage persists under the reports of a real base
+     station remains open.
+5. All three challenges raise a fundamental question, namely whether a learned code admits a link
+   abstraction. If such an abstraction exists, a further question is what makes a given code obey
+   it.
 
 ## Paragraph 4. Pilot findings
 
-1. To answer it, we trained a progressive code under slot-varying SNR, with the chunks of each
-   codeword at independent SNRs. We then decoded it on held-out histories of mixed slot SNRs and
-   tested candidate rules (Sections IV-B and V-A).
+1. To answer these questions, we trained a progressive code under slot-varying SNR, with the
+   chunks of each codeword at independent SNRs. We then decoded it on held-out histories of mixed
+   slot SNRs and tested candidate rules (Sections IV-B and V-A).
    - The code has six phases, any prefix of which decodes.
    - It is a vision transformer whose encoder and decoder never see the SNR.
 
@@ -269,8 +268,8 @@ Overall, our main contributions are as follows.
 
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
-| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
-| (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
+| (1) link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
+| (2) tractable and certifiable scheduling | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
 | (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | an extra 1.7% of the users at 30 dB over the hard target, users missed 0.0% against 1.2% (decoded); an extra 13.3% / 12.5% over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and an extra 13-16% over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation

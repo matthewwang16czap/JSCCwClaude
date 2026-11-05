@@ -3771,8 +3771,8 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 # paper/main.pdf. Nothing to send back.
 
 cd ~/projects/JSCCwClaude-main/jscc/paper
-kpsewhich subfig.sty stfloats.sty algorithmic.sty balance.sty tikz.sty | wc -l   # 5; if fewer:
-                       # sudo apt-get install texlive-latex-extra texlive-science texlive-pictures
+kpsewhich IEEEtran.bst subfig.sty stfloats.sty algorithmic.sty balance.sty tikz.sty | wc -l  # 6
+    # if fewer: sudo apt-get install texlive-latex-extra texlive-science texlive-pictures texlive-publishers
 mkdir -p build                                 # the output goes to build/ (ignored by git), so
                                                # the committed main.pdf is never overwritten
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; bibtex build/main

@@ -127,19 +127,22 @@ authors and title).
 
 **[12] Yan22.** IEEE WCL 2022; 337; highly cited.
 - Says (I, II-B): channel assignment and the number of semantic symbols from a semantic spectral
-  efficiency; values a transmission at one SNR.
+  efficiency; values a transmission at one SNR; a myopic allocation that does not plan over the
+  slots left in the frame (I).
 - Support (abstract): "the semantic spectral efficiency (S-SE) is defined ... and is used to
   optimize resource allocation in terms of channel assignment and the number of transmitted
   semantic symbols".
 
 **[13] Xia24.** IEEE TVT 2024; 43; recent.
-- Says (I, II-B): user association and bandwidth from a message-level throughput.
+- Says (I, II-B): user association and bandwidth from a message-level throughput; a myopic
+  allocation that does not plan over the slots left in the frame (I).
 - Support (abstract): "two fundamental problems of user association (UA) and bandwidth allocation
   (BA)"; "a new semantics-level metric, namely system throughput in message (STM)".
 
 **[14] Hou26.** IEEE TWC 2026; 0; recent.
 - Says (I, II-B): compression ratios and transmission rates by Bayesian optimization over
-  Gaussian-process models of quality against SNR and compression ratio.
+  Gaussian-process models of quality against SNR and compression ratio; a fitted quality model
+  with a single SNR as input, used by a myopic allocation (I).
 - Support (abstract): "a Bayesian optimization (BO)-based online algorithm"; "The edge server
   jointly determines each user's CR and transmission rate by exploiting Gaussian-process (GP)
   models that capture the relationship between reconstruction performance, signal-to-noise ratio
@@ -147,13 +150,15 @@ authors and title).
 
 **[15] Wang22.** IEEE JSAC 2022; 227; highly cited.
 - Says (I, II-B): proximal policy optimization with an attention network assigns resource blocks
-  and the part of the semantic content to send.
+  and the part of the semantic content to send; a learned policy with no certificate of its
+  distance from the optimum (I).
 - Support (abstract): "the BS must select an appropriate resource block for each user as well as
   determine and transmit part of the semantic information"; "a proximal-policy-optimization-based
   reinforcement learning (RL) algorithm integrated with an attention network".
 
 **[16] Zhang23t.** IEEE TCOM 2023; 191; recent and highly cited.
-- Says (I, II-B): a DDPG agent sets each user's compression ratio, power and bandwidth.
+- Says (I, II-B): a DDPG agent sets each user's compression ratio, power and bandwidth; a learned
+  policy with no certificate of its distance from the optimum (I).
 - Support (abstract): "a deep deterministic policy gradient (DDPG) agent at the micro base
   station"; "a joint optimization problem of the semantic compression ratio, transmit power, and
   bandwidth of each user".
