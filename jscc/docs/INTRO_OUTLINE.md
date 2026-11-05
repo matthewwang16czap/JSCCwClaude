@@ -112,7 +112,7 @@ according to a quality predicted at one SNR or a policy learned by reinforcement
 values every slot. This restless-bandit scheduler serves every user slot by slot up to the
 deadline."
 
-## Paragraph 3. Challenges of JSCC design, and the question they raise
+## Paragraph 3. Challenges of JSCC design
 
 1. Although JSCC design avoids the cliff effect of physical link design, it leaves three
    challenges unresolved (a list, each item an italic label followed by a colon).
@@ -141,52 +141,55 @@ deadline."
    - The advantage that motivates these designs was measured against an idealized digital link
      with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether
      this advantage persists under the reports of a real base station remains open.
-5. All three challenges raise a fundamental question, namely whether a learned code admits a link
+
+## Paragraph 4. The question the challenges raise, and the pilot findings
+
+1. All three challenges raise a fundamental question, namely whether a learned code admits a link
    abstraction. If such an abstraction exists, a further question is what makes a given code obey
    it.
-
-## Paragraph 4. Pilot findings
-
-1. To answer these questions, we trained a progressive code under slot-varying SNR, with the
-   chunks of each codeword at independent SNRs. We then decoded it on held-out histories of mixed
-   slot SNRs and tested candidate rules (Sections IV-B and V-A).
-   - The code has six phases, any prefix of which decodes.
-   - It is a vision transformer whose encoder and decoder never see the SNR.
-
-   We found the following.
-2. **(1) Its distortion adds up over slots.** The source distortion plus a sensitivity-weighted
-   sum of per-slot MMSE terms, D = Dsrc + C Σ_j ρ_j φ(n_j), predicts held-out decodes far better
-   than the digital mappings. Mean absolute error, every rule given the same per-phase
-   sensitivity weights (in brackets, the rule's standard equal-weight form):
+   - To answer these questions, we trained a progressive code under slot-varying SNR. Such a code
+     can be decoded from any prefix of its phases. We then compared candidate rules on held-out
+     decodes with mixed slot SNRs (Sections IV-B and V-A). Three findings emerged.
+   - Background, not in the prose: the code has six phases, and in training the chunks of each
+     codeword meet independent SNRs. It is a vision transformer whose encoder and decoder never
+     see the SNR.
+2. **(1) Additivity over slots.** First, the distortion of this code is additive over slots. The
+   source distortion plus a sensitivity-weighted sum of per-slot minimum mean-square-error (MMSE)
+   terms, D = Dsrc + C Σ_j ρ_j φ(n_j), predicts held-out decodes with a mean absolute error of
+   0.055-0.083 dB on two test sets. With the same per-phase weights, EESM errs by 0.16-0.19 dB and
+   MIESM by 0.29-0.34 dB.
 
    | test set | MMSE rule | EESM | MIESM |
    |---|---|---|---|
    | Kodak | 0.055 dB (0.37) | 0.19 dB (0.37) | 0.34 dB (0.49) |
    | CLIC | 0.083 dB (0.41) | 0.16 dB (0.37) | 0.29 dB (0.44) |
 
-   Both parts are needed: the MMSE form, and weights per phase, because the code is ordered and
-   which phase a slot carries matters.
-
-   The form is the one linear analog codes obey by construction [Jakubczak11]. Here a nonlinear
-   learned code acquires it.
-3. **(2) Training decides it.**
-   - The same architecture trained at one constant SNR per image obeys no such rule: the MMSE
-     rule errs by 0.22 dB, and no rule does better than 0.15 dB.
-   - The reason is that such a code codes its later phases against the base reconstruction it
-     expects at one SNR. DeepJSCC-l observed the same mismatch for layers [Kurka21].
-4. **(3) It is cheap and accurate, and its small error still matters.**
-   - Twelve decodes per image calibrate it. The calibrated curves predict held-out mixed-SNR
-     decodes with a mean absolute error of 0.03-0.06 dB per prefix length (0.05-0.09 dB on CLIC).
-   - Used by a scheduler, the model predicts the decoded quality of complete scheduled deliveries
-     with a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB, whether the reports
-     are exact, carry 2 dB CQI errors, or are aged (correlation 0.8).
-   - But even this small error is first-order at a hard quality target. A scheduler that takes
-     the calibrated curves as exact leaves an extra 1.7-2.0% of the users below 30 dB, at every
-     cell size from 16 to 128 users.
-5. In short, a learned code can be given a link abstraction through training. With it, each
-   user's state reduces to two numbers: the phases received, and their accumulated weighted noise.
-   Scheduling then becomes a planning problem, provided the abstraction's residual error is part
-   of the objective.
+   Mean absolute error, every rule given the same per-phase sensitivity weights. In brackets, the
+   rule's standard equal-weight form. Both parts are needed, the MMSE form and a weight per phase,
+   because the code is ordered and the phase a slot carries matters.
+   - Linear analog codes obey this form by construction [Jakubczak11], whereas our nonlinear
+     learned code acquires it through training.
+3. **(2) The role of training.** Second, the training condition determines whether the rule holds.
+   - The same architecture trained at one constant SNR per image obeys no such rule, since the
+     MMSE rule errs by 0.22 dB and no candidate does better than 0.15 dB.
+   - A constant-SNR code encodes its later phases against the base reconstruction it expects at
+     its training SNR, but the actual base reconstruction changes when the slot SNRs vary. A
+     similar mismatch reduces the gain of the refinement layers in DeepJSCC-l below the training
+     SNR [Kurka21].
+4. **(3) Cost, accuracy and residual error.** Third, the abstraction is inexpensive and accurate,
+   but its small residual error is not negligible.
+   - Twelve decodes per image suffice to calibrate it. Background, not in the prose: the calibrated
+     curves predict held-out mixed-SNR decodes with a mean absolute error of 0.03-0.06 dB per
+     prefix length (0.05-0.09 dB on CLIC).
+   - The calibrated abstraction predicts the decoded quality of complete scheduled deliveries with
+     a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB. This accuracy holds whether
+     the channel reports are exact, noisy (2 dB CQI errors) or aged (correlation 0.8).
+   - For a quality target of 30 dB, a scheduler that takes these predictions as exact leaves an
+     extra 1.7-2.0% of the users below the target, compared with one that models their error.
+     This loss occurs at every cell size from 16 to 128 users.
+5. With this abstraction, each user's state reduces to two numbers, namely the phases received and
+   their accumulated weighted noise. A scheduler can thereby plan each delivery over the remaining
+   slots, provided that its objective accounts for this residual error.
 
 ## Paragraph 5. The method: CLASP
 

@@ -78,28 +78,32 @@ idealized digital link with exact channel knowledge and capacity-achieving codes
 \cite{Bourtsoulatze19,Kurka20}. Whether this advantage persists under the reports of a real base
 station remains open.
 \end{itemize}
+
 All three challenges raise a fundamental question, namely whether a learned code admits a link
 abstraction. If such an abstraction exists, a further question is what makes a given code obey it.
-
-To answer these questions, we trained a progressive code, which decodes from any prefix of its phases, under
-slot-varying SNR, and tested candidate rules on held-out decodes with mixed slot SNRs
-(Sections~\ref{sec:method-abstraction} and~\ref{sec:eval-abstraction}). We found three things.
-First, its distortion adds up over slots: the source distortion plus a sensitivity-weighted sum of
-per-slot minimum mean-square-error (MMSE) terms predicts held-out decodes with a mean absolute error
-of 0.055--0.083~dB on two test sets, against 0.16--0.19~dB for EESM and 0.29--0.34~dB for MIESM with
-the same per-phase weights. Linear analog codes obey this form by construction \cite{Jakubczak11};
-here a nonlinear learned code acquires it. Second, training decides it: the same architecture
-trained at one constant SNR per image obeys no such rule (the MMSE rule errs by 0.22~dB, and no rule
-does better than 0.15~dB), because it codes its later phases against the base reconstruction it
-expects at one SNR, the mismatch DeepJSCC-l observed for layers \cite{Kurka21}. Third, the
-abstraction is cheap and accurate, yet its small error matters. Twelve decodes per image calibrate
-it, and it predicts the decoded quality of complete scheduled deliveries with a mean absolute error
-of 0.06--0.09~dB and a bias within $\pm 0.03$~dB, with exact, noisy or aged reports. At a hard
-quality target, however, a scheduler that takes the calibrated curves as exact leaves an extra
-1.7--2.0\% of the users below 30~dB, at every cell size from 16 to 128 users. In short, training
-gives a learned code a link abstraction. With it, each user's state reduces to two numbers, the
-phases received and their accumulated weighted noise, and scheduling becomes a planning problem,
-provided the abstraction's residual error is part of the objective.
+To answer these questions, we trained a progressive code under slot-varying SNR. Such a code can be
+decoded from any prefix of its phases. We then compared candidate rules on held-out decodes with
+mixed slot SNRs (Sections~\ref{sec:method-abstraction} and~\ref{sec:eval-abstraction}). Three
+findings emerged. First, the distortion of this code is additive over slots. The source distortion
+plus a sensitivity-weighted sum of per-slot minimum mean-square-error (MMSE) terms predicts held-out
+decodes with a mean absolute error of 0.055--0.083~dB on two test sets. With the same per-phase
+weights, EESM errs by 0.16--0.19~dB and MIESM by 0.29--0.34~dB. Linear analog codes obey this form
+by construction \cite{Jakubczak11}, whereas our nonlinear learned code acquires it through training.
+Second, the training condition determines whether the rule holds. The same architecture trained at
+one constant SNR per image obeys no such rule, since the MMSE rule errs by 0.22~dB and no candidate
+does better than 0.15~dB. A constant-SNR code encodes its later phases against the base
+reconstruction it expects at its training SNR, but the actual base reconstruction changes when the
+slot SNRs vary. A similar mismatch reduces the gain of the refinement layers in DeepJSCC-$l$ below
+the training SNR \cite{Kurka21}. Third, the abstraction is inexpensive and accurate, but its small
+residual error is not negligible. Twelve decodes per image suffice to calibrate it. The calibrated
+abstraction predicts the decoded quality of complete scheduled deliveries with a mean absolute
+error of 0.06--0.09~dB and a bias within $\pm 0.03$~dB. This accuracy holds whether the channel
+reports are exact, noisy or aged. For a quality target of 30~dB, a scheduler that takes these
+predictions as exact leaves an extra 1.7--2.0\% of the users below the target, compared with one
+that models their error. This loss occurs at every cell size from 16 to 128 users. With this
+abstraction, each user's state reduces to two numbers, namely the phases received and their
+accumulated weighted noise. A scheduler can thereby plan each delivery over the remaining slots,
+provided that its objective accounts for this residual error.
 
 To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
 of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.

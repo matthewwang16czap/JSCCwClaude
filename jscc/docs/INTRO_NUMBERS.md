@@ -117,7 +117,7 @@ image). `results/s13_abstractions.txt`, block 2 (the s1 code), COMMANDS 17.4a, s
 ```
 0.222 (sensitivity weights), rounded to 0.22.
 
-**12. "0.15 dB"** (item 3: no rule does better). The five rules of the same block 2:
+**12. "0.15 dB"** (item 3: no candidate rule does better). The five rules of the same block 2:
 ```
   mean dB                        0.652 / 1.740         0.541 / 1.438
   noise variance                 0.382 / 1.017         0.150 / 0.487
@@ -206,7 +206,7 @@ with it by COMMANDS 30.3 and 33.1).
 **19. "correlation 0.8"** (item 4): as entry 1.
 
 **20. "an extra 1.7-2.0% of the users"** (item 4: the users a scheduler that takes the
-calibrated curves as exact leaves below 30 dB). Simulated, 100 frames per K, B = K/8 units per slot. The calibration-aware
+predictions of the calibrated curves as exact leaves below 30 dB). Simulated, 100 frames per K, B = K/8 units per slot. The calibration-aware
 index minus the hard-target one, paired, at each cell size. `results/s24_soft_auto.txt`,
 COMMANDS 24.1 (printed by 24.4, sent back 2026-10-26):
 ```
