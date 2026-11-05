@@ -32,14 +32,15 @@ which a slot below the design SNR of its block delivers nothing and any SNR abov
 quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link adaptation and HARQ protect the bits from
 imperfect channel knowledge only by spending extra slots.
 
-In contrast, the learned code of the JSCC way has a distortion that varies continuously with the
-SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be matched
-to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this category
-value each user by the predicted quality of the code rather than by bits. Examples include
-allocating the shared channel by the quality predicted at each user's SNR \cite{Yan22,Xia24,Hou26},
-training an allocation policy by deep reinforcement learning \cite{Wang22,Zhang23t}, and embedding
-such learning in a restless bandit over fading slots \cite{McDowell26}
-(Section~\ref{sec:related-jscc}).
+In contrast, the JSCC way bases the downlink on a learned code, whose distortion varies continuously
+with the SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be
+matched to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this
+category value each user by the predicted quality of the code rather than by bits. Per-image rate
+selection sends each image at the least rate at which its predicted quality meets a target
+\cite{Zhang23}. Multi-user designs allocate the shared channel by the quality predicted at each
+user's SNR \cite{Yan22,Xia24,Hou26}, train an allocation policy by deep reinforcement learning
+\cite{Wang22,Zhang23t}, or embed such learning in a restless bandit over fading slots
+\cite{McDowell26} (Section~\ref{sec:related-jscc}).
 
 \begin{figure}[!t]
 \centering
@@ -56,11 +57,11 @@ restless-bandit scheduler serves every user slot by slot up to the deadline.}
 \label{fig:overview}
 \end{figure}
 
-Although existing JSCC methods are effective, they face three challenges in deadline scheduling
-over a multi-user fading downlink.
+Although these designs avoid the cliff effect of physical link design, they leave three challenges
+unresolved.
 \begin{itemize}
 \item The first challenge is the absence of a \emph{link abstraction} for learned codes. The
-quality models of existing methods, whether fitted curves or learned predictors
+quality models of these designs, whether fitted curves or learned predictors
 \cite{Yan22,Zhang23,Hou26}, take a single SNR as input. The symbols of a scheduled image are
 instead spread over slots of different SNRs, and no rule is known for how these SNRs combine into
 the quality of a nonlinear code. Physical link design provides such rules for the error rate of a
@@ -69,15 +70,15 @@ MIESM) \cite{Ericsson03,EMD09}. To our knowledge, neither mapping has been valid
 distortion of a learned code.
 \item The second challenge is \emph{tractable and certifiable scheduling}. Choosing the users of
 every slot up to the deadline, without knowledge of future slots, is a stochastic dynamic program
-whose state grows exponentially with the number of users. Existing allocations are myopic, since
-they ignore the slots that remain in the frame \cite{Yan22,Xia24,Hou26}. Learned policies
+whose state grows exponentially with the number of users. The quality-based allocations are myopic,
+since they ignore the slots that remain in the frame \cite{Yan22,Xia24,Hou26}. Learned policies
 \cite{Wang22,Zhang23t,McDowell26} require many training interactions and offer no certificate of
 their distance from the optimum.
 \item The third challenge is \emph{imperfect information}, because the scheduler decides on
 predictions of both the quality and the channel. Per-image rate selection \cite{Zhang23} treats its
 predicted quality as exact, so a user predicted just above a quality target may decode just below
-it. The closest learned scheduler likewise assumes exact channel knowledge \cite{McDowell26}.
-Moreover, the reported advantage of JSCC over separation-based transmission was measured against an
+it. The learned restless-bandit scheduler likewise assumes exact channel knowledge
+\cite{McDowell26}. Moreover, the advantage that motivates these designs was measured against an
 idealized digital link with exact channel knowledge and capacity-achieving codes
 \cite{Bourtsoulatze19,Kurka20}. Whether this advantage persists under the reports of a real base
 station remains open.
