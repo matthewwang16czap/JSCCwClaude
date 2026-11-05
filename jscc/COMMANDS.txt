@@ -3780,12 +3780,12 @@ pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null; 
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex > /dev/null
 pdflatex -interaction=nonstopmode -output-directory=build main.tex | tail -2
-grep "Overfull" build/main.log                   # one line, about 1 pt (see below)
+grep "Overfull" build/main.log                   # nothing, or one line of about 1 pt
 grep -c "bibitem" build/main.bbl                 # 43
 
-# Reading: "Output written on build/main.pdf (8 pages ...)", bibtex with no warning, one
-# "Overfull \vbox (0.8...pt too high)" line, and 43. That line comes from balancing the columns
-# of the last page (the template's \balance) and is invisible; one of tens of pt would mean a
-# reference was pushed off a page.
+# Reading: "Output written on build/main.pdf (8 pages ...)", bibtex with no warning, at most one
+# "Overfull \vbox (...pt too high)" line of about 1 pt, and 43. That line, when it appears, comes
+# from balancing the columns of the last page (the template's \balance) and is invisible; one of
+# tens of pt would mean a reference was pushed off a page.
 # The log's one LaTeX warning, "Unused global option(s): [lettersize]", comes from the
 # template's first line: V1.8b has no such option and uses letter paper by default.

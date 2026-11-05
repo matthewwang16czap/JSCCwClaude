@@ -24,22 +24,19 @@ Fig.~\ref{fig:overview}(a), its scheduler selects both the served users and the 
 blocks in every slot. Link adaptation sets each rate from the channel quality indicator (CQI),
 hybrid automatic repeat request (HARQ) retransmits failed blocks, and proportional fair (PF)
 scheduling serves each user near the peak of its channel quality
-\cite{Goldsmith97,Caire01,Viswanath02}. Media-aware schedulers further weigh each packet by the
-distortion it removes \cite{Chou06,Pahalawatta07}, and restless bandits have been applied to
-layered video streaming \cite{Hosseini19} (Section~\ref{sec:related-link}). All of these designs
-assume that each block is either decoded or lost. This assumption produces the cliff effect, in
-which a slot below the design SNR of its block delivers nothing and any SNR above it adds no
-quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link adaptation and HARQ protect the bits from
-imperfect channel knowledge only by spending extra slots.
+\cite{Goldsmith97,Caire01,Viswanath02}. These designs assume that each block is either decoded 
+or lost and produce the cliff effect, in which a slot below the design SNR of its block delivers 
+nothing and any SNR above it adds no quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link 
+adaptation and HARQ protect the bits from imperfect channel knowledge only by spending extra slots.
 
-In contrast, the JSCC way bases the downlink on a learned code, whose distortion varies continuously
-with the SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be
-matched to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this
-category value each user by the predicted quality of the code rather than by bits. Per-image rate
-selection sends each image at the least rate at which its predicted quality meets a target
-\cite{Zhang23}. Multi-user designs allocate the shared channel by the quality predicted at each
-user's SNR \cite{Yan22,Xia24,Hou26}, train an allocation policy by deep reinforcement learning
-\cite{Wang22,Zhang23t}, or embed such learning in a restless bandit over fading slots
+In contrast, JSCC design constructs the downlink on a learned code, whose distortion varies 
+continuously with the SNR of its symbols. Hence no transmission is lost outright, and no coding rate 
+has to be matched to an uncertain report. On a single link, per-image rate selection sends each 
+image at the least rate at which its predicted quality meets a target \cite{Zhang23}. As illustrated 
+in Fig.~\ref{fig:overview}(b), multi-user schedulers in this category value each user by such a 
+predicted quality rather than by bits. They allocate the shared channel by the quality predicted 
+at each user's SNR \cite{Yan22,Xia24,Hou26}, train an allocation policy by deep reinforcement 
+learning \cite{Wang22,Zhang23t}, or embed such learning in a restless bandit over fading slots
 \cite{McDowell26} (Section~\ref{sec:related-jscc}).
 
 \begin{figure}[!t]
