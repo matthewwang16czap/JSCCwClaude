@@ -125,40 +125,54 @@ authors and title).
   how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
   value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
 
-**[12] Yan22.** IEEE WCL 2022; 337; highly cited.
+**[12] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
+- Says (I, II-B): PADC predicts each image's PSNR from its content, the SNR and the compression
+  ratio, and sends it at the least compression ratio meeting a quality constraint, treating the
+  prediction as exact.
+- Support (abstract): "an Oracle Network (OraNet) model for predicting peak-signal-to-noise (PSNR)
+  value ... according to its contents, channel signal to noise ratio (SNR) and the compression
+  ratio (CR) value, and a CR optimizer aims at finding the minimal data-level or instance-level CR
+  with a PSNR quality constraint". Read in full with its code (`docs/SURVEY.md` A).
+
+**[13] Yan22.** IEEE WCL 2022; 337; highly cited.
 - Says (I, II-B): channel assignment and the number of semantic symbols from a semantic spectral
-  efficiency; values a transmission at one SNR.
+  efficiency; values a transmission at one SNR; a myopic allocation that does not plan over the
+  slots left in the frame (I).
 - Support (abstract): "the semantic spectral efficiency (S-SE) is defined ... and is used to
   optimize resource allocation in terms of channel assignment and the number of transmitted
   semantic symbols".
 
-**[13] Xia24.** IEEE TVT 2024; 43; recent.
-- Says (I, II-B): user association and bandwidth from a message-level throughput.
+**[14] Xia24.** IEEE TVT 2024; 43; recent.
+- Says (I, II-B): user association and bandwidth from a message-level throughput; a myopic
+  allocation that does not plan over the slots left in the frame (I).
 - Support (abstract): "two fundamental problems of user association (UA) and bandwidth allocation
   (BA)"; "a new semantics-level metric, namely system throughput in message (STM)".
 
-**[14] Hou26.** IEEE TWC 2026; 0; recent.
+**[15] Hou26.** IEEE TWC 2026; 0; recent.
 - Says (I, II-B): compression ratios and transmission rates by Bayesian optimization over
-  Gaussian-process models of quality against SNR and compression ratio.
+  Gaussian-process models of quality against SNR and compression ratio; a fitted quality model
+  with a single SNR as input, used by a myopic allocation (I).
 - Support (abstract): "a Bayesian optimization (BO)-based online algorithm"; "The edge server
   jointly determines each user's CR and transmission rate by exploiting Gaussian-process (GP)
   models that capture the relationship between reconstruction performance, signal-to-noise ratio
   (SNR), and CR".
 
-**[15] Wang22.** IEEE JSAC 2022; 227; highly cited.
+**[16] Wang22.** IEEE JSAC 2022; 227; highly cited.
 - Says (I, II-B): proximal policy optimization with an attention network assigns resource blocks
-  and the part of the semantic content to send.
+  and the part of the semantic content to send; a learned policy with no certificate of its
+  distance from the optimum (I).
 - Support (abstract): "the BS must select an appropriate resource block for each user as well as
   determine and transmit part of the semantic information"; "a proximal-policy-optimization-based
   reinforcement learning (RL) algorithm integrated with an attention network".
 
-**[16] Zhang23t.** IEEE TCOM 2023; 191; recent and highly cited.
-- Says (I, II-B): a DDPG agent sets each user's compression ratio, power and bandwidth.
+**[17] Zhang23t.** IEEE TCOM 2023; 191; recent and highly cited.
+- Says (I, II-B): a DDPG agent sets each user's compression ratio, power and bandwidth; a learned
+  policy with no certificate of its distance from the optimum (I).
 - Support (abstract): "a deep deterministic policy gradient (DDPG) agent at the micro base
   station"; "a joint optimization problem of the semantic compression ratio, transmit power, and
   bandwidth of each user".
 
-**[17] McDowell26.** arXiv 2608.28441 (v2, 31 Aug 2026); preprint; *exception*, kept at the
+**[18] McDowell26.** arXiv 2608.28441 (v2, 31 Aug 2026); preprint; *exception*, kept at the
 authors' request as the closest prior learned scheduler.
 - Says (I, II-C): learns the allocation by reinforcement learning inside a restless bandit over
   independent Rayleigh-fading slots, for a learned semantic code; a Lagrangian relaxation with one
@@ -174,15 +188,6 @@ authors' request as the closest prior learned scheduler.
   the decoder's own posterior; the fluid LP upper bound stated in Appendix C and plotted in no
   figure; a fresh, self-contained codeword of the newest observation in every slot, no deadline,
   and CSI at both ends.
-
-**[18] Zhang23.** IEEE TWC 2023; 277; recent and highly cited; *used* (per-image rate selection).
-- Says (I, II-B): PADC predicts each image's PSNR from its content, the SNR and the compression
-  ratio, and sends it at the least compression ratio meeting a quality constraint, treating the
-  prediction as exact.
-- Support (abstract): "an Oracle Network (OraNet) model for predicting peak-signal-to-noise (PSNR)
-  value ... according to its contents, channel signal to noise ratio (SNR) and the compression
-  ratio (CR) value, and a CR optimizer aims at finding the minimal data-level or instance-level CR
-  with a PSNR quality constraint". Read in full with its code (`docs/SURVEY.md` A).
 
 **[19] Ericsson03.** 3GPP TSG-RAN WG1 #35, Tdoc R1-031303, Nov. 2003; standards contribution, the
 origin of EESM; *used* (EESM baseline).

@@ -32,14 +32,15 @@ which a slot below the design SNR of its block delivers nothing and any SNR abov
 quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link adaptation and HARQ protect the bits from
 imperfect channel knowledge only by spending extra slots.
 
-In contrast, the learned code of the JSCC way has a distortion that varies continuously with the
-SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be matched
-to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this category
-value each user by the predicted quality of the code rather than by bits. Examples include
-allocating the shared channel by the quality predicted at each user's SNR \cite{Yan22,Xia24,Hou26},
-training an allocation policy by deep reinforcement learning \cite{Wang22,Zhang23t}, and embedding
-such learning in a restless bandit over fading slots \cite{McDowell26}
-(Section~\ref{sec:related-jscc}).
+In contrast, the JSCC way bases the downlink on a learned code, whose distortion varies continuously
+with the SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be
+matched to an uncertain report. As illustrated in Fig.~\ref{fig:overview}(b), schedulers in this
+category value each user by the predicted quality of the code rather than by bits. Per-image rate
+selection sends each image at the least rate at which its predicted quality meets a target
+\cite{Zhang23}. Multi-user designs allocate the shared channel by the quality predicted at each
+user's SNR \cite{Yan22,Xia24,Hou26}, train an allocation policy by deep reinforcement learning
+\cite{Wang22,Zhang23t}, or embed such learning in a restless bandit over fading slots
+\cite{McDowell26} (Section~\ref{sec:related-jscc}).
 
 \begin{figure}[!t]
 \centering
@@ -56,35 +57,36 @@ restless-bandit scheduler serves every user slot by slot up to the deadline.}
 \label{fig:overview}
 \end{figure}
 
-Although existing JSCC methods are effective, they face three challenges when a base station
-schedules a learned code to many users over fading slots.
+Although these designs avoid the cliff effect of physical link design, they leave three challenges
+unresolved.
 \begin{itemize}
-\item \emph{No link abstraction.} They value a user's transmission at a single SNR, with a fitted
-quality-SNR curve or a learned quality predictor \cite{Yan22,Zhang23,Hou26}. A scheduled image,
-however, is spread over slots of different SNRs, and for a nonlinear learned code no rule is known
-for how these SNRs combine into decoded quality. The exponential and the mutual-information
-effective SNR mappings (EESM, MIESM) of physical link design predict a digital block's error rate
-from the SNRs of the resources it occupies \cite{Ericsson03,EMD09}, not a learned code's
-distortion, and to our knowledge have not been validated on a learned code.
-\item \emph{No tractable, certifiable scheduler.} Deciding which user each slot serves, before a
-deadline and without knowing future slots, is a stochastic dynamic program whose state grows
-exponentially with the number of users. Existing methods either decide each transmission at its
-current SNR without planning over the slots left before the deadline \cite{Yan22,Xia24,Hou26}, or
-learn the allocation by reinforcement learning, which needs many interactions to train and gives no
-certificate of how far the learned policy is from optimal \cite{Wang22,Zhang23t,McDowell26}.
-\item \emph{Imperfect information.} The quality model and the channel reports are both estimates,
-yet existing schedulers take them at face value: per-image rate selection (PADC \cite{Zhang23})
-treats its predicted quality as exact, so a user predicted just above a quality target can decode
-just below it, and the closest learned scheduler assumes exact channel knowledge \cite{McDowell26}.
-Moreover, the advantage of the JSCC way over physical link design was measured on single links
-against an idealized digital side, with exact channel knowledge and capacity-achieving codes
-\cite{Bourtsoulatze19,Kurka20}; whether it survives the reports a real base station has is open.
+\item The first challenge is the absence of a \emph{link abstraction} for learned codes. The
+quality models of these designs, whether fitted curves or learned predictors
+\cite{Yan22,Zhang23,Hou26}, take a single SNR as input. The symbols of a scheduled image are
+instead spread over slots of different SNRs, and no rule is known for how these SNRs combine into
+the quality of a nonlinear code. Physical link design provides such rules for the error rate of a
+digital block, namely the exponential and mutual-information effective SNR mappings (EESM and
+MIESM) \cite{Ericsson03,EMD09}. To our knowledge, neither mapping has been validated on the
+distortion of a learned code.
+\item The second challenge is \emph{tractable and certifiable scheduling}. Choosing the users of
+every slot up to the deadline, without knowledge of future slots, is a stochastic dynamic program
+whose state grows exponentially with the number of users. The quality-based allocations are myopic,
+since they ignore the slots that remain in the frame \cite{Yan22,Xia24,Hou26}. Learned policies
+\cite{Wang22,Zhang23t,McDowell26} require many training interactions and offer no certificate of
+their distance from the optimum.
+\item The third challenge is \emph{imperfect information}, because the scheduler decides on
+predictions of both the quality and the channel. Per-image rate selection \cite{Zhang23} treats its
+predicted quality as exact, so a user predicted just above a quality target may decode just below
+it. The learned restless-bandit scheduler likewise assumes exact channel knowledge
+\cite{McDowell26}. Moreover, the advantage that motivates these designs was measured against an
+idealized digital link with exact channel knowledge and capacity-achieving codes
+\cite{Bourtsoulatze19,Kurka20}. Whether this advantage persists under the reports of a real base
+station remains open.
 \end{itemize}
-Behind all three lies one question: does a learned code have a link abstraction at all, a rule that,
-like EESM for a digital block, turns the SNRs its symbols met into its decoded quality? And if it
-does, what decides whether a code obeys it?
+All three challenges raise a fundamental question, namely whether a learned code admits a link
+abstraction. If such an abstraction exists, a further question is what makes a given code obey it.
 
-To answer it, we trained a progressive code, which decodes from any prefix of its phases, under
+To answer these questions, we trained a progressive code, which decodes from any prefix of its phases, under
 slot-varying SNR, and tested candidate rules on held-out decodes with mixed slot SNRs
 (Sections~\ref{sec:method-abstraction} and~\ref{sec:eval-abstraction}). We found three things.
 First, its distortion adds up over slots: the source distortion plus a sensitivity-weighted sum of

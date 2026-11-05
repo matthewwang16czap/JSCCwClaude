@@ -60,15 +60,16 @@ transmission is a learned code.
    delivers nothing and any SNR above it adds no quality [Bourtsoulatze19, Gunduz23].
 6. **Limitation 2.** Link adaptation and HARQ protect the bits from imperfect channel knowledge
    only by spending extra slots.
-7. In contrast, the learned code of the JSCC way has a distortion that varies continuously with
-   the SNR of its symbols. Hence no transmission is lost outright, and no coding rate has to be
-   matched to an uncertain report.
+7. In contrast, the JSCC way bases the downlink on a learned code, whose distortion varies
+   continuously with the SNR of its symbols. Hence no transmission is lost outright, and no coding
+   rate has to be matched to an uncertain report.
 8. As illustrated in Fig. 1(b), schedulers in this category value each user by the predicted
    quality of the code rather than by bits.
-9. Examples include allocating the shared channel by the quality predicted at each user's SNR
-   [Yan22, Xia24, Hou26], training an allocation policy by deep reinforcement learning [Wang22,
-   Zhang23t], and embedding such learning in a restless bandit over fading slots [McDowell26]
-   (Section II-B).
+9. Per-image rate selection sends each image at the least rate at which its predicted quality
+   meets a target [Zhang23]. Multi-user designs allocate the shared channel by the quality
+   predicted at each user's SNR [Yan22, Xia24, Hou26], train an allocation policy by deep
+   reinforcement learning [Wang22, Zhang23t], or embed such learning in a restless bandit over
+   fading slots [McDowell26] (Section II-B).
 
 ### Figure 1
 
@@ -106,45 +107,44 @@ deadline."
 
 ## Paragraph 3. Challenges of the JSCC way, and the question they raise
 
-1. Although existing JSCC methods are effective, they still face the following challenges when a
-   base station schedules a learned code to many users over fading slots.
-2. **(1) No link abstraction.**
-   - They value a user's transmission at a single SNR, with a fitted quality-SNR curve or a
-     learned quality predictor [Yan22, Zhang23, Hou26].
-   - A scheduled image, however, is spread over slots of different SNRs. For a nonlinear learned
-     code, no rule is known for how these SNRs combine into decoded quality.
-   - The exponential and the mutual-information effective SNR mappings (EESM, MIESM) of physical
-     link design predict a digital block's error rate from the SNRs of the resources it occupies
-     [Ericsson03, EMD09], not a learned code's distortion. To our knowledge, they have not been
-     validated on a learned code.
-3. **(2) No tractable, certifiable scheduler.**
-   - Deciding which user each slot serves, before a deadline and without knowing future slots,
-     is a stochastic dynamic program. Its state grows exponentially with the number of users.
-   - Existing methods take one of two routes, and neither plans over the frame with a guarantee:
-     - some decide each transmission on its own, at its current SNR, without planning over the
-       slots left before the deadline [Yan22, Xia24, Hou26];
-     - others learn the allocation by reinforcement learning, which needs many interactions to
-       train and gives no certificate of how far the learned policy is from optimal [Wang22,
-       Zhang23t, McDowell26].
+1. Although these designs avoid the cliff effect of physical link design, they leave three
+   challenges unresolved.
+2. **(1) Link abstraction.**
+   - The first challenge is the absence of a link abstraction for learned codes.
+   - The quality models of these designs, whether fitted curves or learned predictors [Yan22,
+     Zhang23, Hou26], take a single SNR as input.
+   - The symbols of a scheduled image are instead spread over slots of different SNRs, and no
+     rule is known for how these SNRs combine into the quality of a nonlinear code.
+   - Physical link design provides such rules for the error rate of a digital block, namely the
+     exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
+     EMD09]. To our knowledge, neither mapping has been validated on the distortion of a learned
+     code.
+3. **(2) Tractable and certifiable scheduling.**
+   - Choosing the users of every slot up to the deadline, without knowledge of future slots, is a
+     stochastic dynamic program whose state grows exponentially with the number of users.
+   - The quality-based allocations are myopic, since they ignore the slots that remain in the
+     frame [Yan22, Xia24, Hou26].
+   - Learned policies [Wang22, Zhang23t, McDowell26] require many training interactions and offer
+     no certificate of their distance from the optimum.
 4. **(3) Imperfect information.**
-   - The scheduler's quality model and its channel reports are both estimates, yet existing
-     schedulers take them at face value.
-     - PADC picks a rate from a predicted quality as if the prediction were exact [Zhang23].
-     - The closest learned scheduler assumes exact channel knowledge [McDowell26].
-   - So a user predicted just above a quality target can decode just below it.
-   - The JSCC way's advantage over physical link design was measured on single links with an
-     idealised digital side: exact channel knowledge and capacity-achieving codes
-     [Bourtsoulatze19, Kurka20].
-     Whether that advantage survives the reports a real base station has is open.
-5. Behind all three challenges lies one question: does a learned code have a link abstraction at
-   all? That is, is there a rule that, like EESM for a digital block, turns the SNRs its symbols
-   met into its decoded quality? And if there is, what decides whether a code obeys it?
+   - The third challenge is imperfect information, because the scheduler decides on predictions
+     of both the quality and the channel.
+   - Per-image rate selection [Zhang23] treats its predicted quality as exact, so a user predicted
+     just above a quality target may decode just below it.
+   - The learned restless-bandit scheduler likewise assumes exact channel knowledge
+     [McDowell26].
+   - The advantage that motivates these designs was measured against an idealized digital link
+     with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether this advantage persists under the reports of a real base
+     station remains open.
+5. All three challenges raise a fundamental question, namely whether a learned code admits a link
+   abstraction. If such an abstraction exists, a further question is what makes a given code obey
+   it.
 
 ## Paragraph 4. Pilot findings
 
-1. To answer it, we trained a progressive code under slot-varying SNR, with the chunks of each
-   codeword at independent SNRs. We then decoded it on held-out histories of mixed slot SNRs and
-   tested candidate rules (Sections IV-B and V-A).
+1. To answer these questions, we trained a progressive code under slot-varying SNR, with the
+   chunks of each codeword at independent SNRs. We then decoded it on held-out histories of mixed
+   slot SNRs and tested candidate rules (Sections IV-B and V-A).
    - The code has six phases, any prefix of which decodes.
    - It is a vision transformer whose encoder and decoder never see the SNR.
 
@@ -269,8 +269,8 @@ Overall, our main contributions are as follows.
 
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
-| (1) no link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
-| (2) no tractable, certifiable scheduler | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
+| (1) link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
+| (2) tractable and certifiable scheduling | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
 | (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | an extra 1.7% of the users at 30 dB over the hard target, users missed 0.0% against 1.2% (decoded); an extra 13.3% / 12.5% over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and an extra 13-16% over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
@@ -307,13 +307,13 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [9] Chou06 | P. A. Chou and Z. Miao, "Rate-distortion optimized streaming of packetized media," IEEE Trans. Multimedia, vol. 8, no. 2, pp. 390–404, Apr. 2006, doi: 10.1109/TMM.2005.864313. |
 | [10] Pahalawatta07 | P. Pahalawatta, R. Berry, T. Pappas, and A. Katsaggelos, "Content-aware resource allocation and packet scheduling for video transmission over wireless networks," IEEE J. Sel. Areas Commun., vol. 25, no. 4, pp. 749–759, May 2007, doi: 10.1109/JSAC.2007.070511. |
 | [11] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
-| [12] Yan22 | L. Yan, Z. Qin, R. Zhang, Y. Li, and G. Y. Li, "Resource allocation for text semantic communications," IEEE Wireless Commun. Lett., vol. 11, no. 7, pp. 1394–1398, Jul. 2022, doi: 10.1109/LWC.2022.3170849. |
-| [13] Xia24 | L. Xia, Y. Sun, D. Niyato, X. Li, and M. A. Imran, "Joint user association and bandwidth allocation in semantic communication networks," IEEE Trans. Veh. Technol., vol. 73, no. 2, pp. 2699–2711, Feb. 2024, doi: 10.1109/TVT.2023.3318510. |
-| [14] Hou26 | H. Hou, S. Bi, X. Li, H. Zhang, and Z. Quan, "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," IEEE Trans. Wireless Commun., vol. 25, pp. 22323–22338, 2026, doi: 10.1109/TWC.2026.3724562. |
-| [15] Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, and S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598–2613, Sep. 2022, doi: 10.1109/JSAC.2022.3191112. |
-| [16] Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, and A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, no. 7, pp. 3992–4004, Jul. 2023, doi: 10.1109/TCOMM.2023.3274145. |
-| [17] McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, and Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, Aug. 2026. |
-| [18] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
+| [12] Zhang23 | W. Zhang, H. Zhang, H. Ma, H. Shao, N. Wang, and V. C. M. Leung, "Predictive and adaptive deep coding for wireless image transmission in semantic communication," IEEE Trans. Wireless Commun., vol. 22, no. 8, pp. 5486–5501, Aug. 2023, doi: 10.1109/TWC.2023.3234408. |
+| [13] Yan22 | L. Yan, Z. Qin, R. Zhang, Y. Li, and G. Y. Li, "Resource allocation for text semantic communications," IEEE Wireless Commun. Lett., vol. 11, no. 7, pp. 1394–1398, Jul. 2022, doi: 10.1109/LWC.2022.3170849. |
+| [14] Xia24 | L. Xia, Y. Sun, D. Niyato, X. Li, and M. A. Imran, "Joint user association and bandwidth allocation in semantic communication networks," IEEE Trans. Veh. Technol., vol. 73, no. 2, pp. 2699–2711, Feb. 2024, doi: 10.1109/TVT.2023.3318510. |
+| [15] Hou26 | H. Hou, S. Bi, X. Li, H. Zhang, and Z. Quan, "Reliable online resource allocation for multi-user semantic communications: A constraint Bayesian optimization approach," IEEE Trans. Wireless Commun., vol. 25, pp. 22323–22338, 2026, doi: 10.1109/TWC.2026.3724562. |
+| [16] Wang22 | Y. Wang, M. Chen, T. Luo, W. Saad, D. Niyato, H. V. Poor, and S. Cui, "Performance optimization for semantic communications: An attention-based reinforcement learning approach," IEEE J. Sel. Areas Commun., vol. 40, no. 9, pp. 2598–2613, Sep. 2022, doi: 10.1109/JSAC.2022.3191112. |
+| [17] Zhang23t | H. Zhang, H. Wang, Y. Li, K. Long, and A. Nallanathan, "DRL-driven dynamic resource allocation for task-oriented semantic communication," IEEE Trans. Commun., vol. 71, no. 7, pp. 3992–4004, Jul. 2023, doi: 10.1109/TCOMM.2023.3274145. |
+| [18] McDowell26 | C. McDowell, A. Panebianco, S. Chakraborty, and Y. Sun, "Significance-driven semantic communication," arXiv:2608.28441, Aug. 2026. |
 | [19] Ericsson03 | Ericsson, "System-level evaluation of OFDM – further considerations," 3GPP TSG-RAN WG1 #35, Lisbon, Portugal, Tdoc R1-031303, Nov. 2003. |
 | [20] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
 | [21] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
