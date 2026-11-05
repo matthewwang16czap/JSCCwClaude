@@ -57,7 +57,9 @@ Although JSCC design avoids the cliff effect of physical link design, it leaves 
 unresolved:
 \begin{itemize}
 \item \emph{Absence of a link abstraction}: The quality models of JSCC design, whether fitted curves
-or learned predictors \cite{Yan22,Zhang23,Hou26}, take a single SNR as input. Physical link design
+or learned predictors \cite{Yan22,Zhang23,Hou26}, take a single SNR as input. Each model maps this
+SNR to the predicted quality of a whole image, as if every symbol of the image met the same channel.
+Physical link design
 provides rules for the error rate of a digital block, namely the exponential and mutual-information
 effective SNR mappings (EESM and MIESM) \cite{Ericsson03,EMD09}, but no rule is known for how the
 SNRs of the slots that carry one image combine into the quality of a nonlinear code.

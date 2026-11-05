@@ -118,7 +118,8 @@ deadline."
    challenges unresolved (a list, each item an italic label followed by a colon).
 2. **(1) Absence of a link abstraction.**
    - The quality models of JSCC design, whether fitted curves or learned predictors [Yan22,
-     Zhang23, Hou26], take a single SNR as input.
+     Zhang23, Hou26], take a single SNR as input. Each model maps this SNR to the predicted
+     quality of a whole image, as if every symbol of the image met the same channel.
    - Physical link design provides rules for the error rate of a digital block, namely the
      exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
      EMD09], but no rule is known for how the SNRs of the slots that carry one image combine into
