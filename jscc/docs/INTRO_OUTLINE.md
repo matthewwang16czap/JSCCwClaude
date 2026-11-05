@@ -30,7 +30,7 @@ the deadline. A difference between two shares is the difference of the two perce
    evaluated on a single link at a given SNR.
 4. A cellular downlink is a multi-user, multi-slot system with fading, imperfect channel knowledge
    and deadlines, so the gain a learned code reports on a single link [Bourtsoulatze19, Xu22,
-   Yang25] is reduced under the case of a base station delivers to many users over fading slots.
+   Yang25] is reduced when a base station delivers to many users over fading slots.
 5. A base station splits a frame of slots among many users through a scheduler, and each user's
    slots fade independently.
 6. Moreover, the base station knows only an estimate of the current slot's channel, making a
