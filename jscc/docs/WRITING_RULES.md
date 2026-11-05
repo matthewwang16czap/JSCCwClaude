@@ -4,7 +4,8 @@ The authors' rules for every sentence of the paper, set on 2026-11-04. `paper/st
 checks rules 1 to 3 mechanically (`python3 style_check.py sections/introduction.tex 18 45` checks
 lines 18 to 45 of that file).
 
-1. No colon.
+1. No colon in a sentence. A list item may open with an italic label followed by a colon, as
+   IEEE papers do (Section I, paragraph 3).
 2. No semicolon.
 3. Every sentence is complete and grammatical, with at most two commas. Each comma-separated part
    is neither too short nor too long.
