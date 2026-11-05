@@ -17,7 +17,7 @@ often late or wrong. Since each delivery has a deadline, a low-latency schedulin
 necessary as well.
 
 Existing approaches to serving images to many users over a fading downlink fall into two
-categories, namely \emph{physical link design} and \emph{the JSCC way}. The scheduler of the former
+categories, namely \emph{physical link design} and \emph{JSCC design}. The scheduler of the former
 serves the bits of a separate image codec, whereas that of the latter serves a learned code.
 
 Physical link design is how cellular systems deliver images today. As illustrated in
@@ -44,11 +44,12 @@ learning \cite{Wang22,Zhang23t}, or embed such learning in a restless bandit ove
 \centering
 \input{figs/overview}
 \caption{Approaches to serving images to many users over a fading downlink. (a) Physical link
-design transmits the bits of a separate codec at a rate set from a channel report, so every block
-either decodes or fails. (b) The JSCC way transmits a learned code, and its scheduler values each
-user at a single SNR or follows a policy learned by reinforcement learning. (c) CLASP schedules a
-progressive code trained under slot-varying SNR, whose link abstraction values every slot. This
-restless-bandit scheduler serves every user slot by slot up to the deadline.}
+design transmits the bits of a separate codec at a rate set from a channel report. Every block
+either decodes or fails, and HARQ resends a failed block in a later slot. (b) JSCC design transmits
+a learned code, and its scheduler splits the channel among users according to a quality predicted
+at one SNR or a policy learned by reinforcement learning. (c) CLASP schedules a progressive code
+trained under slot-varying SNR, whose link abstraction values every slot. This restless-bandit
+scheduler serves every user slot by slot up to the deadline.}
 \label{fig:overview}
 \end{figure}
 

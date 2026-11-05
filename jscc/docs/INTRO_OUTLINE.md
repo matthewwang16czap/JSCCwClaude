@@ -9,7 +9,7 @@ from, is in `docs/INTRO_NUMBERS.md`.
 learned code whose symbols are sent in phases and that decodes from whatever prefix of phases has
 arrived. *Slot*, *frame*, *deadline*: the base station has a frame of T slots and serves K users;
 every image must be delivered by the end of the frame. *Link abstraction*: a rule that maps the
-SNRs a codeword's symbols met to its decoded quality. *Physical link design* and *the JSCC way*:
+SNRs a codeword's symbols met to its decoded quality. *Physical link design* and *JSCC design*:
 the two existing categories (paragraph 2). *Calibration-aware*: deciding on a calibrated
 predictive distribution of a user's decoded quality, whose spread is the measured error of the
 prediction, from the quality model and from the channel reports. *CLASP* (Calibration-aware,
@@ -37,14 +37,14 @@ the deadline. A difference between two shares is the difference of the two perce
    channel-quality report [TS36213] often late or wrong. Since each delivery has a deadline, a
    low-latency scheduling method is necessary as well.
 
-## Paragraph 2. Existing approaches: physical link design and the JSCC way (Fig. 1)
+## Paragraph 2. Existing approaches: physical link design and JSCC design (Fig. 1)
 
-Order: physical link design and its limitations first; then "In contrast," the JSCC way, the
+Order: physical link design and its limitations first; then "In contrast," JSCC design, the
 category ours belongs to. Both are described by their schedulers, since from paragraph 1 on the
 transmission is a learned code.
 
 1. Existing approaches to serving images to many users over a fading downlink fall into two
-   categories, namely physical link design and the JSCC way. The scheduler of the former serves
+   categories, namely physical link design and JSCC design. The scheduler of the former serves
    the bits of a separate image codec, whereas that of the latter serves a learned code.
 2. Physical link design is how cellular systems deliver images today. As illustrated in
    Fig. 1(a), its scheduler selects both the served users and the rate of their blocks in every
@@ -80,17 +80,18 @@ drawn in TikZ in `paper/figs/overview.tex`, which the figure environment of
 - **(a) Physical link design.**
   - The chain: image → "codec" → bits ("0110" on the arrow) → "link adaptation + HARQ" → a row
     of slots. The text says link adaptation and never defines AMC, so the box does too.
-  - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost). A NACK from a lost block
-    loops back to the HARQ box, and the block is sent again in a later slot.
+  - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost). Exactly one block is lost.
+    Its NACK loops back to the HARQ box, and the same block is resent and decoded in a later slot
+    (marked "resent").
   - A "scheduler (CQI)" box above the row picks the user and the rate for each slot; it values a
     slot by the bits it delivers.
   - Inset: quality against SNR as a step (the cliff).
-- **(b) The JSCC way.**
-  - The chain: one image per user → "learned JSCC", which encodes each image separately → one
-    codeword per user → its part of a shared channel, labelled with one SNR → the user.
-  - An "allocator q(SNR)" box sets every user's share from the quality predicted at its SNR.
-  - A dashed "RL policy" box carries a "?" for the value of a slot. A brace groups the three
-    users toward both boxes, and both feed back to the channel as "channel shares".
+- **(b) JSCC design.**
+  - The chain: image → "learned JSCC" → one shared channel, a bar split into unequal shares for
+    users 1-3, each share labelled with the single SNR its user is valued at. As in (a) and (c),
+    one image icon stands for the images of all users.
+  - An "allocator q(SNR)" box and an "RL policy" box, joined by "or", each set the split with an
+    arrow into the channel. Neither carries a question mark.
   - Inset: quality against SNR as a smooth curve.
 - **(c) CLASP.**
   - The chain: image → "progressive JSCC" → phases spread over slots of different SNRs (slot
@@ -103,13 +104,14 @@ drawn in TikZ in `paper/figs/overview.tex`, which the figure environment of
 
 **Caption.** "Fig. 1. Approaches to serving images to many users over a fading downlink.
 (a) Physical link design transmits the bits of a separate codec at a rate set from a channel
-report, so every block either decodes or fails. (b) The JSCC way transmits a learned code, and its
-scheduler values each user at a single SNR or follows a policy learned by reinforcement learning.
+report. Every block either decodes or fails, and HARQ resends a failed block in a later slot.
+(b) JSCC design transmits a learned code, and its scheduler splits the channel among users
+according to a quality predicted at one SNR or a policy learned by reinforcement learning.
 (c) CLASP schedules a progressive code trained under slot-varying SNR, whose link abstraction
 values every slot. This restless-bandit scheduler serves every user slot by slot up to the
 deadline."
 
-## Paragraph 3. Challenges of the JSCC way, and the question they raise
+## Paragraph 3. Challenges of JSCC design, and the question they raise
 
 1. Although these designs avoid the cliff effect of physical link design, they leave three
    challenges unresolved.
@@ -282,7 +284,7 @@ Overall, our main contributions are as follows.
 The rest of the paper is organised as follows:
 
 - Section II reviews related work in three subsections: physical link design for multi-user media
-  delivery, the JSCC way (adaptive and multi-user learned codes), and restless bandits with index
+  delivery, JSCC design (adaptive and multi-user learned codes), and restless bandits with index
   policies.
 - Section III states the system model and the problem.
 - Section IV presents the method: training the progressive code under slot-varying SNR, its
