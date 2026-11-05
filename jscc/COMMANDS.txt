@@ -3763,9 +3763,10 @@ grep "skip" results/s39_figs.txt              # nothing; send me any line it pri
 # jscc/paper/main.tex follows New_IEEEtran_how-to.tex (IEEEtran V1.8b): its preamble, title,
 # author and \thanks block, running heads, abstract, index terms and \balance; paper/IEEEtran.cls
 # is the class file you sent. It holds the abstract (docs/PAPER_OUTLINE.md), Section I
-# (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md), Section II
-# (paper/sections/related.tex), Section III (paper/sections/preliminaries.tex: Table I and Fig. 2,
-# drawn in TikZ) and the headings of Sections IV-VI, which the cross-references point to.
+# (paper/sections/introduction.tex, from docs/INTRO_OUTLINE.md, with Fig. 1 drawn in TikZ in
+# paper/figs/overview.tex), Section II (paper/sections/related.tex), Section III
+# (paper/sections/preliminaries.tex: Table I and Fig. 2, also in TikZ) and the headings of
+# Sections IV-VI, which the cross-references point to.
 # paper/references.bib holds the 43 references; why each qualifies, and the text behind what the
 # paper says about it: docs/RELATED_SOURCES.md. The PDF it builds is already in the repository as
 # paper/main.pdf. Nothing to send back.

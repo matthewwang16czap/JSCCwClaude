@@ -73,13 +73,16 @@ transmission is a learned code.
 
 ### Figure 1
 
-The figure is one column wide, with three panels stacked top to bottom: (a), (b) and (c).
+The figure is one column wide, with three panels stacked top to bottom: (a), (b) and (c). It is
+drawn in TikZ in `paper/figs/overview.tex`, which the figure environment of
+`paper/sections/introduction.tex` includes.
 
 - **Style.** All text is bold. Panels (a) and (b) use grey, low-contrast tones; panel (c) uses
   saturated colour. Red appears only on the words "link abstraction" in (c). There are no
   equations and no axes beyond the insets.
 - **(a) Physical link design.**
-  - The chain: image → "codec" → bits → "AMC + HARQ" → a row of slots.
+  - The chain: image → "codec" → bits ("0110" on the arrow) → "link adaptation + HARQ" → a row
+    of slots. The text says link adaptation and never defines AMC, so the box does too.
   - Each slot holds one user's block, marked ✓ (decoded) or ✗ (lost).
   - A "scheduler (CQI)" box above the row picks the user and the rate for each slot; it values a
     slot by the bits it delivers.
@@ -88,14 +91,17 @@ The figure is one column wide, with three panels stacked top to bottom: (a), (b)
   - The chain: image → "learned JSCC" → one codeword per user.
   - Each codeword has a single arrow to its own channel, labelled with one SNR.
   - An "allocator q(SNR)" box sets every user's share from the quality predicted at its SNR.
-  - A dashed "RL scheduler" box carries a "?" for the value of a slot.
+  - A dashed "RL policy" box carries a "?" for the value of a slot. A brace groups the three
+    users toward both boxes.
   - Inset: quality against SNR as a smooth curve.
 - **(c) CLASP.**
   - The chain: image → "progressive JSCC" → phases spread over slots of different SNRs (slot
     colour = SNR) → "link abstraction" → each user's two-number state → "restless-bandit
     scheduler".
-  - The scheduler serves users slot by slot up to a "deadline" marker.
-  - Inset: predicted against decoded quality, on the diagonal.
+  - The scheduler serves users slot by slot up to a "deadline" marker. A shade bar labelled SNR
+    gives the slot colour scale.
+  - Inset: predicted against decoded quality, drawn as a schematic band along the diagonal with no
+    data points, so that it cannot be read as a measurement.
 
 **Caption.** "Fig. 1. Approaches to serving images to many users over a fading downlink.
 (a) Physical link design transmits the bits of a separate codec at a rate set from a channel
