@@ -123,7 +123,7 @@ deadline."
      exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
      EMD09], but no rule is known for how the SNRs of the slots that carry one image combine into
      the quality of a nonlinear code.
-3. **(2) Tractable and certifiable scheduling.**
+3. **(2) Absence of tractable and certifiable scheduling.**
    - Choosing the users of every slot up to the deadline, without knowledge of future slots, is a
      stochastic dynamic program whose state grows exponentially with the number of users.
    - The quality-based allocations are myopic, since they ignore the slots that remain in the
