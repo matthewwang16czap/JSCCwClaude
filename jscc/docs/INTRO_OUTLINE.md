@@ -114,18 +114,15 @@ deadline."
 
 ## Paragraph 3. Challenges of JSCC design, and the question they raise
 
-1. Although these designs avoid the cliff effect of physical link design, they leave three
-   challenges unresolved.
-2. **(1) Link abstraction.**
-   - The first challenge is the absence of a link abstraction for learned codes.
-   - The quality models of these designs, whether fitted curves or learned predictors [Yan22,
+1. Although JSCC design avoids the cliff effect of physical link design, it leaves three
+   challenges unresolved (a list, each item an italic label followed by a colon).
+2. **(1) Absence of a link abstraction.**
+   - The quality models of JSCC design, whether fitted curves or learned predictors [Yan22,
      Zhang23, Hou26], take a single SNR as input.
-   - The symbols of a scheduled image are instead spread over slots of different SNRs, and no
-     rule is known for how these SNRs combine into the quality of a nonlinear code.
-   - Physical link design provides such rules for the error rate of a digital block, namely the
+   - Physical link design provides rules for the error rate of a digital block, namely the
      exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
-     EMD09]. To our knowledge, neither mapping has been validated on the distortion of a learned
-     code.
+     EMD09], but no rule is known for how the SNRs of the slots that carry one image combine into
+     the quality of a nonlinear code.
 3. **(2) Tractable and certifiable scheduling.**
    - Choosing the users of every slot up to the deadline, without knowledge of future slots, is a
      stochastic dynamic program whose state grows exponentially with the number of users.
@@ -134,15 +131,15 @@ deadline."
    - Learned policies [Wang22, Zhang23t, McDowell26] require many training interactions and offer
      no certificate of their distance from the optimum.
 4. **(3) Imperfect information.**
-   - The third challenge is imperfect information, because the scheduler decides on predictions
-     of both the quality and the channel.
+   - The scheduler makes decisions based on predictions of both the quality and the channel, both
+     of which are imperfect.
    - Per-image rate selection [Zhang23] treats its predicted quality as exact, so a user predicted
      just above a quality target may decode just below it.
    - The learned restless-bandit scheduler likewise assumes exact channel knowledge
      [McDowell26].
    - The advantage that motivates these designs was measured against an idealized digital link
-     with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether this advantage persists under the reports of a real base
-     station remains open.
+     with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether
+     this advantage persists under the reports of a real base station remains open.
 5. All three challenges raise a fundamental question, namely whether a learned code admits a link
    abstraction. If such an abstraction exists, a further question is what makes a given code obey
    it.
