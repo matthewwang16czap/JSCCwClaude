@@ -7,12 +7,12 @@ digital coding needs. Trained end to end through the channel, deep JSCC beats di
 at low signal-to-noise ratio (SNR) and degrades gracefully as the channel worsens, instead of
 failing once the SNR drops below what a digital code was designed for \cite{Bourtsoulatze19,Gunduz23}.
 That makes it a strong candidate for image delivery in 6G, yet a learned code is designed and
-evaluated on a single link at a given SNR. A cellular downlink is a multi-user, multi-slot system
-with fading, imperfect channel knowledge and deadlines, so the gain a learned code reports on a
-single link \cite{Bourtsoulatze19,Xu22,Yang25} is reduced when a base station
-delivers to many users over fading slots. A base station splits a frame of slots among many users
+evaluated on a single link at a given SNR. A cellular downlink is a multi-user multi-slot system
+with fading, imperfect channel knowledge and deadlines, so the gain reported for a learned code on a
+single link \cite{Bourtsoulatze19,Xu22,Yang25} is reduced when a base station delivers to many users
+over fading slots. A base station splits a frame of slots among many users
 through a scheduler, and each user's slots fade independently. Moreover, the base station knows
-only an estimate of the current slot's channel, making a channel-quality report \cite{TS36213}
+only an estimate of the current slot's channel, since a channel-quality report \cite{TS36213} is
 often late or wrong. Since each delivery has a deadline, a low-latency scheduling method is 
 necessary as well.
 

@@ -28,13 +28,13 @@ the deadline. A difference between two shares is the difference of the two perce
    digital code was designed for [Bourtsoulatze19, Gunduz23].
 3. That makes it a strong candidate for image delivery in 6G, yet a learned code is designed and
    evaluated on a single link at a given SNR.
-4. A cellular downlink is a multi-user, multi-slot system with fading, imperfect channel knowledge
-   and deadlines, so the gain a learned code reports on a single link [Bourtsoulatze19, Xu22,
+4. A cellular downlink is a multi-user multi-slot system with fading, imperfect channel knowledge
+   and deadlines, so the gain reported for a learned code on a single link [Bourtsoulatze19, Xu22,
    Yang25] is reduced when a base station delivers to many users over fading slots.
 5. A base station splits a frame of slots among many users through a scheduler, and each user's
    slots fade independently.
-6. Moreover, the base station knows only an estimate of the current slot's channel, making a
-   channel-quality report [TS36213] often late or wrong. Since each delivery has a deadline, a
+6. Moreover, the base station knows only an estimate of the current slot's channel, since a
+   channel-quality report [TS36213] is often late or wrong. Since each delivery has a deadline, a
    low-latency scheduling method is necessary as well.
 
 ## Paragraph 2. Existing approaches: physical link design and JSCC design (Fig. 1)
