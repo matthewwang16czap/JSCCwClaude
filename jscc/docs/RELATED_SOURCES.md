@@ -196,16 +196,7 @@ origin of EESM; *used* (EESM baseline).
   commensurate with its channel quality"; errors "now reduce the sharpness of the received pixels
   but do not cause the video to glitch or stall".
 
-**[20] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
-- Says (I, II-B): layers as successive refinements or multiple descriptions with negligible loss;
-  refinements lose value below the training SNR.
-- Support (abstract): "the well known problems of successive refinement and multiple
-  descriptions"; "can learn to transmit the source progressively with negligible losses in the
-  end-to-end performance compared with a single transmission". Full text (`fulltext_readings.md`
-  item 8): "since the reconstructed base layer becomes significantly different from what the
-  encoder expects based on the training data".
-
-**[21] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
+**[20] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
 - Says (I, II-C, III-E): the constraint on the number of projects operated is relaxed to its
   expected value; the multiplier defines an index; the conjecture of near-optimality (III-E: the
   scheduling problem becomes a restless bandit).
@@ -214,7 +205,7 @@ origin of EESM; *used* (EESM baseline).
   constant ratio, the policy of operating the m projects of largest current index is nearly
   optimal" (a conjecture).
 
-**[22] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
+**[21] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
 the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
 authors and title).
 - Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
@@ -227,7 +218,7 @@ authors and title).
   how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
   value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
 
-**[23] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
+**[22] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
 - Says (I, II-C): the Lagrangian priority value is the greatest tax under which processing is
   optimal; serving in that order is asymptotically optimal; one multiplier per stage.
 - Support (abstract): "we define the Lagrangian priority value as the greatest tax under which it
@@ -235,7 +226,7 @@ authors and title).
   Read in full (`fulltext_readings.md` item 4): "Lagrangian relaxation with one multiplier per
   stage".
 
-**[24] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
+**[23] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
 - Says (I, II-C): relaxing the limit on the number of items selected gives an upper bound and the
   Lagrangian index policy, both asymptotically optimal with many items; tie-breaking matters.
 - Support (abstract): "a Lagrangian relaxation of the DP that relaxes the constraint limiting the
@@ -243,27 +234,27 @@ authors and title).
   "under mild conditions, these policies and bounds are asymptotically optimal for problems with
   many items; mixed policies and tiebreaking play an essential role".
 
-**[25] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
+**[24] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
 - Says (II-A, III-D): HEVC as the standard codec; the HEIC files of the digital baseline use HEVC
   intra coding (Sullivan12 is cited for HEVC; HEIC is the HEIF image format with HEVC-coded images).
 - Support (abstract): "This paper provides an overview of the technical features and
   characteristics of the HEVC standard."
 
-**[26] Chase85.** IEEE TCOM 1985; 743; highly cited.
+**[25] Chase85.** IEEE TCOM 1985; 743; highly cited.
 - Says (II-A, III-D): the receiver combines the noisy copies of a retransmitted block (III-D
   models it as the copies' SNRs adding, eq. (15); the equation is ours, Chase85 is cited for the
   scheme).
 - Support (title): "Code combining - A maximum-likelihood decoding approach for combining an
   arbitrary number of noisy packets".
 
-**[27] Lagen20.** IEEE ICC 2020; 101; highly cited.
+**[26] Lagen20.** IEEE ICC 2020; 101; highly cited.
 - Says (II-A): the 5G NR abstraction of the ns-3 simulator calibrates EESM and obtains SINR-BLER
   tables with a link-level simulator.
 - Support (abstract): "its integration into an open-source ns-3 based NR system-level simulator";
   "we used an NR-compliant link-level simulator to calibrate the EESM method as well as to obtain
   SINR-block error rate (BLER) lookup tables".
 
-**[28] Chou06.** IEEE TMM 2006; 405; highly cited.
+**[27] Chou06.** IEEE TMM 2006; 405; highly cited.
 - Says (II-A): RaDiO reduces streaming to the error-cost optimized transmission of each data unit,
   an MDP with a Lagrange multiplier pricing the rate, essentially at the operational D(R) of the
   source at the erasure channel's capacity.
@@ -273,41 +264,51 @@ authors and title).
   the packet erasure channel". Read in full (`fulltext_readings.md` item 5): "priced by a Lagrange
   multiplier".
 
-**[29] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
+**[28] Pahalawatta07.** IEEE JSAC 2007; 118; highly cited.
 - Says (II-A): gradient-based schedulers set each user's rate from its channel quality and the
   gradient of a utility built from its received-video distortion.
 - Support (abstract): "user data rates are dynamically adjusted based on channel quality as well
   as the gradients of a utility function. The user utilities are designed as a function of the
   distortion of the received video."
 
-**[30] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
+**[29] HouBorkar09.** IEEE INFOCOM 2009; 220; highly cited.
 - Says (II-A): packets expire at the end of each frame; feasible per-client delivery ratios are
   characterized; largest-debt-first fulfills every feasible set.
 - Support: read in full; the notes of that reading (`fulltext_readings.md` batch 4, `docs/SURVEY.md`
   F2) record frames of tau slots with one packet per client per frame, expired at the frame's end,
   per-client long-run delivery ratios, and that largest-debt-first is feasibility optimal.
 
-**[31] Dai22.** IEEE JSAC 2022; 378; highly cited.
+**[30] Dai22.** IEEE JSAC 2022; 378; highly cited.
 - Says (II-B): learns an entropy model of its latent representation and adapts the rate to it.
 - Support (abstract): "learns both the source latent representation and an entropy model as the
   prior on the latent representation. Accordingly, novel adaptive rate transmission ...
   mechanisms are developed".
 
-**[32] YangBianKim22.** IEEE TCCN 2022; 201; highly cited.
+**[31] YangBianKim22.** IEEE TCCN 2022; 201; highly cited.
 - Says (II-B): deep JSCC with OFDM over multipath fading; 2.5-4 dB of SNR gain over BPG with LDPC.
 - Support (abstract): "we combine an autoencoder with orthogonal frequency division multiplexing
   (OFDM) to cope with multipath fading"; "2.5 - 4 dB SNR gain for the equivalent image quality
   compared to ... BPG and ... LDPC".
 
-**[33] Wu24m.** IEEE TWC 2024; 121; recent and highly cited.
+**[32] Wu24m.** IEEE TWC 2024; 121; recent and highly cited.
 - Says (II-B): MIMO channels, with robustness to channel estimation errors.
 - Support (abstract): "over multiple-input multiple-output (MIMO) channels"; "exhibiting
   robustness to channel estimation errors".
 
-**[34] Wu24f.** IEEE TWC 2024; 60; recent.
+**[33] Wu24f.** IEEE TWC 2024; 60; recent.
 - Says (II-B): feedback refines the receiver's estimate block by block.
 - Support (abstract): "employs a single encoder to facilitate transmission over multiple blocks,
   refining the receiver's estimation at each block".
+
+**[34] Kurka21.** IEEE TWC 2021; 195; highly cited; *used* (the layered-code mechanism).
+- Says (II-B): layers as successive refinements or multiple descriptions with negligible loss.
+- Support (abstract): "the well known problems of successive refinement and multiple
+  descriptions"; "can learn to transmit the source progressively with negligible losses in the
+  end-to-end performance compared with a single transmission".
+- Kept for Sections IV-V, to explain why a code trained at one SNR obeys no rule (full text,
+  `fulltext_readings.md` item 8): below the training SNR the refinement layer's gain shrinks,
+  "since the reconstructed base layer becomes significantly different from what the encoder
+  expects based on the training data".
 
 **[35] Mu23.** IEEE JSAC 2023; 88; recent.
 - Says (II-B): in a non-orthogonal uplink shared with a bit-based user, the semantic user's
