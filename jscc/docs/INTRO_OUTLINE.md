@@ -182,22 +182,24 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
      reconstruction it expects at its training SNR, but the actual base reconstruction changes
      when the slot SNRs vary. A similar mismatch reduces the gain of the refinement layers in
      DeepJSCC-l below the training SNR (Kurka21, cited in Section II-B).
-4. **(3) Calibration, accuracy and the remaining error.** Third, this abstraction can be
-   calibrated from a small number of decodes per image. Within a scheduler, it then predicts the
-   quality of complete deliveries accurately, even with noisy or aged channel reports. The remaining prediction error
-   is small but not negligible, since a scheduler that ignores it leaves more users below a
-   quality target.
+4. **(3) Use in a scheduler, calibration and the residual error.** Third, the abstraction remains
+   accurate on the slots that a scheduler selects. It can be calibrated for each image from a
+   small number of decodes, but the calibrated predictions retain a residual error. A scheduler
+   that ignores this error leaves more users below a quality target than one that models it.
    - Evidence, not in the prose: twelve decodes per image calibrate the curves, which predict
      held-out mixed-SNR decodes with a mean absolute error of 0.03-0.06 dB per prefix length
      (0.05-0.09 dB on CLIC).
-   - Evidence, not in the prose: the predicted quality of complete scheduled deliveries has a
-     mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB, whether the reports are
-     exact, carry 2 dB CQI errors, or are aged (correlation 0.8).
+   - Evidence, not in the prose: on complete scheduled deliveries, the abstraction fitted on all
+     mixed-SNR decodes, evaluated at the SNRs the scheduled slots actually met, predicts the
+     decoded PSNR with a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB. This
+     holds for schedules made with exact reports, 2 dB CQI errors or reports aged to correlation
+     0.8. The prediction does not use the reports, so this shows that the rule holds on the slots
+     a scheduler picks, not that a prediction from wrong reports is accurate.
    - Evidence, not in the prose: a scheduler that takes the calibrated curves as exact leaves an
      extra 1.7-2.0% of the users below 30 dB, against one that models their error, at every cell
      size from 16 to 128 users.
-5. These findings show that a learned code can be scheduled through its link abstraction, provided
-   that the scheduler models this error.
+5. These findings indicate that a scheduler can rely on the link abstraction of a code trained
+   under slot-varying SNR, provided that it accounts for this error.
    - Background, not in the prose: under the abstraction, each user's state reduces to two
      numbers, the phases received and their accumulated weighted noise (paragraph 5).
 

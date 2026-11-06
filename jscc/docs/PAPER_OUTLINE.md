@@ -218,8 +218,10 @@ Where each part of the model is implemented:
     0.203, the best 0.147).
   - Calibrated from 12 decodes per image, the curves predict held-out mixed-SNR decodes within
     0.03-0.06 dB per prefix length (CLIC 0.05-0.09).
-  - Scheduled deliveries, decoded: mean absolute error 0.06-0.09 dB, bias within ±0.03 dB,
-    with exact, noisy (2 dB CQI errors) or aged (r = 0.8) reports, Kodak and CLIC.
+  - Scheduled deliveries, decoded: mean absolute error 0.06-0.09 dB, bias within ±0.03 dB, for
+    schedules made with exact, noisy (2 dB CQI errors) or aged (r = 0.8) reports, Kodak and
+    CLIC. The prediction is the fitted curves at the SNRs the slots actually met, not at the
+    reports: the rule holds on the slots a scheduler picks.
 - **B. Mean PSNR: near the bound, and over PF** (fig04a: the gap to the bound per user against
   K, B = K/8; Table III: CLASP over PF under each condition, simulated and decoded, with MS-SSIM
   and LPIPS; fig08a: what it does to the users, decoded; Table IV, appendix: the other

@@ -168,7 +168,11 @@ wrote results/belief_clic_nested.json
 
 **16. "0.06-0.09 dB"** and **17. "±0.03 dB"** (item 4: the model's mean absolute error
 and bias on complete scheduled deliveries, decoded). Every schedule decoded for the
-Introduction's results, all policies in each file. Each `replay_report.py` report begins with
+Introduction's results, all policies in each file. The predicted PSNR is the one the simulator
+scores the user with (`tools/schedule_sim.py`, `util.psnr(i, h)`): the curves of `--utility`,
+fitted on all mixed-SNR decodes, at the SNRs `h` the user's slots actually met. It uses neither
+the transmitter's 12-decode curves (`--belief`) nor the reports, so these errors measure the
+abstraction on scheduled slots, under each report condition. Each `replay_report.py` report begins with
 one line `N decoded histories: predicted - actual PSNR bias ..., MAE ..., p95 ... dB`.
 
 `results/s30_direct.txt` (COMMANDS 30.1, printed by 30.5 (1), sent back 2026-10-31), its five
