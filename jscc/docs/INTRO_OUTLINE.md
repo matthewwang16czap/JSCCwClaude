@@ -142,54 +142,62 @@ deadline."
      with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether
      this advantage persists under the reports of a real base station remains open.
 
-## Paragraph 4. The question the challenges raise, and the pilot findings
+## Paragraph 4. The requirement the challenges share, and the pilot findings
 
-1. All three challenges raise a fundamental question, namely whether a learned code admits a link
-   abstraction. If such an abstraction exists, a further question is what makes a given code obey
-   it.
-   - To answer these questions, we trained a progressive code under slot-varying SNR. Such a code
-     can be decoded from any prefix of its phases. We then compared candidate rules on held-out
-     decodes with mixed slot SNRs (Sections IV-B and V-A). Three findings emerged.
+Only the findings are stated, without their numbers. The numbers behind each finding are listed
+under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in Sections IV-V.
+
+1. The three challenges share one requirement, namely a link abstraction that maps the SNRs of the
+   slots carrying an image to its decoded quality. Such an abstraction would let a scheduler value
+   each slot for each user, plan over the remaining slots and quantify the error of its quality
+   predictions. Two questions therefore arise, namely whether such an abstraction exists for a
+   learned code and how the code should be trained for it to hold.
+   - To answer these questions, we trained a progressive code under slot-varying SNR and compared
+     candidate rules on held-out decodes (Sections IV-B and V-A). Three findings emerged.
    - Background, not in the prose: the code has six phases, and in training the chunks of each
      codeword meet independent SNRs. It is a vision transformer whose encoder and decoder never
      see the SNR.
-2. **(1) Additivity over slots.** First, the distortion of this code is additive over slots. The
-   source distortion plus a sensitivity-weighted sum of per-slot minimum mean-square-error (MMSE)
-   terms, D = Dsrc + C Σ_j ρ_j φ(n_j), predicts held-out decodes with a mean absolute error of
-   0.055-0.083 dB on two test sets. With the same per-phase weights, EESM errs by 0.16-0.19 dB and
-   MIESM by 0.29-0.34 dB.
+2. **(1) An additive MMSE abstraction.** First, the distortion of this code is well described by a
+   source term plus a weighted sum of per-slot minimum mean-square-error (MMSE) terms, a form that
+   linear analog codes have by construction [Jakubczak11]. This additive MMSE rule predicts the
+   decoded quality more accurately than EESM and MIESM.
+   - Evidence, not in the prose: D = Dsrc + C Σ_j ρ_j φ(n_j). Mean absolute error on held-out
+     decodes, every rule given the same per-phase sensitivity weights (in brackets, the rule's
+     standard equal-weight form):
 
    | test set | MMSE rule | EESM | MIESM |
    |---|---|---|---|
    | Kodak | 0.055 dB (0.37) | 0.19 dB (0.37) | 0.34 dB (0.49) |
    | CLIC | 0.083 dB (0.41) | 0.16 dB (0.37) | 0.29 dB (0.44) |
 
-   Mean absolute error, every rule given the same per-phase sensitivity weights. In brackets, the
-   rule's standard equal-weight form. Both parts are needed, the MMSE form and a weight per phase,
-   because the code is ordered and the phase a slot carries matters.
-   - Linear analog codes obey this form by construction [Jakubczak11], whereas our nonlinear
-     learned code acquires it through training.
-3. **(2) The role of training.** Second, the training condition determines whether the rule holds.
-   - The same architecture trained at one constant SNR per image obeys no such rule, since the
-     MMSE rule errs by 0.22 dB and no candidate does better than 0.15 dB.
-   - A constant-SNR code encodes its later phases against the base reconstruction it expects at
-     its training SNR, but the actual base reconstruction changes when the slot SNRs vary. A
-     similar mismatch reduces the gain of the refinement layers in DeepJSCC-l below the training
-     SNR [Kurka21].
-4. **(3) Cost, accuracy and residual error.** Third, the abstraction is inexpensive and accurate,
-   but its small residual error is not negligible.
-   - Twelve decodes per image suffice to calibrate it. Background, not in the prose: the calibrated
-     curves predict held-out mixed-SNR decodes with a mean absolute error of 0.03-0.06 dB per
-     prefix length (0.05-0.09 dB on CLIC).
-   - The calibrated abstraction predicts the decoded quality of complete scheduled deliveries with
-     a mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB. This accuracy holds whether
-     the channel reports are exact, noisy (2 dB CQI errors) or aged (correlation 0.8).
-   - For a quality target of 30 dB, a scheduler that takes these predictions as exact leaves an
-     extra 1.7-2.0% of the users below the target, compared with one that models their error.
-     This loss occurs at every cell size from 16 to 128 users.
-5. With this abstraction, each user's state reduces to two numbers, namely the phases received and
-   their accumulated weighted noise. A scheduler can thereby plan each delivery over the remaining
-   slots, provided that its objective accounts for this residual error.
+   Both parts are needed, the MMSE form and a weight per phase, because the code is ordered and
+   the phase a slot carries matters.
+3. **(2) The role of training.** Second, the abstraction results from training under slot-varying
+   SNR, since the same architecture trained at one constant SNR per image obeys no such rule.
+   - Evidence, not in the prose: on that code the MMSE rule errs by 0.22 dB, and no candidate rule
+     does better than 0.15 dB.
+   - Kept for Sections IV-V: a constant-SNR code encodes its later phases against the base
+     reconstruction it expects at its training SNR, but the actual base reconstruction changes
+     when the slot SNRs vary. A similar mismatch reduces the gain of the refinement layers in
+     DeepJSCC-l below the training SNR (Kurka21, cited in Section II-B).
+4. **(3) Calibration, accuracy and the remaining error.** Third, the abstraction can be calibrated
+   from a small number of decodes per image. It then predicts the quality of complete scheduled
+   deliveries accurately, even with noisy or aged channel reports. The remaining prediction error
+   is small but not negligible, since a scheduler that ignores it leaves more users below a
+   quality target.
+   - Evidence, not in the prose: twelve decodes per image calibrate the curves, which predict
+     held-out mixed-SNR decodes with a mean absolute error of 0.03-0.06 dB per prefix length
+     (0.05-0.09 dB on CLIC).
+   - Evidence, not in the prose: the predicted quality of complete scheduled deliveries has a
+     mean absolute error of 0.06-0.09 dB and a bias within ±0.03 dB, whether the reports are
+     exact, carry 2 dB CQI errors, or are aged (correlation 0.8).
+   - Evidence, not in the prose: a scheduler that takes the calibrated curves as exact leaves an
+     extra 1.7-2.0% of the users below 30 dB, against one that models their error, at every cell
+     size from 16 to 128 users.
+5. These findings show that a learned code can be scheduled through its link abstraction, provided
+   that the scheduler models this error.
+   - Background, not in the prose: under the abstraction, each user's state reduces to two
+     numbers, the phases received and their accumulated weighted noise (paragraph 5).
 
 ## Paragraph 5. The method: CLASP
 
@@ -323,11 +331,10 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [17] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
 | [18] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
 | [19] Jakubczak11 | S. Jakubczak and D. Katabi, "A cross-layer design for scalable mobile video," in Proc. 17th Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Las Vegas, NV, USA, Sep. 2011, pp. 289–300, doi: 10.1145/2030613.2030646. |
-| [20] Kurka21 | D. B. Kurka and D. Gündüz, "Bandwidth-agile image transmission with deep joint source-channel coding," IEEE Trans. Wireless Commun., vol. 20, no. 12, pp. 8081–8095, Dec. 2021, doi: 10.1109/TWC.2021.3090048. |
-| [21] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
-| [22] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
-| [23] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
-| [24] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
+| [20] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
+| [21] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
+| [22] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
+| [23] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
 
 ## Numbers used
 
