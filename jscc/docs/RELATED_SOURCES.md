@@ -218,21 +218,21 @@ authors and title).
   how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
   value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
 
-**[22] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
-- Says (I, II-C): the Lagrangian priority value is the greatest tax under which processing is
-  optimal; serving in that order is asymptotically optimal; one multiplier per stage.
-- Support (abstract): "we define the Lagrangian priority value as the greatest tax under which it
-  is optimal to activate the arm"; "establish its asymptotic optimality as the system scales".
-  Read in full (`fulltext_readings.md` item 4): "Lagrangian relaxation with one multiplier per
-  stage".
-
-**[23] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
+**[22] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
 - Says (I, II-C): relaxing the limit on the number of items selected gives an upper bound and the
   Lagrangian index policy, both asymptotically optimal with many items; tie-breaking matters.
 - Support (abstract): "a Lagrangian relaxation of the DP that relaxes the constraint limiting the
   number of items that may be selected"; "upper bounds on the performance of an optimal policy";
   "under mild conditions, these policies and bounds are asymptotically optimal for problems with
   many items; mixed policies and tiebreaking play an essential role".
+
+**[23] Hao22.** IEEE TAC 2022; 5; *used* (the Lagrangian priority policy is CLASP's policy).
+- Says (I, II-C): the Lagrangian priority value is the greatest tax under which processing is
+  optimal; serving in that order is asymptotically optimal; one multiplier per stage.
+- Support (abstract): "we define the Lagrangian priority value as the greatest tax under which it
+  is optimal to activate the arm"; "establish its asymptotic optimality as the system scales".
+  Read in full (`fulltext_readings.md` item 4): "Lagrangian relaxation with one multiplier per
+  stage".
 
 **[24] Sullivan12.** IEEE TCSVT 2012; 7753; highly cited; *used* (HEVC in the digital baseline).
 - Says (II-A, III-D): HEVC as the standard codec; the HEIC files of the digital baseline use HEVC
