@@ -142,26 +142,26 @@ deadline."
      with exact channel knowledge and capacity-achieving codes [Bourtsoulatze19, Kurka20]. Whether
      this advantage persists under the reports of a real base station remains open.
 
-## Paragraph 4. The requirement the challenges share, and the pilot findings
+## Paragraph 4. Why the first challenge comes first, and the pilot findings
 
 Only the findings are stated, without their numbers. The numbers behind each finding are listed
 under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in Sections IV-V.
 
-1. The three challenges share one requirement, namely a link abstraction that maps the SNRs of the
-   slots carrying an image to its decoded quality. Such an abstraction would let a scheduler value
-   each slot for each user, plan over the remaining slots and quantify the error of its quality
-   predictions. Two questions therefore arise, namely whether such an abstraction exists for a
-   learned code and how the code should be trained for it to hold.
-   - To answer these questions, we trained a progressive code under slot-varying SNR and tested
-     candidate rules on images and SNR patterns that were not used to fit them (Sections IV-B and
-     V-A). Three findings emerged.
+1. The first challenge underlies the other two, since a scheduler needs a link abstraction both to
+   plan over the remaining slots with a certificate and to account for prediction errors. We
+   therefore ask whether the decoded quality of a learned code can be predicted from its slot SNRs
+   at all, and how the code should be trained to make this possible.
+   - To answer these questions, we trained the same progressive architecture in two ways, under
+     slot-varying SNR and at one constant SNR per image. We then compared candidate rules on both
+     codes and evaluated the most accurate rule within a scheduler (Sections IV-B, V-A and V-F).
+     Three findings emerged.
    - Background, not in the prose: the code has six phases, and in training the chunks of each
      codeword meet independent SNRs. It is a vision transformer whose encoder and decoder never
      see the SNR.
-2. **(1) An additive MMSE abstraction.** First, the distortion of this code is well described by a
-   source term plus a weighted sum of per-slot minimum mean-square-error (MMSE) terms, a form that
-   linear analog codes have by construction [Jakubczak11]. This additive MMSE rule predicts the
-   decoded quality more accurately than EESM and MIESM.
+2. **(1) An additive MMSE abstraction.** First, the code trained under slot-varying SNR has an
+   additive link abstraction, a property that linear analog codes have by construction
+   [Jakubczak11]. A source term plus a weighted sum of per-slot minimum mean-square-error (MMSE)
+   terms predicts its decoded quality more accurately than EESM and MIESM.
    - Evidence, not in the prose: D = Dsrc + C Σ_j ρ_j φ(n_j). Mean absolute error on held-out
      decodes, every rule given the same per-phase sensitivity weights (in brackets, the rule's
      standard equal-weight form):
@@ -174,17 +174,17 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
    Both parts are needed, the MMSE form and a weight per phase, because the code is ordered and
    the phase a slot carries matters.
 3. **(2) The role of training.** Second, the training condition determines whether the abstraction
-   holds. When the same architecture is trained at one constant SNR per image, none of the candidate
-   rules predicts its decoded quality with comparable accuracy.
+   holds. For the code trained at one constant SNR per image, none of the candidate rules predicts
+   the decoded quality with comparable accuracy.
    - Evidence, not in the prose: on that code the MMSE rule errs by 0.22 dB, and no candidate rule
      does better than 0.15 dB.
    - Kept for Sections IV-V: a constant-SNR code encodes its later phases against the base
      reconstruction it expects at its training SNR, but the actual base reconstruction changes
      when the slot SNRs vary. A similar mismatch reduces the gain of the refinement layers in
      DeepJSCC-l below the training SNR (Kurka21, cited in Section II-B).
-4. **(3) Calibration, accuracy and the remaining error.** Third, the abstraction can be calibrated
-   from a small number of decodes per image. It then predicts the quality of complete scheduled
-   deliveries accurately, even with noisy or aged channel reports. The remaining prediction error
+4. **(3) Calibration, accuracy and the remaining error.** Third, this abstraction can be
+   calibrated from a small number of decodes per image. Within a scheduler, it then predicts the
+   quality of complete deliveries accurately, even with noisy or aged channel reports. The remaining prediction error
    is small but not negligible, since a scheduler that ignores it leaves more users below a
    quality target.
    - Evidence, not in the prose: twelve decodes per image calibrate the curves, which predict
