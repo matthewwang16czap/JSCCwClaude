@@ -91,12 +91,12 @@ abstraction, a property that linear analog codes have by construction \cite{Jaku
 term plus a weighted sum of per-slot minimum mean-square-error (MMSE) terms predicts its decoded
 quality more accurately than EESM and MIESM. Second, the training condition determines whether the
 abstraction holds. For the code trained at one constant SNR per image, none of the candidate rules
-predicts the decoded quality with comparable accuracy. Third, this abstraction can be calibrated
-from a small number of decodes per image. Within a scheduler, it then predicts the quality of
-complete deliveries accurately, even with noisy or aged channel reports. The remaining prediction
-error is small but not negligible, since a scheduler that ignores it leaves more users below a
-quality target. These findings show that a learned code can be scheduled through its link
-abstraction, provided that the scheduler models this error.
+predicts the decoded quality with comparable accuracy. Third, the abstraction remains accurate on
+the slots that a scheduler selects. It can be calibrated for each image from a small number of
+decodes, but the calibrated predictions retain a residual error. A scheduler that ignores this error
+leaves more users below a quality target than one that models it. These findings indicate that a
+scheduler can rely on the link abstraction of a code trained under slot-varying SNR, provided that
+it accounts for this error.
 
 To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
 of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.
