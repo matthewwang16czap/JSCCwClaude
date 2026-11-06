@@ -80,22 +80,23 @@ station remains open.
 \end{itemize}
 
 The three challenges share one requirement, namely a link abstraction that maps the SNRs of the
-slots carrying an image to its decoded quality. Such an abstraction would let a scheduler value
-each slot for each user, plan over the remaining slots and quantify the error of its quality
-predictions. Two questions therefore arise, namely whether such an abstraction exists for a learned
-code and how the code should be trained for it to hold. To answer these questions, we trained a
-progressive code under slot-varying SNR and compared candidate rules on held-out decodes
-(Sections~\ref{sec:method-abstraction} and~\ref{sec:eval-abstraction}). Three findings emerged.
-First, the distortion of this code is well described by a source term plus a weighted sum of
-per-slot minimum mean-square-error (MMSE) terms, a form that linear analog codes have by
+slots carrying an image to its decoded quality. Such an abstraction would let a scheduler value each
+slot for each user, plan over the remaining slots and quantify the error of its quality predictions.
+Two questions therefore arise, namely whether such an abstraction exists for a learned code and how
+the code should be trained for it to hold. To answer these questions, we trained a progressive code
+under slot-varying SNR and tested candidate rules on images and SNR patterns that were not used to
+fit them (Sections~\ref{sec:method-abstraction} and~\ref{sec:eval-abstraction}). Three findings
+emerged. First, the distortion of this code is well described by a source term plus a weighted sum
+of per-slot minimum mean-square-error (MMSE) terms, a form that linear analog codes have by
 construction \cite{Jakubczak11}. This additive MMSE rule predicts the decoded quality more
-accurately than EESM and MIESM. Second, the abstraction results from training under slot-varying
-SNR, since the same architecture trained at one constant SNR per image obeys no such rule. Third,
-the abstraction can be calibrated from a small number of decodes per image. It then predicts the
-quality of complete scheduled deliveries accurately, even with noisy or aged channel reports. The
-remaining prediction error is small but not negligible, since a scheduler that ignores it leaves
-more users below a quality target. These findings show that a learned code can be scheduled
-through its link abstraction, provided that the scheduler models this error.
+accurately than EESM and MIESM. Second, the training condition determines whether the abstraction
+holds. When the same architecture is trained at one constant SNR per image, none of the candidate
+rules predicts its decoded quality with comparable accuracy. Third, the abstraction can be
+calibrated from a small number of decodes per image. It then predicts the quality of complete
+scheduled deliveries accurately, even with noisy or aged channel reports. The remaining prediction
+error is small but not negligible, since a scheduler that ignores it leaves more users below a
+quality target. These findings show that a learned code can be scheduled through its link
+abstraction, provided that the scheduler models this error.
 
 To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
 of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.

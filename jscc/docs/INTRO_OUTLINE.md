@@ -152,8 +152,9 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
    each slot for each user, plan over the remaining slots and quantify the error of its quality
    predictions. Two questions therefore arise, namely whether such an abstraction exists for a
    learned code and how the code should be trained for it to hold.
-   - To answer these questions, we trained a progressive code under slot-varying SNR and compared
-     candidate rules on held-out decodes (Sections IV-B and V-A). Three findings emerged.
+   - To answer these questions, we trained a progressive code under slot-varying SNR and tested
+     candidate rules on images and SNR patterns that were not used to fit them (Sections IV-B and
+     V-A). Three findings emerged.
    - Background, not in the prose: the code has six phases, and in training the chunks of each
      codeword meet independent SNRs. It is a vision transformer whose encoder and decoder never
      see the SNR.
@@ -172,8 +173,9 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
 
    Both parts are needed, the MMSE form and a weight per phase, because the code is ordered and
    the phase a slot carries matters.
-3. **(2) The role of training.** Second, the abstraction results from training under slot-varying
-   SNR, since the same architecture trained at one constant SNR per image obeys no such rule.
+3. **(2) The role of training.** Second, the training condition determines whether the abstraction
+   holds. When the same architecture is trained at one constant SNR per image, none of the candidate
+   rules predicts its decoded quality with comparable accuracy.
    - Evidence, not in the prose: on that code the MMSE rule errs by 0.22 dB, and no candidate rule
      does better than 0.15 dB.
    - Kept for Sections IV-V: a constant-SNR code encodes its later phases against the base
