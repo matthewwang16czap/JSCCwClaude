@@ -23,7 +23,7 @@ the deadline. A difference between two shares is the difference of the two perce
 1. Deep JSCC can map an image directly to channel symbols with a single learned encoder and
    decoder, eliminating the separate source and channel codes that digital coding needs (widely
    known in the field, so not cited).
-2. Trained end to end through the channel, deep JSCC beats digital transmission at low SNR and
+2. Trained end to end through the channel, deep JSCC outperforms digital transmission at low SNR and
    degrades gracefully as the channel worsens, instead of failing once the SNR drops below what a
    digital code was designed for [Bourtsoulatze19, Gunduz23].
 3. That makes it a strong candidate for image delivery in 6G, yet a learned code is designed and
@@ -122,8 +122,8 @@ deadline."
      quality of a whole image, as if every symbol of the image met the same channel.
    - Physical link design provides rules for the error rate of a digital block, namely the
      exponential and mutual-information effective SNR mappings (EESM and MIESM) [Ericsson03,
-     EMD09], but no rule is known for how the SNRs of the slots that carry one image combine into
-     the quality of a nonlinear code.
+     EMD09]. To our knowledge, no comparable rule has been reported for how the SNRs of the slots
+     that carry one image combine into the quality of a nonlinear code.
 3. **(2) Absence of tractable and certifiable scheduling.**
    - Choosing the users of every slot up to the deadline, without knowledge of future slots, is a
      stochastic dynamic program whose state grows exponentially with the number of users.
