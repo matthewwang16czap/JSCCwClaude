@@ -202,35 +202,35 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
 
 ## Paragraph 5. The method: CLASP
 
+One paragraph of prose, no list, in the order of the supervisor's template (section 1 of
+`paper_instruction.txt`, as recorded in this outline's first version): name the method, contrast it
+with the closest alternative, state its main designs ("Specifically"), close on performance. It
+does not pair a design with each challenge of paragraph 3.
+
 1. Based on these findings, we propose CLASP (Calibration-aware Link-Abstraction-based Scheduling
    of Progressive codes), a scheduler for learned progressive codes over a multi-user fading
    downlink.
-2. Not in the prose: a sentence contrasting CLASP with existing JSCC methods, since paragraphs 2-4
-   already draw that contrast.
-3. It has one design for each challenge (a list, each item an italic label followed by a colon):
-   - **Calibrated link abstraction (challenge 1).** CLASP schedules a progressive code with the
-     additive MMSE abstraction, which the base station fits to each image from simulated
-     transmissions at two SNRs. Each user's state thereby reduces to two numbers, namely the
-     length of the prefix received so far and its accumulated weighted noise.
-     - Evidence, not in the prose: 12 decodes per image, at 1 and 13 dB for each of the six
-       prefix lengths. The two numbers are the phases received and Y = Σ_j ρ_j φ(n_j).
-   - **Lagrangian restless-bandit scheduling (challenge 2).** On this state, scheduling a frame
-     becomes a finite-horizon restless bandit problem [Whittle88], a model also used to schedule
-     layered video [Hosseini19] and learned semantic codes [McDowell26]. A Lagrangian relaxation
-     with one price per slot decomposes this problem into one small dynamic program per user, and
-     each program is solved exactly. The value of the relaxation is an upper bound on every causal
-     scheduler [Brown20], which certifies how close CLASP is to the optimum. CLASP serves users in
-     the order of the Lagrangian index that these programs define [Hao22, Brown20].
-   - **Calibration-aware decisions (challenge 3).** Each program rewards the probability that the
-     decoded quality of the user reaches the target, rather than a predicted quality that exceeds
-     it. This probability comes from a predictive distribution of the decoded quality, whose
-     spread is set by the measured errors of the calibrated abstraction and of the channel
-     reports. Given an aged report, each program decides on the posterior of the channel rather
-     than on the report itself.
-     - Evidence, not in the prose: the spread, measured offline, is the calibrated curves' error
-       alone with exact reports, 0.03-0.05 dB per prefix length. With noisy or aged reports it
-       includes the reports' error, 0.18-0.97 dB.
-4. Results, not in the prose (paragraph 6 states them):
+2. Unlike the restless-bandit schedulers for layered video [Hosseini19] and learned semantic codes
+   [McDowell26], CLASP obtains the value of each slot from the link abstraction of the code rather
+   than from a decode-or-fail outcome or reinforcement learning.
+3. Specifically, the abstraction reduces the state of each user to two numbers, namely the length
+   of the prefix received so far and its accumulated weighted noise. On this state, deadline
+   scheduling becomes a finite-horizon restless bandit [Whittle88], which a Lagrangian relaxation
+   with one price per slot decomposes into one small dynamic program per user. Solved exactly,
+   these programs give an upper bound on every causal scheduler [Brown20] and an index that orders
+   the users in every slot [Hao22, Brown20]. Each program rewards the probability that the user
+   reaches the quality target, computed from the measured errors of the abstraction and of the
+   channel reports.
+   - Evidence, not in the prose: 12 decodes per image, at 1 and 13 dB for each of the six prefix
+     lengths, calibrate the abstraction. The two numbers are the phases received and
+     Y = Σ_j ρ_j φ(n_j).
+   - Evidence, not in the prose: the spread, measured offline, is the calibrated curves' error
+     alone with exact reports, 0.03-0.05 dB per prefix length. With noisy or aged reports it
+     includes the reports' error, 0.18-0.97 dB. Given an aged report, each program decides on the
+     posterior of the channel (Section IV-D).
+4. Experiments show that CLASP outperforms proportional fair scheduling, per-image rate
+   selection and a digital chain with link adaptation and HARQ, while approaching its
+   Lagrangian bound in large cells. The numbers, not in the prose (paragraph 6 states them):
    - Decoded by the codec, in all four decoded cases (Kodak with fresh reports, 2 dB CQI errors
      or aged reports; CLIC with fresh reports), CLASP gains 0.5-0.6 dB of mean PSNR over
      proportional fair and brings an extra 8-15% of the users to 30 dB over per-image rate
@@ -333,8 +333,8 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [17] EMD09 | IEEE 802.16 Broadband Wireless Access Working Group, "IEEE 802.16m evaluation methodology document (EMD)," IEEE 802.16m-08/004r5, Jan. 2009. |
 | [18] Kurka20 | D. B. Kurka and D. Gündüz, "DeepJSCC-f: Deep joint source-channel coding of images with feedback," IEEE J. Sel. Areas Inf. Theory, vol. 1, no. 1, pp. 178–193, May 2020, doi: 10.1109/JSAIT.2020.2987203. |
 | [19] Jakubczak11 | S. Jakubczak and D. Katabi, "A cross-layer design for scalable mobile video," in Proc. 17th Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Las Vegas, NV, USA, Sep. 2011, pp. 289–300, doi: 10.1145/2030613.2030646. |
-| [20] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
-| [21] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
+| [20] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
+| [21] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
 | [22] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
 | [23] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
 

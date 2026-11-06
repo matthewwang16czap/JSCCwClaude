@@ -196,7 +196,21 @@ origin of EESM; *used* (EESM baseline).
   commensurate with its channel quality"; errors "now reduce the sharpness of the received pixels
   but do not cause the video to glitch or stall".
 
-**[20] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
+**[20] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
+the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
+authors and title).
+- Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
+  restless bandit and relaxed to a linear program whose value is plotted beside the policies; up to
+  twice the network utilization of PF; layered video already scheduled by a restless bandit, the
+  value of a slot coming from layers that decode or fail (I).
+- Support (abstract): "We model the QA-adaptive scheduling ... as a Restless Bandit"; "our
+  QA-Aware strategy can achieve up to two times improvement in network utilization compared to
+  popular baseline algorithms such as Proportional Fairness". Read in full (arXiv v2); the notes
+  of that reading (`fulltext_readings.md` item 1) record a finite Markov channel per user that sets
+  how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
+  value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
+
+**[21] Whittle88.** J. Appl. Probab. 1988; 814; highly cited.
 - Says (I, II-C, III-E): the constraint on the number of projects operated is relaxed to its
   expected value; the multiplier defines an index; the conjecture of near-optimality (III-E: the
   scheduling problem becomes a restless bandit).
@@ -204,19 +218,6 @@ origin of EESM; *used* (EESM baseline).
   Lagrange multiplier associated with this constraint defines an index"; "for m and n large in
   constant ratio, the policy of operating the m projects of largest current index is nearly
   optimal" (a conjecture).
-
-**[21] Hosseini19.** IEEE Access 2019; 0 citations; *exception*, kept at the authors' request as
-the closest restless-bandit work on video. The published version of arXiv 1612.03985 (same
-authors and title).
-- Says (I, II-A, II-C): scalable video streaming to many users over Markov channels, modeled as a
-  restless bandit and relaxed to a linear program whose value is plotted beside the policies; up to
-  twice the network utilization of PF; layered video already scheduled by a restless bandit.
-- Support (abstract): "We model the QA-adaptive scheduling ... as a Restless Bandit"; "our
-  QA-Aware strategy can achieve up to two times improvement in network utilization compared to
-  popular baseline algorithms such as Proportional Fairness". Read in full (arXiv v2); the notes
-  of that reading (`fulltext_readings.md` item 1) record a finite Markov channel per user that sets
-  how many SVC layers a subchannel carries, the relaxed problem solved as a linear program, its
-  value plotted as "the optimum" beside the policies at 20 users, and layers that decode or fail.
 
 **[22] Brown20.** Manage. Sci. 2020; 72; *used* (the Lagrangian index policy and bound).
 - Says (I, II-C): relaxing the limit on the number of items selected gives an upper bound and the

@@ -96,25 +96,19 @@ it accounts for this error.
 
 Based on these findings, we propose CLASP (Cal\-i\-bra\-tion-aware Link-Ab\-strac\-tion-based
 Scheduling of Progressive codes), a scheduler for learned progressive codes over a multi-user fading
-downlink. It has one design for each challenge:
-\begin{itemize}
-\item \emph{Calibrated link abstraction}: CLASP schedules a progressive code with the additive MMSE
-abstraction, which the base station fits to each image from simulated transmissions at two SNRs.
-Each user's state thereby reduces to two numbers, namely the length of the prefix received so far
-and its accumulated weighted noise.
-\item \emph{Lagrangian restless-bandit scheduling}: On this state, scheduling a frame becomes a
-finite-horizon restless bandit problem \cite{Whittle88}, a model also used to schedule layered
-video \cite{Hosseini19} and learned semantic codes \cite{McDowell26}. A Lagrangian relaxation with
-one price per slot decomposes this problem into one small dynamic program per user, and each
-program is solved exactly. The value of the relaxation is an upper bound on every causal scheduler
-\cite{Brown20}, which certifies how close CLASP is to the optimum. CLASP serves users in the order
-of the Lagrangian index that these programs define \cite{Hao22,Brown20}.
-\item \emph{Calibration-aware decisions}: Each program rewards the probability that the decoded
-quality of the user reaches the target, rather than a predicted quality that exceeds it. This
-probability comes from a predictive distribution of the decoded quality, whose spread is set by the
-measured errors of the calibrated abstraction and of the channel reports. Given an aged report,
-each program decides on the posterior of the channel rather than on the report itself.
-\end{itemize}
+downlink. Unlike the restless-bandit schedulers for layered video \cite{Hosseini19} and learned
+semantic codes \cite{McDowell26}, CLASP obtains the value of each slot from the link abstraction of
+the code rather than from a decode-or-fail outcome or reinforcement learning. Specifically, the
+abstraction reduces the state of each user to two numbers, namely the length of the prefix received
+so far and its accumulated weighted noise. On this state, deadline scheduling becomes a
+finite-horizon restless bandit \cite{Whittle88}, which a Lagrangian relaxation with one price per
+slot decomposes into one small dynamic program per user. Solved exactly, these programs give an
+upper bound on every causal scheduler \cite{Brown20} and an index that orders the users in every
+slot \cite{Hao22,Brown20}. Each program rewards the probability that the user reaches the quality
+target, computed from the measured errors of the abstraction and of the channel reports.
+Experiments show that CLASP outperforms proportional fair scheduling, per-image rate selection and
+a digital chain with link adaptation and HARQ, while approaching its Lagrangian bound in large
+cells.
 
 The main contributions of this paper are as follows.
 \begin{itemize}
