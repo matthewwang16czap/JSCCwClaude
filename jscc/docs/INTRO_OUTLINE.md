@@ -39,32 +39,29 @@ the deadline. A difference between two shares is the difference of the two perce
 
 ## Paragraph 2. Existing approaches: physical link design and JSCC design (Fig. 1)
 
-Order: physical link design and its limitations first; then "In contrast," JSCC design, the
-category ours belongs to. Both are described by their schedulers, since from paragraph 1 on the
-transmission is a learned code.
+Order: physical link design and its limitations first; then "In contrast," JSCC design, the category
+ours belongs to. No sentence introduces the two names; the panels of Fig. 1 carry them. Both are
+described by their schedulers, since from paragraph 1 on the transmission is a learned code.
 
-1. Existing approaches to serving images to many users over a fading downlink fall into two
-   categories, namely physical link design and JSCC design. The scheduler of the former serves
-   the bits of a separate image codec, whereas that of the latter serves a learned code.
-2. Physical link design is how cellular systems deliver images today. As illustrated in
+1. Physical link design is how cellular systems deliver images today. As illustrated in
    Fig. 1(a), its scheduler selects both the served users and the rate of their blocks in every
    slot.
-3. Link adaptation sets each rate from the CQI, HARQ retransmits failed blocks, and PF
+2. Link adaptation sets each rate from the CQI, HARQ retransmits failed blocks, and PF
    scheduling serves each user near the peak of its channel quality [Goldsmith97, Caire01,
    Viswanath02].
-4. **Limitation 1.** These designs assume that each block is either decoded or lost and produce
+3. **Limitation 1.** These designs assume that each block is either decoded or lost and produce
    the cliff effect, in which a slot below the design SNR of its block delivers nothing and any
    SNR above it adds no quality [Bourtsoulatze19, Gunduz23].
-5. **Limitation 2.** Link adaptation and HARQ protect the bits from imperfect channel knowledge
+4. **Limitation 2.** Link adaptation and HARQ protect the bits from imperfect channel knowledge
    only by spending extra slots.
-6. In contrast, JSCC design constructs the downlink on a learned code, whose distortion varies
+5. In contrast, JSCC design constructs the downlink on a learned code, whose distortion varies
    continuously with the SNR of its symbols. Hence no transmission is lost outright, and no coding
    rate has to be matched to an uncertain report.
-7. On a single link, per-image rate selection sends each image at the least rate at which its
+6. On a single link, per-image rate selection sends each image at the least rate at which its
    predicted quality meets a target [Zhang23].
-8. As illustrated in Fig. 1(b), multi-user schedulers in this category value each user by such a
+7. As illustrated in Fig. 1(b), multi-user schedulers in this category value each user by such a
    predicted quality rather than by bits.
-9. They allocate the shared channel by the quality predicted at each user's SNR [Yan22, Xia24,
+8. They allocate the shared channel by the quality predicted at each user's SNR [Yan22, Xia24,
    Hou26], train an allocation policy by deep reinforcement learning [Wang22, Zhang23t], or embed
    such learning in a restless bandit over fading slots [McDowell26] (Section II-B).
 
@@ -205,34 +202,35 @@ under it as evidence, in the order of `docs/INTRO_NUMBERS.md`, and are quoted in
 
 ## Paragraph 5. The method: CLASP
 
-1. To address the aforementioned challenges, we propose CLASP (Calibration-aware,
-   Link-Abstraction-based Scheduling of Progressive codes), a scheduler for learned progressive
-   codes in a multi-user fading downlink.
-2. Existing JSCC methods value each user at one SNR and allocate once, or learn the allocation by
-   reinforcement learning. Unlike them, CLASP values every slot for every user through the code's
-   link abstraction, and plans each user's delivery to the deadline exactly.
-3. Specifically, CLASP has one design for each challenge:
-   - **Challenge (1), the link abstraction.** We train the progressive code under slot-varying
-     SNR and calibrate its MMSE link abstraction per image from 12 decodes. Each user then becomes
-     a two-number state.
-   - **Challenge (2), the scheduler.** On this state the frame becomes a finite-horizon restless
-     bandit [Whittle88], a model already used to schedule layered video [Hosseini19] and learned
-     semantic codes [McDowell26]:
-     - a Lagrangian relaxation splits it into one small dynamic program per user under per-slot
-       prices, solved exactly on a CPU;
-     - the relaxation's value is an upper bound on every causal scheduler;
-     - users are served in the order of the Lagrangian index those programs define [Hao22,
-       Brown20].
-   - **Challenge (3), imperfect information.**
-     - Each program rewards the probability of reaching the quality target under a calibrated
-       predictive distribution of the user's decoded quality, rather than a hard threshold on
-       the predicted quality.
-     - The distribution's spread is the measured error of the prediction, measured offline. With
-       exact reports it is the calibrated curves' error alone, 0.03-0.05 dB per prefix length.
-       With noisy or aged reports it includes the reports' error, 0.18-0.97 dB.
-     - Each program decides on the posterior of the channel given an aged report, not on the
-       report itself.
-4. Results:
+1. Based on these findings, we propose CLASP (Calibration-aware Link-Abstraction-based Scheduling
+   of Progressive codes), a scheduler for learned progressive codes over a multi-user fading
+   downlink.
+2. Not in the prose: a sentence contrasting CLASP with existing JSCC methods, since paragraphs 2-4
+   already draw that contrast.
+3. It has one design for each challenge (a list, each item an italic label followed by a colon):
+   - **Calibrated link abstraction (challenge 1).** CLASP schedules a progressive code with the
+     additive MMSE abstraction, which the base station fits to each image from simulated
+     transmissions at two SNRs. Each user's state thereby reduces to two numbers, namely the
+     length of the prefix received so far and its accumulated weighted noise.
+     - Evidence, not in the prose: 12 decodes per image, at 1 and 13 dB for each of the six
+       prefix lengths. The two numbers are the phases received and Y = Σ_j ρ_j φ(n_j).
+   - **Lagrangian restless-bandit scheduling (challenge 2).** On this state, scheduling a frame
+     becomes a finite-horizon restless bandit problem [Whittle88], a model also used to schedule
+     layered video [Hosseini19] and learned semantic codes [McDowell26]. A Lagrangian relaxation
+     with one price per slot decomposes this problem into one small dynamic program per user, and
+     each program is solved exactly. The value of the relaxation is an upper bound on every causal
+     scheduler [Brown20], which certifies how close CLASP is to the optimum. CLASP serves users in
+     the order of the Lagrangian index that these programs define [Hao22, Brown20].
+   - **Calibration-aware decisions (challenge 3).** Each program rewards the probability that the
+     decoded quality of the user reaches the target, rather than a predicted quality that exceeds
+     it. This probability comes from a predictive distribution of the decoded quality, whose
+     spread is set by the measured errors of the calibrated abstraction and of the channel
+     reports. Given an aged report, each program decides on the posterior of the channel rather
+     than on the report itself.
+     - Evidence, not in the prose: the spread, measured offline, is the calibrated curves' error
+       alone with exact reports, 0.03-0.05 dB per prefix length. With noisy or aged reports it
+       includes the reports' error, 0.18-0.97 dB.
+4. Results, not in the prose (paragraph 6 states them):
    - Decoded by the codec, in all four decoded cases (Kodak with fresh reports, 2 dB CQI errors
      or aged reports; CLIC with fresh reports), CLASP gains 0.5-0.6 dB of mean PSNR over
      proportional fair and brings an extra 8-15% of the users to 30 dB over per-image rate
@@ -337,8 +335,8 @@ it, are in `docs/RELATED_SOURCES.md`.
 | [19] Jakubczak11 | S. Jakubczak and D. Katabi, "A cross-layer design for scalable mobile video," in Proc. 17th Annu. Int. Conf. Mobile Comput. Netw. (MobiCom), Las Vegas, NV, USA, Sep. 2011, pp. 289–300, doi: 10.1145/2030613.2030646. |
 | [20] Whittle88 | P. Whittle, "Restless bandits: Activity allocation in a changing world," J. Appl. Probab., vol. 25, no. A, pp. 287–298, 1988, doi: 10.2307/3214163. |
 | [21] Hosseini19 | S. A. Hosseini and S. S. Panwar, "Restless video bandits: Optimal SVC streaming in a multi-user wireless network," IEEE Access, vol. 7, pp. 150805–150822, 2019, doi: 10.1109/ACCESS.2019.2947902. |
-| [22] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
-| [23] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
+| [22] Brown20 | D. B. Brown and J. E. Smith, "Index policies and performance bounds for dynamic selection problems," Manage. Sci., vol. 66, no. 7, pp. 3029–3050, Jul. 2020, doi: 10.1287/mnsc.2019.3342. |
+| [23] Hao22 | L. Hao, Y. Xu, and L. Tong, "Asymptotically optimal Lagrangian priority policy for deadline scheduling with processing rate limits," IEEE Trans. Autom. Control, vol. 67, no. 1, pp. 236–250, Jan. 2022, doi: 10.1109/TAC.2021.3049340. |
 
 ## Numbers used
 

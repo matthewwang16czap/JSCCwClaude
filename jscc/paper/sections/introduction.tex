@@ -1,24 +1,20 @@
 \section{Introduction}
 \label{sec:intro}
 
-\IEEEPARstart{D}{eep} joint source-channel coding (JSCC) can map an image directly to channel symbols
-with a single learned encoder and decoder, eliminating the separate source and channel codes that
-digital coding needs. Trained end to end through the channel, deep JSCC outperforms digital
+\IEEEPARstart{D}{eep} joint source-channel coding (JSCC) can map an image directly to channel 
+symbols with a single learned encoder and decoder, eliminating the separate source and channel codes 
+that digital coding needs. Trained end to end through the channel, deep JSCC outperforms digital
 transmission at low signal-to-noise ratio (SNR) and degrades gracefully as the channel worsens,
-instead of failing once the SNR drops below what a digital code was designed for \cite{Bourtsoulatze19,Gunduz23}.
-That makes it a strong candidate for image delivery in 6G, yet a learned code is designed and
-evaluated on a single link at a given SNR. A cellular downlink is a multi-user multi-slot system
-with fading, imperfect channel knowledge and deadlines, so the gain reported for a learned code on a
-single link \cite{Bourtsoulatze19,Xu22,Yang25} is reduced when a base station delivers to many users
-over fading slots. A base station splits a frame of slots among many users
-through a scheduler, and each user's slots fade independently. Moreover, the base station knows
-only an estimate of the current slot's channel, since a channel-quality report \cite{TS36213} is
-often late or wrong. Since each delivery has a deadline, a low-latency scheduling method is 
-necessary as well.
-
-Existing approaches to serving images to many users over a fading downlink fall into two
-categories, namely \emph{physical link design} and \emph{JSCC design}. The scheduler of the former
-serves the bits of a separate image codec, whereas that of the latter serves a learned code.
+instead of failing once the SNR drops below what a digital code was designed for 
+\cite{Bourtsoulatze19,Gunduz23}. That makes it a strong candidate for image delivery in 6G, yet a 
+learned code is designed and evaluated on a single link at a given SNR. A cellular downlink is a 
+multi-user multi-slot system with fading, imperfect channel knowledge and deadlines, so the gain 
+reported for a learned code on a single link \cite{Bourtsoulatze19,Xu22,Yang25} is reduced when a 
+base station delivers to many users over fading slots. A base station splits a frame of slots 
+among many users through a scheduler, and each user's slots fade independently. Moreover, the base 
+station knows only an estimate of the current slot's channel, since a channel-quality report 
+\cite{TS36213} is often late or wrong. Since each delivery has a deadline, a low-latency scheduling 
+method is necessary as well.
 
 Physical link design is how cellular systems deliver images today. As illustrated in
 Fig.~\ref{fig:overview}(a), its scheduler selects both the served users and the rate of their
@@ -98,25 +94,26 @@ leaves more users below a quality target than one that models it. These findings
 scheduler can rely on the link abstraction of a code trained under slot-varying SNR, provided that
 it accounts for this error.
 
-To address these challenges, we propose CLASP (Cal\-i\-bra\-tion-aware, Link-Ab\-strac\-tion-based Scheduling
-of Progressive codes), a scheduler for learned progressive codes in a multi-user fading downlink.
-Unlike existing JSCC methods, which value each user at one SNR or learn the allocation by
-reinforcement learning, CLASP values every slot for every user through the code's link abstraction and plans each
-user's delivery to the deadline exactly. It has one design for each challenge.
+Based on these findings, we propose CLASP (Cal\-i\-bra\-tion-aware Link-Ab\-strac\-tion-based
+Scheduling of Progressive codes), a scheduler for learned progressive codes over a multi-user fading
+downlink. It has one design for each challenge:
 \begin{itemize}
-\item \emph{Link abstraction.} The progressive code is trained under slot-varying SNR and its MMSE
-link abstraction is calibrated per image, so that each user becomes a two-number state.
-\item \emph{Scheduler.} On this state the frame becomes a finite-horizon restless bandit
-\cite{Whittle88}, a model already used to schedule layered video \cite{Hosseini19} and learned
-semantic codes \cite{McDowell26}. A Lagrangian relaxation splits it into one small dynamic program per user under
-per-slot prices, solved exactly on a CPU; the relaxation's value is an upper bound on every causal
-scheduler; and users are served in the order of the Lagrangian index those programs define
-\cite{Hao22,Brown20}.
-\item \emph{Imperfect information.} Each program rewards the probability of reaching the quality
-target under a calibrated predictive distribution of the user's decoded quality, rather than a hard
-threshold on the predicted quality. The distribution's spread is the measured error of the
-prediction, from the calibrated curves and from the channel reports. Given an aged report, each
-program decides on the posterior of the channel, not on the report itself.
+\item \emph{Calibrated link abstraction}: CLASP schedules a progressive code with the additive MMSE
+abstraction, which the base station fits to each image from simulated transmissions at two SNRs.
+Each user's state thereby reduces to two numbers, namely the length of the prefix received so far
+and its accumulated weighted noise.
+\item \emph{Lagrangian restless-bandit scheduling}: On this state, scheduling a frame becomes a
+finite-horizon restless bandit problem \cite{Whittle88}, a model also used to schedule layered
+video \cite{Hosseini19} and learned semantic codes \cite{McDowell26}. A Lagrangian relaxation with
+one price per slot decomposes this problem into one small dynamic program per user, and each
+program is solved exactly. The value of the relaxation is an upper bound on every causal scheduler
+\cite{Brown20}, which certifies how close CLASP is to the optimum. CLASP serves users in the order
+of the Lagrangian index that these programs define \cite{Hao22,Brown20}.
+\item \emph{Calibration-aware decisions}: Each program rewards the probability that the decoded
+quality of the user reaches the target, rather than a predicted quality that exceeds it. This
+probability comes from a predictive distribution of the decoded quality, whose spread is set by the
+measured errors of the calibrated abstraction and of the channel reports. Given an aged report,
+each program decides on the posterior of the channel rather than on the report itself.
 \end{itemize}
 
 The main contributions of this paper are as follows.
