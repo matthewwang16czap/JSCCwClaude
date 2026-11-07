@@ -12,19 +12,19 @@ multi-user multi-slot system with fading, imperfect channel knowledge and deadli
 reported for a learned code on a single link \cite{Bourtsoulatze19,Xu22,Yang25} is reduced when a 
 base station delivers to many users over fading slots. A base station splits a frame of slots 
 among many users through a scheduler, and each user's slots fade independently. Moreover, the base 
-station knows only an estimate of the current slot's channel, since a channel-quality report 
+station knows only an estimate of the current slot's channel, given a channel-quality report 
 \cite{TS36213} is often late or wrong. Since each delivery has a deadline, a low-latency scheduling 
 method is necessary as well.
 
 Physical link design is how cellular systems deliver images today. As illustrated in
-Fig.~\ref{fig:overview}(a), its scheduler selects both the served users and the rate of their
-blocks in every slot. Link adaptation sets each rate from the channel quality indicator (CQI),
-hybrid automatic repeat request (HARQ) retransmits failed blocks, and proportional fair (PF)
-scheduling serves each user near the peak of its channel quality
-\cite{Goldsmith97,Caire01,Viswanath02}. These designs assume that each block is either decoded 
-or lost and produce the cliff effect, in which a slot below the design SNR of its block delivers 
-nothing and any SNR above it adds no quality \cite{Bourtsoulatze19,Gunduz23}. Moreover, link 
-adaptation and HARQ protect the bits from imperfect channel knowledge only by spending extra slots.
+Fig.~\ref{fig:overview}(a), its scheduler selects both the served users and the rate of their blocks 
+in every slot. Link adaptation sets each rate from the channel quality indicator (CQI), hybrid 
+automatic repeat request (HARQ) retransmits failed blocks, and proportional fair (PF) scheduling 
+serves each user near the peak of its channel quality \cite{Goldsmith97,Caire01,Viswanath02}. 
+These designs assume that each block is either decoded or lost and produce the cliff effect, in 
+which a slot below the design SNR of its block delivers nothing and any SNR above it adds no quality 
+\cite{Bourtsoulatze19,Gunduz23}. Moreover, link adaptation and HARQ protect the bits from imperfect 
+channel knowledge only by spending extra slots.
 
 In contrast, JSCC design constructs the downlink on a learned code, whose distortion varies 
 continuously with the SNR of its symbols. Hence no transmission is lost outright, and no coding rate 
@@ -117,11 +117,11 @@ and the 0.29--0.34~dB of MIESM.
 \item We propose CLASP as a restless-bandit scheduler with exact per-user dynamic programs, whose
 reward accounts for the errors of both the quality predictions and the channel reports.
 \item When every scheduled delivery is decoded by the codec, CLASP gains 0.5--0.6~dB of mean PSNR
-over proportional fair scheduling. It also brings an extra 8--15\% of the users to 30~dB over per-image rate selection.
-Simulated against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2--1.6~dB of
-mean PSNR under 2~dB CQI errors or reports aged to correlation 0.8. Its simulated gap to the upper
-bound falls to 0.005~dB per user at 128 users. Training the code on the channel that CLASP creates
-raises the decoded mean PSNR by a further 0.21~dB.
+over proportional fair scheduling. It also brings an extra 8--15\% of the users to 30~dB over 
+per-image rate selection. Simulated against a digital chain with CQI-table link adaptation and 
+HARQ, it gains 1.2--1.6~dB of mean PSNR under 2~dB CQI errors or reports aged to correlation 0.8. 
+Its simulated gap to the upper bound falls to 0.005~dB per user at 128 users. Training the code on 
+the channel that CLASP creates raises the decoded mean PSNR by a further 0.21~dB.
 \end{itemize}
 
 The rest of the paper is organized as follows. Section~\ref{sec:related} reviews related work, and

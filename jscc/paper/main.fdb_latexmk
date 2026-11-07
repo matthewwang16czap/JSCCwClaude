@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex main"] 1794019798.27064 "main.aux" "main.bbl" "main" 1794019798.99735 0
+["bibtex main"] 1794021364.95202 "main.aux" "main.bbl" "main" 1794022966.20879 0
   "./references.bib" 1793978754.57001 14127 be3fee0ba41e4ea2ccb9906b13c1196a ""
   "/usr/local/texlive/2026/texmf-dist/bibtex/bst/ieeetran/IEEEtran.bst" 1440712899 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "main.aux" 1794019798.82766 10522 1269bbdd901dbde3017940111f8a2c91 "pdflatex"
+  "main.aux" 1794022966.0591 10503 0ed8bd51778eebdf3c049bc83a129228 "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1794019798.33297 "/home/matthewwang16czap/projects/JSCCwClaude/jscc/paper/main.tex" "main.pdf" "main" 1794019798.99749 0
-  "/home/matthewwang16czap/projects/JSCCwClaude/jscc/paper/main.tex" 1793978754.57001 4127 bdbd3bf0683a31f2f887721b35c9fddc ""
+["pdflatex"] 1794022965.54672 "/home/matthewwang16czap/projects/JSCCwClaude/jscc/paper/main.tex" "main.pdf" "main" 1794022966.20893 0
+  "/home/matthewwang16czap/projects/JSCCwClaude/jscc/paper/main.tex" 1794021363.86674 4127 ee413dadfdc0696e460529e77b3f4305 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/local/texlive/2026/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmb7t.tfm" 1136768653 2172 fd0c924230362ff848a33632ed45dc23 ""
@@ -174,10 +174,10 @@
   "/usr/local/texlive/2026/texmf.cnf" 1780064842.98724 455 5b996dcaa0eb4ef14a83b026bc0a008c ""
   "IEEEtran.cls" 1793978754.56601 288451 2ca944e3837f3f55e325ddfd2f1a2479 ""
   "figs/overview.tex" 1793978754.56601 6012 23de17495be84c069489933c410e39b5 ""
-  "main.aux" 1794019798.82766 10522 1269bbdd901dbde3017940111f8a2c91 "pdflatex"
-  "main.bbl" 1794019798.32766 10175 72c8612643693674c2678ce9fd19f6d7 "bibtex main"
-  "main.tex" 1793978754.57001 4127 bdbd3bf0683a31f2f887721b35c9fddc ""
-  "sections/introduction.tex" 1794019797.31167 11061 19d98e578873fc808fb36db41c07c429 ""
+  "main.aux" 1794022966.0591 10503 0ed8bd51778eebdf3c049bc83a129228 "pdflatex"
+  "main.bbl" 1794021365.01474 10175 72c8612643693674c2678ce9fd19f6d7 "bibtex main"
+  "main.tex" 1794021363.86674 4127 ee413dadfdc0696e460529e77b3f4305 ""
+  "sections/introduction.tex" 1794022965.3471 10320 cb005f250c04c708c6fcc9d45dc463fb ""
   "sections/preliminaries.tex" 1793978754.57001 18791 2d1d4e555b26b92a8d9aad2e34b4b610 ""
   "sections/related.tex" 1793978754.57001 11183 c1f1145445663a4f03a0158c79ae6ad0 ""
   (generated)
