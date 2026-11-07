@@ -193,7 +193,10 @@ Where each part of the model is implemented:
   - One retraining round is the fixed point.
 - **Complexity.** Per-user programs cost O(T P n_y n_g) on a CPU. At K 8 the bound and every
   policy take 8.9 s per frame and worker process, 21.3 s with the calibration-aware reward
-  (`tools/rmab_scale.py`).
+  (`tools/rmab_scale.py`). Those are simulation times of everything at once; COMMANDS 41.3 times
+  CLASP alone on one CPU thread (`tools/sched_timing.py`): its planning before a frame (programs,
+  prices, priced programs) and its decision per slot, at K 8-128, against the quality-based
+  allocation of [10]-[12], greedy, PADC and PF, and on a lighter grid.
 
 ## V. Experiments (~5 pages)
 

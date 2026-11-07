@@ -1914,6 +1914,75 @@ def check_paired_runs():
         ok(refused, "a run on other frames (another seed) is refused")
 
 
+def check_timing():
+    """tools/sched_timing.py: it times the policies of the other tools, not copies of them. On
+    the same frames, its clasp (mean PSNR: lagrange; --target: lagrange_soft on the transmitter's
+    curves) and its pf score exactly what tools/rmab_scale.py's lagrange, lagrange_soft and pf
+    score; its quality-based allocation, greedy and PADC run, and every time is positive."""
+    import contextlib
+    import io
+    import json
+
+    import numpy as np
+
+    import tools.rmab_scale as rs
+    import tools.sched_timing as st
+    from alloc.utility import Utility, nested_rho
+
+    print("[scheduler timing]")
+    rng = np.random.default_rng(3)
+    N, P = 8, 6
+    master = np.array([0.49, 0.25, 0.17, 0.07, 0.015, 0.005])
+    base = 10 ** (-np.array([28.7, 31.0, 32.6, 33.4, 33.5, 33.5]) / 10)
+    dsrc = np.stack([base * 10 ** (-rng.uniform(-3, 3) / 10) for _ in range(N)])
+    u = Utility(1.8, [nested_rho(master, L) for L in range(1, P + 1)], dsrc,
+                dsrc * rng.uniform(2.0, 4.0, (N, 1)) * np.linspace(1.0, 0.6, P),
+                [f"im{i}" for i in range(N)], meta={"nested": master.tolist()})
+    b = u.perturbed(0.04, np.random.default_rng(11))
+    common = ["--users", "8", "16", "--frames", "1", "--slots", "8", "--price-steps", "2",
+              "--ny", "48", "--ng", "8"]
+
+    def call(module, name, argv, out):
+        old, buf = sys.argv, io.StringIO()
+        sys.argv = [name] + argv + ["--out", out]
+        try:
+            with contextlib.redirect_stdout(buf):
+                module.main()
+        finally:
+            sys.argv = old
+        with open(out) as fh:
+            return json.load(fh)["per_K"], buf.getvalue()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pu, pb = os.path.join(tmp, "u.json"), os.path.join(tmp, "b.json")
+        u.save(pu)
+        b.save(pb)
+        rm, _ = call(rs, "rmab_scale.py", ["--utility", pu, "--belief", pb] + common
+                     + ["--index-arms", "1", "--policies", "pf", "lagrange"],
+                     os.path.join(tmp, "rm.json"))
+        tm, text = call(st, "sched_timing.py", ["--utility", pu, "--belief", pb] + common,
+                        os.path.join(tmp, "tm.json"))
+        rt, _ = call(rs, "rmab_scale.py", ["--utility", pu, "--belief", pb, "--target", "29"]
+                     + common + ["--index-arms", "1", "--policies", "pf", "lagrange_soft"],
+                     os.path.join(tmp, "rt.json"))
+        tt, _ = call(st, "sched_timing.py", ["--utility", pu, "--belief", pb, "--target", "29"]
+                     + common, os.path.join(tmp, "tt.json"))
+    same = all(abs(tm[k]["clasp"]["score"] - rm[k]["lagrange"]) < 1e-9
+               and abs(tm[k]["pf"]["score"] - rm[k]["pf"]) < 1e-9
+               and abs(tt[k]["clasp"]["score"] - rt[k]["lagrange_soft"]) < 1e-9
+               and abs(tt[k]["pf"]["score"] - rt[k]["pf"]) < 1e-9 for k in ("8", "16"))
+    ok(same, "tools/sched_timing.py times the policies of tools/rmab_scale.py: on the same frames "
+       "its clasp scores as lagrange (mean) and lagrange_soft (target), its pf as pf")
+    runs = [r for tab in (tm, tt) for r in tab.values()]
+    pos = all(r[p]["plan_ms"][0] >= 0 and r[p]["decide_per_slot_ms"][0] > 0
+              and np.isfinite(r[p]["score"]) for r in runs for p in r if isinstance(r[p], dict))
+    parts = all(set(r["clasp"]["parts_ms"]) == {"programs", "prices", "priced"} for r in runs)
+    ok(pos and parts and {"quality", "greedy"} <= set(tm["8"]) and "padc" in tt["8"]
+       and "clasp's planning" in text,
+       "its quality-based allocation, greedy and PADC run; every time is positive, and CLASP's "
+       "planning is split into its programs, prices and priced programs")
+
+
 def check_figures():
     """tools/paper_figs.py reads the tools' outputs back: its parsers round-trip the tables
     tools/schedule_sim.py prints (its own report functions) and tools/utility_fit.py's
@@ -2159,6 +2228,7 @@ def main():
     check_frontier()
     check_freeze(x)
     check_paired_runs()
+    check_timing()
     check_bootstrap_coverage()
     check_figures()
     print("all checks passed")

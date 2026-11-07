@@ -108,6 +108,9 @@ tools/                  smoke.py  check_channel.py  compare_runs.py  paired.py  
                         latency.py (the frame length each policy needs for a quality: the
                         latency budget at equal quality; schedule_sim.py --delay: time to the
                         target within a frame)
+                        sched_timing.py (how long each scheduler takes to decide on one CPU
+                        thread: CLASP's planning before a frame and its decision per slot,
+                        against the quality-based allocation, greedy, PADC and PF)
                         stream_sim.py (continuous traffic: requests arriving over time, a
                         deadline each; reliability within d slots, capacity, delay)
                         paper_figs.py (the paper's figures and tables from results/: PDF + PNG
