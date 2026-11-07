@@ -1,16 +1,17 @@
 ================================================================================
- COMMANDS.txt — rev 2026-11-01. Everything runs on the server, from the jscc/ directory.
+ COMMANDS.txt — rev 2026-11-07. Everything runs on the server, from the jscc/ directory.
  GPUs: ONLY 1, 2, 3 and 4. GPU 0 is kept free and never used.
  (Renumbered 2026-10-19: the broken card was taken out, so the cards that were GPUs 2-5 are
  now GPUs 1-4, and every command below uses the new numbers. Log names such as gpu5_*.out in
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 39 (CPU, ~2 min; no GPU): the redraw with CLASP in the legends and the
-shares of users in % (no "points"); nothing to send back but a "skip" line, if any. Sections 0-36
-are done (docs/NOTES.md 6d-6k; the figures: docs/FIGURES.md, all reviewed); section 39 replaces
-37 and 38. Optional: section 40 compiles the paper draft (Sections I-III) on the IEEE template
-(jscc/paper/main.pdf is already in the repository, built from the same files).
+WHAT TO RUN: section 41 (CPU ~1-1.5 h, GPUs 1-4 ~20-40 min each, then one CPU thread ~1-1.5 h):
+CLASP against the quality-based allocation of the JSCC designs [10]-[12], decoded on the frames
+already decoded for CLASP; the frame each needs at equal quality; and how long CLASP takes to
+decide. Send back everything 41.4 prints. Sections 0-36 are done (docs/NOTES.md 6d-6k; the
+figures: docs/FIGURES.md, all reviewed); section 39 (a redraw, CPU ~2 min) is optional if not run
+yet, and section 40 compiles the paper draft (jscc/paper/main.pdf is already in the repository).
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
 docs/INTRO_NUMBERS.md).
@@ -87,10 +88,13 @@ docs/INTRO_NUMBERS.md).
      legends of fig08 and fig12
   38 redraw: the method's name, CLASP, in      replaced by 39 (the same redraw)
      the legends and Table III's caption
-  39 redraw: CLASP, and the shares of users     TO RUN (CPU, ~2 min)
+  39 redraw: CLASP, and the shares of users     optional if not run yet (CPU, ~2 min)
      in % instead of "points"
   40 compile the paper draft on the IEEE       optional (CPU, seconds; needs pdflatex)
      template (jscc/paper)
+  41 CLASP against the quality-based           TO RUN (CPU ~1-1.5 h; GPUs 1-4 ~20-40 min;
+     allocation of [10]-[12], decoded;          then one CPU thread ~1-1.5 h)
+     latency at equal quality; the timing
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
 that day, before the paper moved to scheduling, and four things are wrong with it now:
@@ -3734,7 +3738,7 @@ grep "skip" results/s38_figs.txt              # nothing; send me any line it pri
 # Reading: "14" (the figures and tables written) and no "skip" line.
 
 ================================================================================
- 39. TO RUN NOW -- redraw: CLASP, and the shares of users in % (CPU, ~2 min; nothing to send back)
+ 39. OPTIONAL IF NOT RUN YET -- redraw: CLASP, and the shares of users in % (CPU, ~2 min)
 ================================================================================
 # Why: the figures and tables wrote a difference between two shares of users (a gain over PADC,
 # a gap to the bound) in "points" (percentage points). They now write it in %, the difference of
@@ -3789,3 +3793,205 @@ grep -c "bibitem" build/main.bbl                 # 43
 # tens of pt would mean a reference was pushed off a page.
 # The log's one LaTeX warning, "Unused global option(s): [lettersize]", comes from the
 # template's first line: V1.8b has no such option and uses letter paper by default.
+
+================================================================================
+ 41. TO RUN NOW -- CLASP against the quality-based allocation of the JSCC designs [10]-[12],
+     decoded; the frame each needs at equal quality; how long CLASP takes to decide
+     (CPU: four chains, ~1-1.5 h; GPUs 1-4: ~20-40 min each; then one CPU thread, ~1-1.5 h)
+================================================================================
+# Why: the Introduction compares CLASP with one existing JSCC design, per-image rate selection
+# (PADC [9]), which is a single-link method adapted to many users. The multi-user JSCC designs
+# it criticises allocate the channel by a quality model at each user's SNR, without planning
+# over the slots left [10]-[12]. This round adds that rule as a baseline, in its best case: the
+# exact optimum of its own objective on our calibrated curves.
+#   fixed_slope     each user's phases from its single-SNR curve at its mean SNR, by the
+#                   equal-slope rule: the largest total predicted quality for the frame; then
+#                   PF timing among the users below their quota (one allocation, as [10]-[12])
+#   adaptive_slope  the same allocation re-planned every slot from what each user holds
+#   greedy          slot by slot, the user with the largest predicted PSNR gain from this slot
+# Bayesian optimisation over a Gaussian-process quality model [12] can only approach the
+# allocation fixed_slope computes exactly, so the comparison favours the baseline. It is
+# described in the paper as "the allocation rule of [10]-[12] on our quality curves", not as a
+# reproduction of one paper. The round also measures:
+#   - latency at equal quality: the frame length each policy needs to match CLASP's mean PSNR
+#     (tools/latency.py, as 21.3 did against PF), and the delivery timing on 500 frames;
+#   - compute: CLASP's planning before a frame and its decision per slot on one CPU thread,
+#     against the baselines, at 8 to 128 users (new: tools/sched_timing.py).
+# Everything runs on the frames of the earlier rounds: the baselines' schedules land on the 60
+# frames already decoded for CLASP (rounds 22 and 30) and on round 30's 2000 main frames, so
+# they are paired with CLASP's numbers frame by frame and CLASP's numbers stay the ones quoted.
+# Only the baselines are decoded. A decode's noise is seeded by its place in its file, never by
+# the policy, so pairing across files is as valid as within one.
+# New in the code: tools/sched_timing.py; smoke: [scheduler timing] (its CLASP and PF schedule
+# exactly as tools/rmab_scale.py's lagrange, lagrange_soft and pf).
+#
+#   41.1  CPU, background: the baselines' schedules on the decoded frames (Kodak with fresh
+#         reports, 2 dB CQI errors and r = 0.8; CLIC fresh; minutes), round 30's 2000 main
+#         frames (~30 min), the delivery timing (~20 min) and latency at equal quality (~1 h)
+#   41.2  GPUs 1-4, background: one decode each (~20-40 min, with MS-SSIM and LPIPS)
+#   41.3  one CPU thread, background, after 41.1 and 41.2 have finished (alone on the CPU,
+#         ~1-1.5 h): the timing at 8-128 users, mean PSNR, the 30 dB target, and a lighter grid
+#   41.4  reading (send back everything it prints)
+
+# 41.0 -- setup, ~5 min CPU ------------------------------------------------------------------
+cd ~/projects/JSCCwClaude-main
+git fetch origin && git checkout claude/gifted-newton-cfldb8 && git pull origin claude/gifted-newton-cfldb8
+cd jscc
+export JSCC_DATA_ROOT=$HOME
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+python -m pyflakes main.py engine.py configs data net utils tools alloc
+python tools/smoke.py 2>&1 | tail -3          # "all checks passed" (new: [scheduler timing])
+mkdir -p results logs_s41
+nvidia-smi -i 1,2,3,4
+cat > logs_s41/env.sh <<'ENV'
+. logs_s30/env.sh
+QB="--policies pf fixed_slope adaptive_slope greedy"
+ENV
+. logs_s41/env.sh
+#   inputs that must exist (send me any line saying "No such file"):
+ls logs_s30/env.sh results/utility_snrc4_nested.json results/belief_snrc4_nested.json results/utility_clic_nested.json results/belief_clic_nested.json results/s22_rep_mean.json results/s30_rep_e2_mean.json results/s22_rep_r80_mean.json results/s22_clic_rep_mean.json results/s22_dec_mean.json results/s30_dec_e2_mean.json results/s22_dec_r80_mean.json results/s22_clic_dec_mean.json results/s30_j_mean_f.json results/s30_j_mean_e2.json results/s30_j_mean_r80.json results/s24_main_soft.txt results/s26_latency_tgt.txt $SNRC4 > /dev/null
+ls -d $CLICDIR > /dev/null                    # CLIC's test images (GPU 4's decode needs them)
+
+# 41.1 -- CPU, background, four chains (one process each) ----------------------------------
+#   rep      the baselines' schedules on the 60 decoded frames (dumps for 41.2; minutes), then
+#            logs_s41/rep.done
+#   main     the baselines on round 30's 2000 main frames, fresh / 2 dB CQI error / r = 0.8
+#            aware, paired in 41.4 with CLASP's runs of round 30 (~30 min)
+#   delay    the delivery timing (--delay) of CLASP and the baselines on 500 frames (~20 min)
+#   latency  the frame length each policy needs to match CLASP at T = 16 and 24 slots
+#            (tools/latency.py, T = 12 ... 32, 300 frames per length; ~1 h)
+cat > logs_s41/cpu.sh <<'CPU'
+. logs_s41/env.sh
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+run() { n=$1; shift; [ -s results/$n.json ] || python tools/schedule_sim.py "$@" --out results/$n.json > results/$n.txt 2>&1; }
+case $1 in
+  rep)
+    run s41_rep_f    $NUB  --frames 60 --dump 60 $QB
+    run s41_rep_e2   $NUB  --frames 60 --dump 60 --cqi-error 2 $QB
+    run s41_rep_r80  $NUB  --frames 60 --dump 60 --cqi-corr 0.8 --cqi-aware $QB
+    run s41_rep_clic $CNUB --frames 60 --dump 60 $QB ;;
+  main)
+    run s41_m_f   $J $QB
+    run s41_m_e2  $J $QB --cqi-error 2
+    run s41_m_r80 $J $QB --cqi-corr 0.8 --cqi-aware ;;
+  delay)
+    [ -s results/s41_delay_mean.txt ] || { python tools/schedule_sim.py $NUB --frames 500 --delay --policies pf fixed_slope adaptive_slope greedy lagrange > results/s41_delay_mean.tmp 2>&1 && mv results/s41_delay_mean.tmp results/s41_delay_mean.txt ; } ;;
+  latency)
+    [ -s results/s41_latency_mean.txt ] || { python tools/latency.py $NUB --frames 300 --slots 12 16 20 24 28 32 --policies pf fixed_slope adaptive_slope greedy lagrange --ref lagrange --at 16 24 --levels 30 31 --out results/s41_latency_mean.json > results/s41_latency_mean.tmp 2>&1 && mv results/s41_latency_mean.tmp results/s41_latency_mean.txt ; } ;;
+esac
+echo done > logs_s41/$1.done
+CPU
+for k in rep main delay latency; do nohup bash logs_s41/cpu.sh $k > logs_s41/$k.log 2>&1 & done
+sleep 120; ls results/s41_rep_*_histories.json      # four files once rep is done
+
+# 41.2 -- GPUs 1-4, background: each card waits for rep.done (up to 12 h), then decodes one
+#   condition's baseline schedules with snrc4, with MS-SSIM and LPIPS (as rounds 22 and 30):
+#   GPU 1 Kodak fresh, GPU 2 Kodak 2 dB CQI error, GPU 3 Kodak r = 0.8, GPU 4 CLIC fresh
+cat > logs_s41/gpu.sh <<'GPU'
+. logs_s41/env.sh
+G=$1
+waitfor() { for i in $(seq 1 720); do [ -e "$1" ] && return 0; sleep 60; done; return 1; }
+dec() { [ -s results/$1.json ] || CUDA_VISIBLE_DEVICES=$G python tools/mixed_snr.py $2 $PM --pretrained $SNRC4 --profiles-json results/$3_histories.json --out results/$1.json > results/$1.txt 2>&1; }
+case $G in
+  1) waitfor logs_s41/rep.done && dec s41_dec_f "$REPF" s41_rep_f ;;
+  2) waitfor logs_s41/rep.done && dec s41_dec_e2 "$REPF" s41_rep_e2 ;;
+  3) waitfor logs_s41/rep.done && dec s41_dec_r80 "$REPF" s41_rep_r80 ;;
+  4) waitfor logs_s41/rep.done && { if [ -d $CLICDIR ]; then dec s41_dec_clic "$CREPF" s41_rep_clic; else echo "no CLIC at $CLICDIR: skipped"; fi ; } ;;
+esac
+echo done > logs_s41/gpu$G.done
+GPU
+for g in 1 2 3 4; do nohup bash logs_s41/gpu.sh $g > logs_s41/gpu$g.log 2>&1 & done
+sleep 60; tail -n 2 logs_s41/gpu*.log
+
+# 41.3 -- one CPU thread, background: the timing waits until 41.1 and 41.2 have finished, so
+#   that it runs alone on the machine, then times 10 frames per K = 8 ... 128 (B = K / 8 units
+#   per slot): CLASP for the mean, CLASP calibration-aware at 30 dB against PADC, and CLASP on a
+#   lighter grid (64 Y points, 8 fading bins, 3 price steps) for the mean. results/s41_cpu.txt
+#   records the CPU.
+cat > logs_s41/timing.sh <<'TIM'
+. logs_s41/env.sh
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+for k in rep main delay latency gpu1 gpu2 gpu3 gpu4; do
+  for i in $(seq 1 1440); do [ -e logs_s41/$k.done ] && break; sleep 60; done
+done
+lscpu > results/s41_cpu.txt 2>&1
+[ -s results/s41_timing_mean.json ] || python tools/sched_timing.py $NUB --frames 10 --out results/s41_timing_mean.json > results/s41_timing_mean.txt 2>&1
+[ -s results/s41_timing_tgt.json ] || python tools/sched_timing.py $NUB --target 30 --frames 10 --out results/s41_timing_tgt.json > results/s41_timing_tgt.txt 2>&1
+[ -s results/s41_timing_light.json ] || python tools/sched_timing.py $NUB --frames 10 --ny 64 --ng 8 --price-steps 3 --out results/s41_timing_light.json > results/s41_timing_light.txt 2>&1
+echo done > logs_s41/timing.done
+TIM
+nohup bash logs_s41/timing.sh > logs_s41/timing.log 2>&1 &
+
+# 41.4 -- reading (send back everything it prints), when logs_s41/ holds rep, main, delay,
+#   latency, gpu1 ... gpu4 and timing .done (9 files) ---------------------------------------
+. logs_s41/env.sh
+ls logs_s41/*.done | wc -l                    # 9
+#   (1) the frames are the old ones: PF's predicted mean PSNR in each new 60-frame run equals the
+#       old run's to the last digit (four lines ending in "same")
+python - <<'PY'
+import json
+for new, old in (("s41_rep_f", "s22_rep_mean"), ("s41_rep_e2", "s30_rep_e2_mean"),
+                 ("s41_rep_r80", "s22_rep_r80_mean"), ("s41_rep_clic", "s22_clic_rep_mean")):
+    a = json.load(open(f"results/{new}.json"))["summary"]["pf"]["mean_psnr"]
+    b = json.load(open(f"results/{old}.json"))["summary"]["pf"]["mean_psnr"]
+    print(f"{new} pf {a:.6f}, {old} pf {b:.6f}: {'same' if abs(a - b) < 1e-9 else 'DIFFERENT'}")
+PY
+#   (2) decoded: CLASP (rounds 22 and 30) against each baseline (this round), paired by frame;
+#       for Kodak fresh also MS-SSIM and LPIPS
+{ for c in f e2 r80 clic; do
+    case $c in f) old=s22_dec_mean ;; e2) old=s30_dec_e2_mean ;; r80) old=s22_dec_r80_mean ;; clic) old=s22_clic_dec_mean ;; esac
+    [ -s results/s41_dec_$c.json ] || { echo "[$c] not decoded"; continue; }
+    echo "== [$c] every policy, decoded, minus the quality-based allocation (fixed_slope)"
+    python tools/replay_report.py results/$old.json results/s41_dec_$c.json --tags clasp qb --base qb:fixed_slope
+    for b in adaptive_slope greedy pf; do
+      echo "== [$c] CLASP minus qb:$b"
+      python tools/replay_report.py results/$old.json results/s41_dec_$c.json --tags clasp qb --base qb:$b | grep "^  clasp:lagrange "
+    done
+  done
+  for m in msssim lpips; do
+    echo "== [f] $m: CLASP minus each baseline"
+    for b in fixed_slope adaptive_slope greedy; do
+      python tools/replay_report.py results/s22_dec_mean.json results/s41_dec_f.json --tags clasp qb --base qb:$b --metric $m | grep "^  clasp:lagrange "
+    done
+  done ; } 2>&1 | tee results/s41_decoded.txt
+#   (3) simulated on round 30's 2000 main frames: CLASP minus each baseline, and the frames check
+#       (round 30's PF minus this round's PF: +0.000)
+{ for c in f e2 r80; do
+    for b in fixed_slope adaptive_slope greedy; do
+      python tools/paired_runs.py --label "[$c] mean PSNR: CLASP - $b" --a results/s30_j_mean_$c.json:lagrange --b results/s41_m_$c.json:$b
+    done
+    python tools/paired_runs.py --label "[$c] check: PF of round 30 - PF of round 41" --a results/s30_j_mean_$c.json:pf --b results/s41_m_$c.json:pf
+  done ; } 2>&1 | tee results/s41_main.txt
+#   (4) the delivery timing on 500 frames, and latency at equal quality
+cat results/s41_delay_mean.txt
+cat results/s41_latency_mean.txt
+#   (5) the timing, and the CPU it ran on
+cat results/s41_timing_mean.txt results/s41_timing_tgt.txt results/s41_timing_light.txt
+grep "Model name\|^CPU(s)\|Thread(s) per core\|MHz" results/s41_cpu.txt
+#   (6) nothing new: CLASP's delivery timing against PADC at 30 dB, from rounds 24 and 26, for
+#       docs/INTRO_NUMBERS.md
+grep -A 9 "^target 30 dB: users at it by slot" results/s24_main_soft.txt
+cat results/s26_latency_tgt.txt
+
+# Reading:
+#   (1) "same" four times. Any "DIFFERENT" means the frames are not the old ones: stop there and
+#       send me the lines.
+#   (2) each "clasp:lagrange" line is CLASP's decoded gain over that baseline, with its interval:
+#       fresh, 2 dB CQI errors and r = 0.8 on Kodak, and CLIC. In the first block of each
+#       condition, clasp:pf and qb:pf are the same PF schedules decoded twice: their gains over
+#       fixed_slope should agree within their intervals (the decoders' own noise).
+#   (3) the same on 2000 frames, simulated; the check lines must read +0.000.
+#   (4) the delay table: per policy, the slot of the first decodable phase and the PSNR averaged
+#       over the frame. CLASP waits for good slots, so its first phase may come later and its
+#       average over the frame may be lower than a myopic baseline's (at 30 dB its first phase
+#       comes at slot 7.75 against PADC's 6.54: docs/PAPER_OUTLINE.md, V-C); that is the price
+#       of its quality at the deadline. The latency table is the
+#       latency the deadline sets: the frame length each baseline needs to reach CLASP's mean
+#       PSNR at T = 16 and 24, and the share of that frame CLASP saves.
+#   (5) per K, CLASP's planning before a frame (median and 90th percentile, ms; split into its
+#       programs, prices and priced programs) and its decision per slot, against the baselines;
+#       the "quality" column is each policy on the same 10 frames (a check, not a result). The
+#       light grid shows how much faster CLASP plans and what that costs it on those frames.
+#   (6) the lines behind the Introduction's latency against PADC (users at 30 dB by each slot,
+#       the mean slot to 30 dB, and the frame PADC needs): already run, now quoted.
