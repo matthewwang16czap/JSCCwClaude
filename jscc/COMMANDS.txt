@@ -6,12 +6,11 @@
  the sections already done keep the numbers they were run with.)
 ================================================================================
 
-WHAT TO RUN: section 41 (CPU ~1-1.5 h, GPUs 1-4 ~20-40 min each, then one CPU thread ~1-1.5 h):
-CLASP against the quality-based allocation of the JSCC designs [10]-[12], decoded on the frames
-already decoded for CLASP; the frame each needs at equal quality; and how long CLASP takes to
-decide. Send back everything 41.4 prints. Sections 0-36 are done (docs/NOTES.md 6d-6k; the
-figures: docs/FIGURES.md, all reviewed); section 39 (a redraw, CPU ~2 min) is optional if not run
-yet, and section 40 compiles the paper draft (jscc/paper/main.pdf is already in the repository).
+WHAT TO RUN: nothing new. Section 41 is done (sent back 2026-11-07, docs/NOTES.md 6l), and its
+numbers are in the Introduction's paragraphs 5 and 6. Sections 0-36 and 41 are done
+(docs/NOTES.md 6d-6l; the figures: docs/FIGURES.md, all reviewed); section 39 (a redraw, CPU
+~2 min) is optional if not run yet, and section 40 compiles the paper draft (jscc/paper/main.pdf
+is already in the repository, rebuilt with this revision).
 Section 29 is optional: it reruns the code review's checks (docs/CORRECTNESS_REVIEW.md). Still
 to review: the Introduction outline from paragraph 2 on (docs/INTRO_OUTLINE.md; its numbers:
 docs/INTRO_NUMBERS.md).
@@ -92,8 +91,8 @@ docs/INTRO_NUMBERS.md).
      in % instead of "points"
   40 compile the paper draft on the IEEE       optional (CPU, seconds; needs pdflatex)
      template (jscc/paper)
-  41 CLASP against the quality-based           TO RUN (CPU ~1-1.5 h; GPUs 1-4 ~20-40 min;
-     allocation of [10]-[12], decoded;          then one CPU thread ~1-1.5 h)
+  41 CLASP against the quality-based           done (docs/NOTES.md 6l)
+     allocation of [10]-[12], decoded;
      latency at equal quality; the timing
 
 WHY WAVE C2 (old sections 2-4) IS RETIRED. It was written on 2026-10-09 for the plan of
@@ -3795,7 +3794,7 @@ grep -c "bibitem" build/main.bbl                 # 43
 # template's first line: V1.8b has no such option and uses letter paper by default.
 
 ================================================================================
- 41. TO RUN NOW -- CLASP against the quality-based allocation of the JSCC designs [10]-[12],
+ 41. DONE 2026-11-07 (docs/NOTES.md 6l) -- CLASP against the quality-based allocation of [10]-[12],
      decoded; the frame each needs at equal quality; how long CLASP takes to decide
      (CPU: four chains, ~1-1.5 h; GPUs 1-4: ~20-40 min each; then one CPU thread, ~1-1.5 h)
 ================================================================================

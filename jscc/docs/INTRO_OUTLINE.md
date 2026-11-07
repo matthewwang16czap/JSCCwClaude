@@ -226,13 +226,20 @@ does not pair a design with each challenge of paragraph 3.
      alone with exact reports, 0.03-0.05 dB per prefix length. With noisy or aged reports it
      includes the reports' error, 0.18-0.97 dB. Given an aged report, each program decides on the
      posterior of the channel (Section IV-D).
-4. Experiments show that CLASP outperforms proportional fair scheduling, per-image rate
-   selection and a digital chain with link adaptation and HARQ. The numbers, not in the prose
-   (paragraph 6 states the main ones):
+4. Experiments show that CLASP outperforms the quality-based allocation of [Yan22, Xia24,
+   Hou26], per-image rate selection and a digital chain with link adaptation and HARQ. The
+   numbers, not in the prose (paragraph 6 states the main ones):
    - Decoded by the codec, in all four decoded cases (Kodak with fresh reports, 2 dB CQI errors
-     or aged reports; CLIC with fresh reports), CLASP gains 0.5-0.6 dB of mean PSNR over
-     proportional fair and brings an extra 8-15% of the users to 30 dB over per-image rate
-     selection [Zhang23].
+     or aged reports; CLIC with fresh reports), CLASP gains 0.43-0.60 dB of mean PSNR over the
+     quality-based allocation of [Yan22, Xia24, Hou26] on the same calibrated curves, 0.5-0.6 dB
+     over proportional fair, and brings an extra 8-15% of the users to 30 dB over per-image rate
+     selection [Zhang23]. The allocation itself is only 0.03-0.08 dB ahead of proportional fair.
+   - Simulated, CLASP matches the mean PSNR of the quality-based allocation under a 13-19%
+     shorter deadline (frames of 16 and 24 slots). Its first decodable phase comes later (slot
+     7.12 against 4.50), so the latency claim is about the deadline, not the first image.
+   - Not a claim: CLASP's planning takes 3.4 s per frame at 8 users and 52 s at 128 users in
+     Python on one CPU thread, linear in the number of users; a decision per slot takes 0.9-14
+     ms. The quality-based allocation plans in 0.8-13 ms (`docs/NOTES.md` 6l).
    - Simulated against the bound, its gap shrinks to 0.005 dB per user at 128 users for mean
      PSNR; for the target, its share of users at 30 dB is within ±0.3% of the bound from 16
      users on.
@@ -277,14 +284,22 @@ of `docs/INTRO_NUMBERS.md`.
      Kodak, fresh reports) and entry 59 (missed 0.0% against 1.2%).
    - Not in the prose: the gap for mean PSNR goes from 0.21 to 0.005 dB per user between 8 and
      128 users; for the target it is within ±0.3% of the bound from 16 users on (entries 50-51).
-3. When every scheduled delivery is decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR
-   over proportional fair scheduling. It brings an extra 8-15% of the users to 30 dB over
-   per-image rate selection [Zhang23] in every decoded case, including noisy and aged reports.
-   Simulated against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2-1.6 dB
-   of mean PSNR under 2 dB CQI errors or reports aged to correlation 0.8. Training the code on the
-   channel that CLASP creates raises the decoded mean PSNR by a further 0.21 dB.
-   - Evidence: entries 29 (PF), 30 and 60 (per-image rate selection, the four decoded cases:
-     14.8%, 13.3%, 12.5% and 8.1%), 34 (the digital chain) and 41 (0.21 dB, two seeds).
+3. Given the same calibrated quality curves, CLASP gains 0.43-0.60 dB of mean PSNR over the
+   quality-based allocation of [Yan22, Xia24, Hou26] when every scheduled delivery is decoded by
+   the codec. Simulations show that CLASP matches the mean PSNR of this allocation under a 13-19%
+   shorter deadline. It also brings an extra 8-15% of the users to 30 dB over per-image rate
+   selection [Zhang23] in every decoded case, including noisy and aged reports. Simulated against
+   a digital chain with CQI-table link adaptation and HARQ, it achieves a 1.2-1.6 dB higher mean
+   PSNR under 2 dB CQI errors or reports aged to correlation 0.8.
+   - Evidence: entries 63 (the quality-based allocation, the four decoded cases: +0.472, +0.433,
+     +0.456 and +0.597 dB), 64 (13.0% fewer slots at 16 slots, 19.2% at 24), 30 and 60
+     (per-image rate selection, the four decoded cases: 14.8%, 13.3%, 12.5% and 8.1%) and 34 (the
+     digital chain).
+   - Not in the prose: re-planned every slot, the allocation does no better (CLASP +0.44 to
+     +0.59 dB over it, decoded); slot by slot (greedy) it does worse (+0.65 to +0.95 dB). Over
+     proportional fair CLASP gains 0.51-0.63 dB, decoded (entry 29).
+   - Not in the prose: training the code on the channel that CLASP creates adds 0.21 dB, decoded
+     on the same slots, two seeds (entry 41).
    - Not in the prose: against the digital chain, CLASP leads at every CSI condition tested,
      1.2-1.6 dB and an extra 13-16% of the users at 30 dB with 2 dB CQI errors or reports aged to
      correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
@@ -297,7 +312,7 @@ of `docs/INTRO_NUMBERS.md`.
 | challenge (paragraph 3) | design in CLASP (paragraph 5) | evidence (paragraph 6) |
 |---|---|---|
 | (1) link abstraction | slot-varying-SNR training; MMSE link abstraction calibrated per image from 12 decodes | mean absolute error 0.055-0.083 dB, against EESM 0.16-0.19 and MIESM 0.29-0.34 with the same weights; decoded schedules 0.06-0.09 dB, bias within ±0.03 dB |
-| (2) tractable and certifiable scheduling | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.5-0.6 dB over PF (decoded) |
+| (2) tractable and certifiable scheduling | two-number state → finite-horizon restless bandit: exact per-user programs, Lagrangian bound, Lagrangian index | per-user gap to the bound 0.21 → 0.005 dB, 8 → 128 users (simulated); +0.43-0.60 dB over the myopic quality-based allocation of [10]-[12] (decoded); its mean PSNR under a 13-19% shorter deadline (simulated) |
 | (3) imperfect information | a calibration-aware reward: the probability of reaching the target under the prediction's measured error (the curves' and the reports'); programs on the channel posterior given aged reports | an extra 1.7% of the users at 30 dB over the hard target, users missed 0.0% against 1.2% (decoded); an extra 13.3% / 12.5% over PADC at 2 dB CQI errors / r = 0.8 (decoded); +1.2-1.6 dB and an extra 13-16% over digital (simulated); aged reports cost CLASP 0.6 dB, digital 1.9 dB |
 
 ## Paragraph 7. Organisation
@@ -308,10 +323,11 @@ The rest of the paper is organised as follows:
   delivery, JSCC design (adaptive and multi-user learned codes), and restless bandits with index
   policies.
 - Section III states the system model and the problem.
-- Section IV presents the method: training the progressive code under slot-varying SNR, its
-  MMSE link abstraction, CLASP, and training the code on the channel CLASP creates.
-- Section V evaluates it: the abstraction's accuracy, and CLASP against proportional fair,
-  per-image rate selection, the Lagrangian bound and the digital chain.
+- Section IV presents the training of the progressive code and its MMSE link abstraction. It
+  then describes CLASP and the training of the code on the channel that CLASP creates.
+- Section V evaluates the accuracy of the abstraction and the gap between CLASP and the
+  Lagrangian bound. It also compares CLASP with PF, the quality-based allocation, per-image rate
+  selection and the digital chain.
 - Section VI concludes and states the limitations.
 
 ## References cited in Section I

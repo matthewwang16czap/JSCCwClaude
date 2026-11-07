@@ -105,8 +105,8 @@ its Lagrangian relaxation decomposes into one small dynamic program per user. So
 exactly yields the Lagrangian index by which CLASP selects the users of each slot, together with an
 upper bound on the achievable performance \cite{Brown20,Hao22}. Each program rewards the probability
 of reaching the quality target under the measured errors of the abstraction and of the channel
-reports. Experiments show that CLASP outperforms proportional fair scheduling, per-image rate
-selection and a digital chain with link adaptation and HARQ.
+reports. Experiments show that CLASP outperforms the quality-based allocation of
+\cite{Yan22,Xia24,Hou26}, per-image rate selection and a digital chain with link adaptation and HARQ.
 
 The main contributions of this paper are as follows:
 \begin{itemize}
@@ -123,17 +123,19 @@ than this over CLASP. Rewarding the probability of reaching the target, instead 
 on the predicted quality, brings an extra 1.7\% of the users to 30~dB on decoded images. No user that
 the calibration-aware version predicts to reach the target decodes below it, whereas the
 hard-threshold version misses 1.2\% of the users.
-\item When every scheduled delivery is decoded by the codec, CLASP gains 0.5--0.6~dB of mean PSNR
-over proportional fair scheduling. It brings an extra 8--15\% of the users to 30~dB over per-image
-rate selection \cite{Zhang23} in every decoded case, including noisy and aged reports. Simulated
-against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2--1.6~dB of mean PSNR
-under 2~dB CQI errors or reports aged to correlation 0.8. Training the code on the channel that
-CLASP creates raises the decoded mean PSNR by a further 0.21~dB.
+\item Given the same calibrated quality curves, CLASP gains 0.43--0.60~dB of mean PSNR over the
+quality-based allocation of \cite{Yan22,Xia24,Hou26} when every scheduled delivery is decoded by
+the codec. Simulations show that CLASP matches the mean PSNR of this allocation under a
+\mbox{13--19\%} shorter deadline. It also brings an extra 8--15\% of the users to 30~dB over per-image rate
+selection \cite{Zhang23} in every decoded case, including noisy and aged reports. Simulated against
+a digital chain with CQI-table link adaptation and HARQ, it achieves a 1.2--1.6~dB higher mean PSNR
+under 2~dB CQI errors or reports aged to correlation 0.8.
 \end{itemize}
 
 The rest of the paper is organized as follows. Section~\ref{sec:related} reviews related work, and
 Section~\ref{sec:system} states the system model and the problem. Section~\ref{sec:method} presents
-the training of the progressive code, its MMSE link abstraction, CLASP, and the training of the code
-on the channel CLASP creates. Section~\ref{sec:eval} evaluates the abstraction, and CLASP against
-PF, per-image rate selection, the Lagrangian bound and the digital chain. Section~\ref{sec:conclusion}
-concludes and states the limitations.
+the training of the progressive code and its MMSE link abstraction. It then describes CLASP and the
+training of the code on the channel that CLASP creates. Section~\ref{sec:eval} evaluates the
+accuracy of the abstraction and the gap between CLASP and the Lagrangian bound. It also compares
+CLASP with PF, the quality-based allocation, per-image rate selection and the digital chain.
+Section~\ref{sec:conclusion} concludes and states the limitations.

@@ -193,10 +193,14 @@ Where each part of the model is implemented:
   - One retraining round is the fixed point.
 - **Complexity.** Per-user programs cost O(T P n_y n_g) on a CPU. At K 8 the bound and every
   policy take 8.9 s per frame and worker process, 21.3 s with the calibration-aware reward
-  (`tools/rmab_scale.py`). Those are simulation times of everything at once; COMMANDS 41.3 times
-  CLASP alone on one CPU thread (`tools/sched_timing.py`): its planning before a frame (programs,
-  prices, priced programs) and its decision per slot, at K 8-128, against the quality-based
-  allocation of [10]-[12], greedy, PADC and PF, and on a lighter grid.
+  (`tools/rmab_scale.py`). CLASP alone on one CPU thread (COMMANDS 41.3, `tools/sched_timing.py`,
+  Xeon Silver 4210, Python): planning before a frame 3.39 / 6.76 / 13.3 / 26.0 / 52.1 s at K 8 /
+  16 / 32 / 64 / 128 (linear in K; the price search 77% of it), a decision 0.93-13.6 ms per slot;
+  calibration-aware at 30 dB 3.52-55.7 s and 0.97-14.2 ms. A lighter grid (64 x 8, 3 price
+  steps) plans 2.3-2.4 times faster within 0.04 dB on the timed frames. The quality-based
+  allocation plans in 0.8-12.9 ms and decides in 0.03-0.12 ms per slot. State linear scaling,
+  not real time: planning takes seconds where a frame of 24 slots lasts tens of ms, and the
+  decision passes 1 ms from K 16 (docs/NOTES.md 6l). Real-time implementation: future work.
 
 ## V. Experiments (~5 pages)
 
@@ -225,10 +229,17 @@ Where each part of the model is implemented:
     schedules made with exact, noisy (2 dB CQI errors) or aged (r = 0.8) reports, Kodak and
     CLIC. The prediction is the fitted curves at the SNRs the slots actually met, not at the
     reports: the rule holds on the slots a scheduler picks.
-- **B. Mean PSNR: near the bound, and over PF** (fig04a: the gap to the bound per user against
-  K, B = K/8; Table III: CLASP over PF under each condition, simulated and decoded, with MS-SSIM
-  and LPIPS; fig08a: what it does to the users, decoded; Table IV, appendix: the other
-  schedulers).
+- **B. Mean PSNR: near the bound, over PF and over the quality-based allocation of [10]-[12]**
+  (fig04a: the gap to the bound per user against K, B = K/8; Table III: CLASP over PF under each
+  condition, simulated and decoded, with MS-SSIM and LPIPS; fig08a: what it does to the users,
+  decoded; Table IV, appendix: the other schedulers).
+  - The quality-based allocation of [10]-[12] in its best case, on the same calibrated curves
+    (COMMANDS 41; docs/NOTES.md 6l): CLASP gains, decoded, +0.47 / +0.43 / +0.46 / +0.60 dB over
+    it (Kodak fresh / 2 dB CQI error / r = 0.8; CLIC fresh), the same over its version re-planned
+    every slot, and +0.65 to +0.95 dB over its slot-by-slot version (greedy); MS-SSIM and LPIPS
+    agree. Simulated on 2000 frames: +0.49 / +0.42 / +0.44 dB, and +0.67 to +0.76 over greedy. The
+    allocation itself gains only 0.03-0.08 dB over PF: quality at one SNR without planning takes
+    almost nothing of what CLASP takes.
   - CLASP's gap to the bound goes 0.207 → 0.005 dB per user from K 8 to 128 (total 1.66 → 0.64
     dB). The Whittle index 0.265 → 0.016; the closed form plateaus at 0.15; PF 0.71 → 0.52.
   - Main frames (Table III, simulated, 500 frames): +0.52 dB over PF with fresh reports, +0.48
@@ -253,8 +264,11 @@ Where each part of the model is implemented:
   - The share has a price for the users who miss: 0.26 dB of mean PSNR and +0.013 LPIPS
     against the hard-target index (F).
   - Latency: for the mean CLASP needs 12.7% / 19.9% fewer slots than PF at T 16 / 24 (PF needs
-    +6.0 slots at T 24, fig12a); at 30 dB PADC needs more than 32 slots for CLASP's share at
-    T 24 (fig12b). Within a 24-slot frame (fig12c) CLASP brings 29.3 / 53.1 / 70.2 / 77.2% of
+    +6.0 slots at T 24, fig12a), 13.0% / 19.2% fewer than the quality-based allocation and 17.5% /
+    more than 25% fewer than greedy (COMMANDS 41.1); for the mean too its first decodable phase
+    comes later (slot 7.12 against 4.50) and its PSNR averaged over the frame is lower (24.80
+    against 26.19 dB): a later first image for more quality at the deadline; at 30 dB PADC needs
+    more than 32 slots for CLASP's share at T 24 (fig12b). Within a 24-slot frame (fig12c) CLASP brings 29.3 / 53.1 / 70.2 / 77.2% of
     users to 30 dB by slots 6 / 12 / 18 / 24, PADC 20.1 / 48.4 / 60.8 / 64.6%; the mean slot to
     30 dB is 1.85 [1.72, 1.98] slots earlier (1.04 on the users both bring there). A user's
     first decodable phase comes later (slot 7.75 against 6.54): CLASP waits for good slots.

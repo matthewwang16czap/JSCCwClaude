@@ -505,7 +505,8 @@ decoded, paired by frame: mean PSNR minus hf:lagrange's, 95% CI over frames
 
 **47. "a two-number user state"** (item 2): as entry 23.
 
-**48. "0.5-0.6 dB over proportional fair"** (item 3): entry 29.
+**48. "0.5-0.6 dB over proportional fair"** (paragraph 5, item 4's notes; item 3's "not in the
+prose"): entry 29.
 
 **49. "an extra 8-15% of the users at 30 dB"** (item 3): entry 30.
 
@@ -532,14 +533,15 @@ to correlation 0.8"**
 (item 3): entries 39
 and 40.
 
-**55. "0.21 dB"** (item 3): entry 41.
+**55. "0.21 dB"** (paragraph 5, item 4's notes; item 3's "not in the prose"): entry 41.
 
 ## The table "How paragraphs 3, 5 and 6 line up"
 
 **56. Row (1):** "12 decodes": entry 13; "0.055-0.083 dB": entries 5 and 8; "EESM 0.16-0.19 and
 MIESM 0.29-0.34": entries 6, 9, 7, 10; "0.06-0.09 dB, bias within ±0.03 dB": entries 16 and 17.
 
-**57. Row (2):** "0.21 → 0.005 dB, 8 → 128 users": entry 50; "+0.5-0.6 dB over PF": entry 29.
+**57. Row (2):** "0.21 → 0.005 dB, 8 → 128 users": entry 50; "+0.43-0.60 dB over the myopic
+quality-based allocation": entry 63; "a 13-19% shorter deadline": entry 64.
 
 **58. Row (3), "an extra 1.7% of the users at 30 dB over the hard target"** (decoded, 60 frames, paired by frame,
 Kodak with fresh reports). `results/s24_replays.txt`, the report of `s24_dec_auto.json` against
@@ -568,6 +570,40 @@ entry 30.
 
 **62. Row (3), "aged reports cost CLASP 0.6 dB, digital 1.9 dB"**: entries 2 and 3.
 
+## Round 41: the quality-based allocation of [10]-[12], and latency (paragraphs 5 and 6)
+
+**63. "0.43-0.60 dB of mean PSNR over the quality-based allocation of [10]-[12]"** (paragraph 6,
+item 3; paragraph 5's "outperforms the quality-based allocation"). Decoded, 60 frames per case,
+paired by frame across files: CLASP's decodes of rounds 22 and 30 against this round's decodes of
+the baseline, `fixed_slope` (each user's phases from its single-SNR curve at its mean SNR by the
+equal-slope rule, on the transmitter's calibrated curves, PF timing). `results/s41_decoded.txt`,
+COMMANDS 41.4 (2), sent back 2026-11-07; the frames check, 41.4 (1), printed "same" in all four:
+```
+== [f] every policy, decoded, minus the quality-based allocation (fixed_slope)
+  clasp:lagrange            +0.472 dB [+0.412, +0.532]  (60 frames)
+== [e2] every policy, decoded, minus the quality-based allocation (fixed_slope)
+  clasp:lagrange            +0.433 dB [+0.367, +0.503]  (60 frames)
+== [r80] every policy, decoded, minus the quality-based allocation (fixed_slope)
+  clasp:lagrange            +0.456 dB [+0.347, +0.567]  (60 frames)
+== [clic] every policy, decoded, minus the quality-based allocation (fixed_slope)
+  clasp:lagrange            +0.597 dB [+0.521, +0.672]  (60 frames)
+```
+Kodak with fresh reports, 2 dB CQI errors and reports aged to r = 0.8, and CLIC with fresh reports:
++0.433 to +0.597, i.e. 0.43-0.60. Re-planned every slot (`adaptive_slope`) the allocation is the
+same (+0.475, +0.436, +0.457, +0.593); slot by slot (`greedy`) it is worse (+0.756, +0.646, +0.759,
++0.946).
+
+**64. "a 13-19% shorter deadline"** (paragraph 6, item 3: the same mean PSNR as the quality-based
+allocation, with 13-19% fewer slots per frame). Simulated, 300 frames per length, T = 12 ... 32. `results/s41_latency_mean.txt`,
+COMMANDS 41.1 (printed by 41.4 (4), sent back 2026-11-07):
+```
+the frame length each policy needs to match lagrange at T = 16 (29.94 dB), 95% bootstrap intervals over frames:
+  fixed_slope  needs  18.39 slots [17.99, 18.95]: +2.39 slots; lagrange needs 13.0% fewer [11.1, 15.6]
+the frame length each policy needs to match lagrange at T = 24 (31.44 dB), 95% bootstrap intervals over frames:
+  fixed_slope  needs  29.71 slots [27.63, 31.54]: +5.71 slots; lagrange needs 19.2% fewer [13.1, 23.9]
+```
+13.0 and 19.2, i.e. 13-19.
+
 ## To check on the server, in the order above
 
 ```
@@ -588,4 +624,6 @@ grep -A 3 "3 dB-gap code" results/s35_gap3.txt                             # 38,
 grep -n "minus hf:lagrange's\|lag:lagrange \|lagb:lagrange \|lagblind:lagrange " results/s30_codesign.txt   # 41-42
 grep -n "decoded histories\|minus lagrange's\|^  lagrange_soft " results/s24_replays.txt      # 58
 grep -A 8 "target 30 dB: share" results/s24_dec_auto.txt                   # 59
+grep -E "^== \[|^  clasp:lagrange " results/s41_decoded.txt               # 63
+grep -E "match lagrange at|^  fixed_slope +needs" results/s41_latency_mean.txt  # 64
 ```

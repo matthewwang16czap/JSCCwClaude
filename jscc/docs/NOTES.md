@@ -1002,6 +1002,75 @@ averaged over the frame is lower (24.19 against 25.04 dB): it waits for good slo
 **Redrawn (`s35_figs.txt`).** fig12(c) every slot, fig14 with the gap code at 30 dB, fig15
 from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 
+## 6l. CLASP against the quality-based allocation of [10]-[12]; latency; timing (COMMANDS 41, returned 2026-11-07)
+
+The multi-user JSCC designs the Introduction criticises allocate the channel by a quality model at
+each user's SNR without planning over the slots left [10]-[12]. Their rule ran in its best case, on
+the same calibrated curves as CLASP: `fixed_slope` (each user's phases from its single-SNR curve at
+its mean SNR, equal slope: the largest total predicted quality; PF timing), `adaptive_slope` (the
+same re-planned every slot) and `greedy` (the largest predicted gain of this slot). Only the
+baselines were decoded; the frames check printed "same" for all four cases (PF's predicted mean
+equal to the last digit) and +0.000 on the 2000 main frames, so they pair with CLASP's decodes of
+rounds 22 and 30 frame by frame.
+
+**Decoded** (60 frames per case, paired; `s41_decoded.txt`), CLASP minus each baseline (dB):
+
+| case | fixed_slope | adaptive_slope | greedy | PF (this round's decode) |
+|---|---|---|---|---|
+| Kodak, fresh | +0.472 [0.412, 0.532] | +0.475 [0.413, 0.537] | +0.756 [0.690, 0.827] | +0.527 [0.467, 0.587] |
+| Kodak, 2 dB CQI error | +0.433 [0.367, 0.503] | +0.436 [0.369, 0.507] | +0.646 [0.579, 0.715] | +0.511 [0.444, 0.581] |
+| Kodak, r = 0.8 aware | +0.456 [0.347, 0.567] | +0.457 [0.350, 0.569] | +0.759 [0.629, 0.892] | +0.515 [0.410, 0.623] |
+| CLIC, fresh | +0.597 [0.521, 0.672] | +0.593 [0.518, 0.667] | +0.946 [0.844, 1.051] | +0.629 [0.555, 0.701] |
+
+* The quality-based allocation gains only +0.03 to +0.08 dB over PF (decoded) and greedy loses
+  0.21-0.35 dB to it: valuing users by quality at one SNR, without planning, takes almost none of
+  what CLASP takes. Re-planning every slot changes nothing (-0.003 to +0.004 dB).
+* Kodak fresh, MS-SSIM: +0.0067 over fixed_slope and adaptive_slope, +0.0102 over greedy; LPIPS
+  -0.0051, -0.0051, -0.0111 (lower is better).
+* The model's error on the baselines' decoded schedules: MAE 0.070 / 0.078 / 0.088 / 0.087 dB,
+  bias -0.020 to -0.001 (with CLASP's files pooled).
+
+**Simulated, round 30's 2000 main frames** (paired with `s30_j_mean_*`; `s41_main.txt`): CLASP minus
+fixed_slope +0.487 [0.477, 0.498] / +0.422 [0.411, 0.433] / +0.435 [0.419, 0.451] dB (fresh / 2 dB
+CQI error / r = 0.8 aware); adaptive_slope the same to 0.001 dB; greedy +0.760 / +0.675 / +0.667.
+
+**Delivery** (500 frames, `s41_delay_mean.txt`): mean PSNR over PF +0.518 (CLASP), +0.045
+(fixed_slope), +0.046 (adaptive_slope), -0.240 (greedy); served slots below 0 dB 0.7% (CLASP)
+against 5.1% and 6.1%; lift +3.0 dB against +1.7 and +0.9. CLASP waits for good slots: its first
+decodable phase comes at slot 7.12 against 4.50 for every baseline, and its PSNR averaged over the
+frame is 24.80 dB against 26.18-26.19. The price of the deadline quality is a later first image.
+
+**Latency at equal quality** (300 frames per length, T = 12 ... 32; `s41_latency_mean.txt`): to match
+CLASP at T = 16 (29.94 dB) fixed_slope needs 18.39 slots (CLASP 13.0% [11.1, 15.6] fewer),
+adaptive_slope 18.38 (12.9%), greedy 19.39 (17.5% [15.0, 20.8]), PF 18.33 (12.7%); at T = 24
+(31.44 dB) fixed_slope 29.71 (19.2% [13.1, 23.9]), adaptive_slope 29.54 (18.7%), PF 29.96 (19.9%),
+greedy more than 32. 30 dB takes 16.30 slots (CLASP) against 18.72 (fixed_slope) and 19.72 (greedy);
+31 dB 21.42 against 24.31 and 27.34. At the 30 dB target (rounds 24 and 26, printed again): PADC
+needs more than 32 slots for the share CLASP reaches at T = 16 (70.5%); 70% of the users at 30 dB
+take 15.75 slots (CLASP) and more than 32 (PADC); by slots 6 / 12 / 18 / 24 CLASP has 29.3 / 53.1 /
+70.2 / 77.2% of the users there, PADC 20.1 / 48.4 / 60.8 / 64.6%.
+
+**Compute** (one thread of an Intel Xeon Silver 4210 at 2.2 GHz, Python and numpy; 10 frames per
+K, B = K/8, T = 24; `s41_timing_*.txt`), median planning per frame / decision per slot:
+
+| K | CLASP (mean) | CLASP (30 dB) | CLASP, light grid | quality-based | greedy | PADC | PF |
+|---|---|---|---|---|---|---|---|
+| 8 | 3.39 s / 0.93 ms | 3.52 s / 0.97 ms | 1.44 s / 0.93 ms | 0.8 ms / 0.03 ms | - / 0.17 ms | 0.3 ms / 0.03 ms | - / 0.03 ms |
+| 32 | 13.3 s / 3.44 ms | 14.1 s / 3.60 ms | 5.64 s / 3.46 ms | 3.1 ms / 0.06 ms | - / 0.67 ms | 1.1 ms / 0.06 ms | - / 0.05 ms |
+| 128 | 52.1 s / 13.6 ms | 55.7 s / 14.2 ms | 22.6 s / 13.8 ms | 12.9 ms / 0.12 ms | - / 2.34 ms | 4.2 ms / 0.13 ms | - / 0.08 ms |
+
+* CLASP's time grows linearly with K (planning 3.39 / 6.76 / 13.3 / 26.0 / 52.1 s at K 8 ... 128),
+  as its per-user programs do; the joint program grows exponentially. The price search is 77% of
+  the planning (2.62 of 3.39 s at K 8), the programs 21%, pricing them 2%.
+* The light grid (64 Y points, 8 fading bins, 3 price steps) plans 2.3-2.4 times faster and, on
+  the same 10 frames, scores within 0.04 dB of the default grid at every K (31.707 against 31.739 at
+  K 8, 31.729 against 31.731 at K 128). Ten frames: a sign, not a measurement of its loss.
+* In this implementation CLASP does not run in real time: a frame of 24 slots of 1 ms would leave
+  24 ms to plan, against seconds, and its decision per slot passes 1 ms from K 16. The planning
+  happens before the frame and its per-user programs are independent; a compiled or parallel
+  implementation is not measured. The paper can claim linear scaling and delivery latency, not
+  compute latency.
+
 ## 7. Open
 
 1. An online phase-to-slot mapping rule for fixed-quota frames (sequential stochastic assignment,
@@ -1147,4 +1216,4 @@ from CLASP's banks, fig16 with intervals over images; the tables as in round 34.
 | Can the calibration-aware reward cover CSI errors? | 32 | 10-31 | yes: with a 0.5 dB spread CLASP beats the planner at every CSI condition (+1.1% to +3.4%) and CLASP as run in 30 by +0.7 to +6.0, no margin; any spread 0.25-1 dB nearly everywhere |
 | The measured spread (curves and reports) | 33, 34 | 11-01 | CLASP with --soft-sigma csi is the best target policy at every CSI condition (+1.4% to +3.6% over the planner), as good as the best fixed spread, identical with exact reports; against digital +12.7% / +15.8% at 2 dB CQI error / r 0.8; decoded +13.3 / +12.5 over PADC, +3.3 [1.7, 5.2] over the planner at 2 dB; 34: fig14 and Tables II-IV redrawn with it (Table II at r 0.8: +8.75 [6.0, 11.3] over the hard target, missed 1.7% -> 0.4%) |
 | The figures' review: CLASP's channel, the 3 dB-gap code at 30 dB | 35, 36 | 11-01 | under CLASP the lift over a blind slot is +5.6 / +4.8 / +4.2 dB (phases 1-3) and keeps 65% of itself at r = 0.8, close to r^2 as under the closed form; phase 1 +0.7 to +5.4 dB from K 2 to 24; the 3 dB-gap code with HARQ is 2.4% ahead at 30 dB with exact reports and behind from 1 dB of CQI error or r = 0.95 (+5.3 to +13.7, paired); fig12(c) on round 24's frames |
-| CLASP against the quality-based allocation of [10]-[12]; latency; timing | 41 | 11-07 | not run yet: the baselines fixed_slope, adaptive_slope and greedy decoded on CLASP's frames, latency at equal quality, CLASP's planning and decision times (tools/sched_timing.py) |
+| CLASP against the quality-based allocation of [10]-[12]; latency; timing | 41 | 11-07 | decoded +0.43 to +0.60 dB over the quality-based allocation in its best case (+0.65 to +0.95 over greedy), in all four cases; 13-19% fewer slots for the same mean PSNR; CLASP's first phase later (slot 7.1 against 4.5); planning 3.4 s at K 8 to 52 s at K 128 on one thread, linear in K, decision 0.9-14 ms per slot; a lighter grid 2.3-2.4x faster, within 0.04 dB on the timed frames |
