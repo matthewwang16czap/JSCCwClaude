@@ -94,43 +94,34 @@ leaves more users below a quality target than one that models it. These findings
 scheduler can rely on the link abstraction of a code trained under slot-varying SNR, provided that
 it accounts for this error.
 
-Based on these findings, we propose CLASP (Cal\-i\-bra\-tion-aware Link-Ab\-strac\-tion-based
-Scheduling of Progressive codes), a scheduler for learned progressive codes over a multi-user fading
-downlink. Unlike the restless-bandit schedulers for layered video \cite{Hosseini19} and learned
-semantic codes \cite{McDowell26}, CLASP obtains the value of each slot from the link abstraction of
-the code rather than from a decode-or-fail outcome or reinforcement learning. Specifically, the
-abstraction reduces the state of each user to two numbers, namely the length of the prefix received
-so far and its accumulated weighted noise. With this two-number state, deadline scheduling can be 
-formulated as a finite-horizon restless bandit problem \cite{Whittle88}. Relaxing the per-slot 
-limit on the number of served users with one Lagrange multiplier per slot decomposes this problem 
-into one small dynamic program per user. Solving these programs exactly yields an upper bound on the 
-expected performance of any causal scheduler \cite{Brown20}, as well as a Lagrangian index by which 
-CLASP selects the users served in each slot \cite{Hao22,Brown20}. Each program rewards the probability 
-of that the user reaches the quality target, computed from the measured errors of the abstraction and 
-of the channel reports. Experiments show that CLASP outperforms proportional fair scheduling, 
-per-image rate selection and a digital chain with link adaptation and HARQ, while approaching its 
-Lagrangian bound in large cells.
+We therefore propose CLASP (Cal\-i\-bra\-tion-aware Link-Ab\-strac\-tion-based Scheduling of
+Progressive codes), a scheduler for learned progressive codes over a multi-user fading downlink.
+Unlike the restless-bandit schedulers for layered video \cite{Hosseini19} and learned semantic codes
+\cite{McDowell26}, CLASP values each slot through the link abstraction instead of a decode-or-fail
+outcome or reinforcement learning. The abstraction reduces the state of each user to two numbers,
+namely the length of the prefix received so far and its accumulated weighted noise. Deadline
+scheduling over these states is thus a finite-horizon restless bandit problem \cite{Whittle88}, and
+its Lagrangian relaxation decomposes into one small dynamic program per user. Solving these programs
+exactly yields the Lagrangian index by which CLASP selects the users of each slot, together with an
+upper bound on the achievable performance \cite{Brown20,Hao22}. Each program rewards the probability
+of reaching the quality target under the measured errors of the abstraction and of the channel
+reports. Experiments show that CLASP outperforms proportional fair scheduling, per-image rate
+selection and a digital chain with link adaptation and HARQ.
 
 The main contributions of this paper are as follows:
 \begin{itemize}
-\item We find that a learned progressive code trained under slot-varying SNR obeys an additive MMSE 
-link abstraction, more accurate than EESM and MIESM, while a code trained at constant SNR obeys none, 
-and that a transmitter can calibrate it from 12 decodes per image. To our knowledge, effective-SNR 
-mappings had not been tested on a learned code before.
-\item We propose CLASP, which casts multi-user deadline scheduling of learned codes as a 
-finite-horizon restless bandit with a two-number user state, solves it with exact per-user
-programs, a Lagrangian bound and an index policy, and is robust to the errors of its own quality
-prediction and of the channel reports.
-\item Decoded by the codec, CLASP gains 0.5--0.6~dB of mean PSNR over PF and
-brings an extra 8--15\% of the users to 30~dB over per-image rate selection, with fresh, noisy or
-aged reports. In simulation its gap to the bound vanishes as the cell grows: from 0.21 to
-0.005~dB per user between 8 and 128 users for mean PSNR, and for the target within $\pm 0.3\%$ of
-the bound from 16 users on. Against a digital chain with CQI-table link adaptation and HARQ, it leads
-at every CSI condition tested, by 1.2--1.6~dB and an extra 13--16\% of the users at 30~dB with
-2~dB CQI errors or reports aged to correlation 0.8. An idealized digital code 3~dB from capacity
-with the same HARQ leads CLASP by 2.4\% of the users with exact reports and trails it by 5--14\% from
-1~dB CQI errors or correlation 0.95 on. Training the code on the channel CLASP creates adds
-0.21~dB, decoded.
+\item We show that a progressive code obeys an additive MMSE link abstraction when it is trained
+under slot-varying SNR, but not when it is trained at one constant SNR per image. The mean absolute
+error of this abstraction is 0.055--0.083~dB on two test sets, well below the 0.16--0.19~dB of EESM
+and the 0.29--0.34~dB of MIESM.
+\item We propose CLASP as a restless-bandit scheduler with exact per-user dynamic programs, whose
+reward accounts for the errors of both the quality predictions and the channel reports.
+\item When every scheduled delivery is decoded by the codec, CLASP gains 0.5--0.6~dB of mean PSNR
+over proportional fair scheduling. It also brings an extra 8--15\% of the users to 30~dB over per-image rate selection.
+Simulated against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2--1.6~dB of
+mean PSNR under 2~dB CQI errors or reports aged to correlation 0.8. Its simulated gap to the upper
+bound falls to 0.005~dB per user at 128 users. Training the code on the channel that CLASP creates
+raises the decoded mean PSNR by a further 0.21~dB.
 \end{itemize}
 
 The rest of the paper is organized as follows. Section~\ref{sec:related} reviews related work, and
