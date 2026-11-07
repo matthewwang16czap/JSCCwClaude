@@ -250,34 +250,47 @@ does not pair a design with each challenge of paragraph 3.
 
 ## Paragraph 6. Contributions (Discovery-Method-Performance)
 
-The main contributions of this paper are as follows (a list of plain items, no labels):
+The main contributions of this paper are as follows (a list of plain items, no labels). Each item
+is about as long as a challenge of paragraph 3 and gives its evidence; the entry numbers are those
+of `docs/INTRO_NUMBERS.md`.
 
 1. We show that a progressive code obeys an additive MMSE link abstraction when it is trained
    under slot-varying SNR, but not when it is trained at one constant SNR per image. The mean
    absolute error of this abstraction is 0.055-0.083 dB on two test sets, well below the
-   0.16-0.19 dB of EESM and the 0.29-0.34 dB of MIESM.
-   - Evidence, not in the prose: EESM and MIESM are given the same per-phase weights; in their
-     standard form, they err by 0.37 dB and 0.44-0.49 dB. A transmitter calibrates the
-     abstraction from 12 decodes per image.
-2. We propose CLASP as a restless-bandit scheduler with exact per-user dynamic programs, whose
-   reward accounts for the errors of both the quality predictions and the channel reports.
-   - Background, not in the prose: a two-number user state, a Lagrangian bound and an index
-     policy (paragraph 5).
+   0.16-0.19 dB of EESM and the 0.29-0.34 dB of MIESM. For the code trained at constant SNR, even
+   the best candidate rule errs by 0.15 dB. On the slots that schedulers actually select, the
+   error of the abstraction stays at 0.06-0.09 dB, and twelve decodes calibrate it for a new
+   image.
+   - Evidence: entries 5-10 (the three rules on two test sets, the same per-phase weights), 12
+     (0.15 dB), 16 (0.06-0.09 dB, the abstraction fitted on all decodes, at the SNRs the
+     scheduled slots met) and 13 (twelve decodes). In their standard form, EESM and MIESM err by
+     0.37 dB and 0.44-0.49 dB (entry 45).
+2. We propose CLASP as a restless-bandit scheduler that solves the Lagrangian relaxation of
+   deadline scheduling exactly, with one small dynamic program per user. Its simulated gap to the
+   resulting bound falls to 0.005 dB per user at 128 users, so even a learned policy cannot gain
+   more than this over CLASP. Rewarding the probability of reaching the target, instead of a hard
+   threshold on the predicted quality, brings an extra 1.7% of the users to 30 dB on decoded
+   images. No user that the calibration-aware version predicts to reach the target decodes below
+   it, whereas the hard-threshold version misses 1.2% of the users.
+   - Evidence: entry 31 (0.005 dB; the bound holds for every causal scheduler, a learned policy
+     included, so no such policy beats CLASP by more than the gap), entry 58 (+1.7%, decoded,
+     Kodak, fresh reports) and entry 59 (missed 0.0% against 1.2%).
+   - Not in the prose: the gap for mean PSNR goes from 0.21 to 0.005 dB per user between 8 and
+     128 users; for the target it is within ±0.3% of the bound from 16 users on (entries 50-51).
 3. When every scheduled delivery is decoded by the codec, CLASP gains 0.5-0.6 dB of mean PSNR
-   over proportional fair scheduling. It also brings an extra 8-15% of the users to 30 dB over
-   per-image rate selection. Simulated against a digital chain with CQI-table link adaptation and
-   HARQ, it gains 1.2-1.6 dB of mean PSNR under 2 dB CQI errors or reports aged to correlation
-   0.8. Its simulated gap to the upper bound falls to 0.005 dB per user at 128 users. Training
-   the code on the channel that CLASP creates raises the decoded mean PSNR by a further 0.21 dB.
-   - Evidence, not in the prose: the gap to the bound for mean PSNR goes from 0.21 to 0.005 dB
-     per user between 8 and 128 users; for the target, it is within ±0.3% of the bound from 16
-     users on.
-   - Evidence, not in the prose: against the digital chain, CLASP leads at every CSI condition
-     tested: 1.2-1.6 dB and an extra 13-16% of the users at 30 dB with 2 dB CQI errors or reports
-     aged to correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
-   - Evidence, not in the prose: an idealised digital code 3 dB from capacity, with the same
-     HARQ, brings an extra 2.4% of the users to 30 dB over CLASP with exact reports; from 1 dB CQI
-     errors or correlation 0.95 on, CLASP leads it with an extra 5-14% of the users at 30 dB.
+   over proportional fair scheduling. It brings an extra 8-15% of the users to 30 dB over
+   per-image rate selection [Zhang23] in every decoded case, including noisy and aged reports.
+   Simulated against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2-1.6 dB
+   of mean PSNR under 2 dB CQI errors or reports aged to correlation 0.8. Training the code on the
+   channel that CLASP creates raises the decoded mean PSNR by a further 0.21 dB.
+   - Evidence: entries 29 (PF), 30 and 60 (per-image rate selection, the four decoded cases:
+     14.8%, 13.3%, 12.5% and 8.1%), 34 (the digital chain) and 41 (0.21 dB, two seeds).
+   - Not in the prose: against the digital chain, CLASP leads at every CSI condition tested,
+     1.2-1.6 dB and an extra 13-16% of the users at 30 dB with 2 dB CQI errors or reports aged to
+     correlation 0.8. Aged reports cost the digital chain 1.9 dB and CLASP 0.6 dB.
+   - Not in the prose: an idealised digital code 3 dB from capacity, with the same HARQ, brings
+     an extra 2.4% of the users to 30 dB over CLASP with exact reports; from 1 dB CQI errors or
+     correlation 0.95 on, CLASP leads it with an extra 5-14% of the users at 30 dB.
 
 **How paragraphs 3, 5 and 6 line up:**
 

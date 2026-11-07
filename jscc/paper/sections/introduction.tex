@@ -113,15 +113,22 @@ The main contributions of this paper are as follows:
 \item We show that a progressive code obeys an additive MMSE link abstraction when it is trained
 under slot-varying SNR, but not when it is trained at one constant SNR per image. The mean absolute
 error of this abstraction is 0.055--0.083~dB on two test sets, well below the 0.16--0.19~dB of EESM
-and the 0.29--0.34~dB of MIESM.
-\item We propose CLASP as a restless-bandit scheduler with exact per-user dynamic programs, whose
-reward accounts for the errors of both the quality predictions and the channel reports.
+and the 0.29--0.34~dB of MIESM. For the code trained at constant SNR, even the best candidate rule
+errs by 0.15~dB. On the slots that schedulers actually select, the error of the abstraction stays at
+0.06--0.09~dB, and twelve decodes calibrate it for a new image.
+\item We propose CLASP as a restless-bandit scheduler that solves the Lagrangian relaxation of
+deadline scheduling exactly, with one small dynamic program per user. Its simulated gap to the
+resulting bound falls to 0.005~dB per user at 128 users, so even a learned policy cannot gain more
+than this over CLASP. Rewarding the probability of reaching the target, instead of a hard threshold
+on the predicted quality, brings an extra 1.7\% of the users to 30~dB on decoded images. No user that
+the calibration-aware version predicts to reach the target decodes below it, whereas the
+hard-threshold version misses 1.2\% of the users.
 \item When every scheduled delivery is decoded by the codec, CLASP gains 0.5--0.6~dB of mean PSNR
-over proportional fair scheduling. It also brings an extra 8--15\% of the users to 30~dB over 
-per-image rate selection. Simulated against a digital chain with CQI-table link adaptation and 
-HARQ, it gains 1.2--1.6~dB of mean PSNR under 2~dB CQI errors or reports aged to correlation 0.8. 
-Its simulated gap to the upper bound falls to 0.005~dB per user at 128 users. Training the code on 
-the channel that CLASP creates raises the decoded mean PSNR by a further 0.21~dB.
+over proportional fair scheduling. It brings an extra 8--15\% of the users to 30~dB over per-image
+rate selection \cite{Zhang23} in every decoded case, including noisy and aged reports. Simulated
+against a digital chain with CQI-table link adaptation and HARQ, it gains 1.2--1.6~dB of mean PSNR
+under 2~dB CQI errors or reports aged to correlation 0.8. Training the code on the channel that
+CLASP creates raises the decoded mean PSNR by a further 0.21~dB.
 \end{itemize}
 
 The rest of the paper is organized as follows. Section~\ref{sec:related} reviews related work, and
